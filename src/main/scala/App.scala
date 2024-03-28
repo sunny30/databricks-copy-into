@@ -55,6 +55,8 @@ object App {
     spark.sql("generate deltalog for table default.tbl_parquet using parquet")
 
 
+
+
     var dl = DeltaLog.forTable(spark,"/tmp/csv/")
     print(dl.snapshot.metadata)
 
