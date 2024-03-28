@@ -4,15 +4,14 @@ target/
 !**/src/test/**/target/
 
 ### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/misc.xml
-.idea/libraries/
 /workspace.xml
 *.iws
 *.iml
 *.ipr
+.idea/
+
+metastore_db/
+spark-warehouse/
 
 ### Eclipse ###
 .apt_generated
