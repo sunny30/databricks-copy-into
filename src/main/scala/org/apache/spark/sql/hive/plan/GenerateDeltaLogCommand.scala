@@ -35,16 +35,16 @@ case class CopyIntoFromLocationCommand(databaseName: String,
                                        newTableName: String,
                                        fromLocation: String,
                                        format: String,
-                                       optionsMap: Option[Map[String, String]] = None,
+                                       optionsMap: Map[String, String],
                                        storageMap: Option[Map[String, String]] = None) extends LeafRunnableCommand {
 
 
   override val output: Seq[Attribute] = Nil
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val df = sparkSession.read.format(format).load(fromLocation)
+    val df = sparkSession.read.format(format).options(optionsMap).load(fromLocation)
     val qualifiedTable = databaseName + "." + newTableName
-    df.write.insertInto(qualifiedTable)
+    df.write.options(optionsMap).insertInto(qualifiedTable)
     scala.collection.immutable.Seq.empty[Row]
   }
 
@@ -57,7 +57,7 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
                                            fromLocation: String,
                                            format: String,
                                            selectClause: String,
-                                           optionsMap: Option[Map[String, String]] = None,
+                                           optionsMap: Map[String, String],
                                            storageMap: Option[Map[String, String]] = None) extends LeafRunnableCommand {
 
 
@@ -65,7 +65,7 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     import sparkSession.implicits._
-    val df = sparkSession.read.format(format).load(fromLocation)
+    val df = sparkSession.read.format(format).options(optionsMap).load(fromLocation)
     val ttlViewName = String.format("%s_%s", "ttlView", "1")
     df.createTempView(ttlViewName)
 //    val colClauses = selectClause.split(",").map(cl => expr(cl)).toSeq

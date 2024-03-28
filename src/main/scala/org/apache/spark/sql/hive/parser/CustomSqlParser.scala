@@ -21,6 +21,10 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   val INTO = Keyword("into")
   val FROM = Keyword("from")
   val FILEFORMAT = Keyword("fileformat")
+  val FORMAT_OPTIONS = Keyword("format_options")
+  val OPEN_PARENTHESIS = Keyword("(")
+  val CLOSE_PARENTHESIS = Keyword(")")
+  def quoteValue:Parser[String] = """\'"""
 
 
 
@@ -122,17 +126,60 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     }
   }
 
-  def copy_into_location_rule1: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat^^{
-    case _ ~ _ ~ newTable ~ _ ~ loc ~ fm => CopyIntoFromLocationCommand(
+  def copy_into_location_rule1: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat ~ opt(parseFormatProperties)^^{
+    case _ ~ _ ~ newTable ~ _ ~ loc ~ fm ~ props => CopyIntoFromLocationCommand(
       databaseName = newTable._1,
       newTableName = newTable._2,
       fromLocation = loc,
-      format = fm
+      format = fm,
+      props.getOrElse(Map.empty[String,String]).toMap
     )
   }
 
-  def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat ^^ {
-    case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm =>
+
+  def parseFormatProperties: Parser[Seq[(String, String)]] = {
+    FORMAT_OPTIONS ~ OPEN_PARENTHESIS ~> rep1sep(parseSingleProperty, ",") <~ CLOSE_PARENTHESIS ^^ {
+      case props => props
+    }
+  }
+
+  def parseSingleProperty: Parser[(String, String)] = {
+    parseKey ~ equalTo ~ parseValue ^^ {
+      case key ~ _ ~ value => (key, value)
+    }
+  }
+
+  def parseKey: Parser[String] = {
+    quote ~> keyIdent <~ quote ^^ {
+      case key => key
+    }
+  }
+
+  def quote: Parser[String] = "'"
+
+  def keyIdent: Parser[String] = {
+    "" ~>
+      rep1(
+        acceptIf(x => isKeyCharacterValue(x))("identifier expected but '" + _ + "' found"),
+        elem("identifier part", isKeyCharacterValue(_: Char))) ^^ (_.mkString)
+
+  }
+
+
+  def equalTo: Parser[String] = "="
+
+  def isKeyCharacterValue(c: Char): Boolean = {
+    Character.isLetterOrDigit(c) || '.'.equals(c) || '_'.equals(c)
+  }
+
+  def parseValue: Parser[String] = {
+    nonJavaident | (quote ~> (quoteValue| quoteIdent | quote) <~ quote) ^^ {
+      case value => value
+    }
+  }
+
+  def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat ~ opt(parseFormatProperties)^^ {
+    case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm ~ props =>
       val prjClause = prj_loc.split("from ")(0)
       val loc = prj_loc.split("from ")(1).trim
 
@@ -140,7 +187,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
       databaseName = newTable._1,
       newTableName = newTable._2,
       fromLocation = loc,
-      format = fm, selectClause = prjClause
+      format = fm, selectClause = prjClause, props.getOrElse(Map.empty[String,String]).toMap
     )
   }
 }

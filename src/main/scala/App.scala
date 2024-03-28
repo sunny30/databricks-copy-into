@@ -27,9 +27,14 @@ object App {
     dfLocal.write.insertInto("tbl_csv")
     spark.sql("select * from tbl_csv")
 
-    spark.sql("""create table if not exists default.t_delta2(id string, name String) using delta """)
-    spark.sql("copy into default.t_delta2 from '/tmp/copy-csv' fileformat = csv")
-    val dfRead = spark.read.table("default.t_delta2")
+    spark.sql("""create table if not exists default.copy_tbl_parquet1(id string, name String) using parquet """)
+    spark.sql("copy into default.copy_tbl_parquet1 from '/tmp/copy-csv' fileformat = csv format_options('header'='true', 'delimiter'=',')")
+    var dfRead = spark.read.table("default.copy_tbl_parquet1")
+    dfRead.show()
+
+    spark.sql("""create table if not exists default.copy_tbl_parquet1_without_options(id string, name String) using parquet """)
+    spark.sql("copy into default.copy_tbl_parquet1_without_options from '/tmp/copy-csv' fileformat = csv")
+    dfRead = spark.read.table("default.copy_tbl_parquet1_without_options")
     dfRead.show()
 
 
