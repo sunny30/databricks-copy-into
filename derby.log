@@ -1,0 +1,13 @@
+----------------------------------------------------------------
+Thu Mar 28 20:54:53 IST 2024:
+Booting Derby version The Apache Software Foundation - Apache Derby - 10.14.2.0 - (1828579): instance a816c00e-018e-85a9-fab6-00000d6b1ae0 
+on database directory /Users/sharadsingh/Dev/databricks-copy-into/metastore_db with class loader jdk.internal.loader.ClassLoaders$AppClassLoader@42a57993 
+Loaded from file:/Users/sharadsingh/.m2/repository/org/apache/derby/derby/10.14.2.0/derby-10.14.2.0.jar
+java.vendor=GraalVM Community
+java.runtime.version=11.0.8+10-jvmci-20.2-b03
+user.dir=/Users/sharadsingh/Dev/databricks-copy-into
+os.name=Mac OS X
+os.arch=x86_64
+os.version=10.15.2
+derby.system.home=null
+Database Class Loader started - derby.database.classpath=''
