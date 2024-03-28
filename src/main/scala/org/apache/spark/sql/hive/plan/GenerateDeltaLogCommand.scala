@@ -10,6 +10,8 @@ import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.hive.datashare.ConverterUtil
 
+import scala.collection.mutable.ListBuffer
+
 case class GenerateDeltaLogCommand(table: Option[CatalogTable],
                                    location: Option[String],
                                    format: String
@@ -68,13 +70,40 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
     val df = sparkSession.read.format(format).load(fromLocation)
     val ttlViewName = String.format("%s_%s", "ttlView", "1")
     df.createTempView(ttlViewName)
-//    val colClauses = selectClause.split(",").map(cl => expr(cl)).toSeq
-//    val resultDf = df.select(colClauses)
-    val resultDf = sparkSession.sql(selectClause+"from "+ttlViewName)
+    //    val colClauses = selectClause.split(",").map(cl => expr(cl)).toSeq
+    //    val resultDf = df.select(colClauses)
+    val resultDf = sparkSession.sql(selectClause + "from " + ttlViewName)
     val qualifiedTable = databaseName + "." + newTableName
     resultDf.write.saveAsTable(qualifiedTable)
     scala.collection.immutable.Seq.empty[Row]
   }
+}
 
+  case class CopyIntoFromFilesCommand(databaseName: String,
+                                      newTableName: String,
+                                      fromLocation: String,
+                                      format: String,
+                                      files: Seq[String],
+                                      formatOptions: Option[Map[String, String]] = None,
+                                      copyOptionsMap: Option[Map[String, String]] = None) extends LeafRunnableCommand {
+
+
+    override val output: Seq[Attribute] = Nil
+    override def run(sparkSession: SparkSession): Seq[Row] = {
+      import sparkSession.implicits._
+      var mergedOptionsMap: Map[String, String] = None.get
+      if (!formatOptions.isEmpty) {
+        mergedOptionsMap = formatOptions.get
+      }
+      if (!copyOptionsMap.isEmpty) {
+        mergedOptionsMap = mergedOptionsMap.++(copyOptionsMap.get)
+      }
+      // pass comma separated list of files to load into spark dataframe
+      files.foreach(e => String.format("%s/%s", fromLocation, e))
+      val df = sparkSession.read.options(mergedOptionsMap).format(format).load(files.mkString(","))
+      val qualifiedTable = databaseName + "." + newTableName
+      df.write.saveAsTable(qualifiedTable)
+      scala.collection.immutable.Seq.empty[Row]
+    }
 
 }
