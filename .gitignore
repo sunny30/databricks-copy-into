@@ -8,7 +8,7 @@ target/
 *.iws
 *.iml
 *.ipr
-.idea/
+.idea/*
 
 metastore_db/
 spark-warehouse/
