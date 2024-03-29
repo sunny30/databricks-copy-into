@@ -84,6 +84,7 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
                                       newTableName: String,
                                       fromLocation: String,
                                       format: String,
+                                      pattern : Option[String],
                                       files: Seq[String],
                                       formatOptions: Option[Map[String, String]] = None,
                                       copyOptionsMap: Option[Map[String, String]] = None) extends LeafRunnableCommand {
@@ -99,11 +100,14 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
       if (!copyOptionsMap.isEmpty) {
         mergedOptionsMap = mergedOptionsMap.++(copyOptionsMap.get)
       }
-      var df:sql.DataFrame = None.get
+      var df:sql.DataFrame = null
       // pass comma separated list of files to load into spark dataframe
       if (!files.isEmpty) {
         val qualifiedFiles = files.map(e => String.format("%s/%s", fromLocation, e))
         df = sparkSession.read.options(mergedOptionsMap).format(format).load(paths = qualifiedFiles: _*)
+      } else if (!pattern.isEmpty) {
+         val qualifiedPattern = String.format("%s/%s", fromLocation, pattern.get)
+         df = sparkSession.read.options(mergedOptionsMap).format(format).load(qualifiedPattern)
       } else {
          df = sparkSession.read.options(mergedOptionsMap).format(format).load(fromLocation)
       }
