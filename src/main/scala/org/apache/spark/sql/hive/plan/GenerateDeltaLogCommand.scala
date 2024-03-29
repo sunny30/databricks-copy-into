@@ -21,7 +21,7 @@ case class GenerateDeltaLogCommand(table: Option[CatalogTable],
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val path = if (table.isDefined) {
-      table.get.storage.locationUri.get.getPath
+      table.get.storage.locationUri.get.toString
     } else {
       location.get
     }
