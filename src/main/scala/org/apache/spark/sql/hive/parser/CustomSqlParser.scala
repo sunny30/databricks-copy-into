@@ -208,17 +208,23 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     )
   }
 
-  def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat ^^ {
-    case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm =>
+  def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat~opt(parsePattern)~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
+    case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm~ pattern ~ files ~ formatOptions ~ copyOptions =>
       val prjClause = prj_loc.split("from")(0)
       val loc = prj_loc.split("from ")(1).replaceAll("'","").replaceAll(" ","")
 
       CopyIntoFromSelectClauseCommand(
-      databaseName = newTable._1,
-      newTableName = newTable._2,
-      fromLocation = loc,
-      format = fm, selectClause = prjClause
-    )
+        databaseName = newTable._1,
+        newTableName = newTable._2,
+        fromLocation = loc,
+        format = fm,
+        selectClause = prjClause,
+        pattern = pattern,
+        files = files.getOrElse(Seq.empty[String]),
+        formatOptions = Option.apply(formatOptions.getOrElse(Seq.empty[(String, String)]).toMap),
+        copyOptionsMap = Option.apply(copyOptions.getOrElse(Seq.empty[(String, String)]).toMap)
+
+      )
   }
 
   def copy_into_location_rule3: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat~opt(parsePattern)~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
