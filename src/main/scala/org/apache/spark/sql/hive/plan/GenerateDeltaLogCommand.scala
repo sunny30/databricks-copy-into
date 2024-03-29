@@ -91,7 +91,7 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
     override val output: Seq[Attribute] = Nil
     override def run(sparkSession: SparkSession): Seq[Row] = {
       import sparkSession.implicits._
-      var mergedOptionsMap: Map[String, String] = None.get
+      var mergedOptionsMap: Map[String, String] = Map.empty[String, String]
       if (!formatOptions.isEmpty) {
         mergedOptionsMap = formatOptions.get
       }
@@ -99,10 +99,10 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
         mergedOptionsMap = mergedOptionsMap.++(copyOptionsMap.get)
       }
       // pass comma separated list of files to load into spark dataframe
-      files.foreach(e => String.format("%s/%s", fromLocation, e))
-      val df = sparkSession.read.options(mergedOptionsMap).format(format).load(files.mkString(","))
+     val qualifiedFiles =  files.map(e => String.format("%s/%s", fromLocation, e))
+      val df = sparkSession.read.options(mergedOptionsMap).format(format).load(paths = qualifiedFiles:_*)
       val qualifiedTable = databaseName + "." + newTableName
-      df.write.saveAsTable(qualifiedTable)
+      df.write.insertInto(qualifiedTable)
       scala.collection.immutable.Seq.empty[Row]
     }
 
