@@ -29,7 +29,7 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-unsafe_2.12</artifactId>
             <version>3.5.0</version>
-<!--            <scope>provided</scope>-->
+            <scope>provided</scope>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core -->
@@ -64,7 +64,7 @@
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
             <version>2.13.0</version>
-
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -77,13 +77,14 @@
             <groupId>io.delta</groupId>
             <artifactId>delta-spark_2.12</artifactId>
             <version>3.0.0</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-core_2.12</artifactId>
             <version>3.5.0</version>
-<!--            <scope>provided</scope>-->
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -91,14 +92,14 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-catalyst_2.12</artifactId>
             <version>3.5.0</version>
-
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-hive_2.12</artifactId>
             <version>3.5.0</version>
-<!--            <scope>provided</scope>-->
+            <scope>provided</scope>
         </dependency>
 
         <dependency>
@@ -112,7 +113,7 @@
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-sql_2.12</artifactId>
             <version>3.5.0</version>
-<!--            <scope>provided</scope>-->
+            <scope>provided</scope>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/io.delta/delta-storage -->
@@ -120,6 +121,7 @@
             <groupId>io.delta</groupId>
             <artifactId>delta-storage</artifactId>
             <version>3.0.0</version>
+            <scope>provided</scope>
         </dependency>
     </dependencies>
 
