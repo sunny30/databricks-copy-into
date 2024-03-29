@@ -86,8 +86,29 @@ object App {
 //    dl = DeltaLog.forTable(spark,"/tmp/parquet/")
 //    print(dl.snapshot.metadata)
 
+    // Tests from Bharat
+    val data = Seq(("1", "ssh"), ("2 ", "xy"), ("3 ", "sh"), ("4 ", "bh"))
+    val columns = Seq("id", "name")
+    val dfLocal = data.toDF(columns: _*)
+    dfLocal.show()
+    dfLocal.printSchema()
+
+    spark.sql("""create table if not exists tbl_csv(id string, name string) using csv options (header=true) location '/tmp/copy-csv/'""")
+    dfLocal.write.insertInto("tbl_csv")
+    spark.sql("select * from tbl_csv")
+
+    spark.sql("""create table if not exists default.copy_tbl_parquet1(id string, name String) using parquet """)
+    spark.sql("copy into default.copy_tbl_parquet1 from '/tmp/copy-csv' fileformat = csv format_options('header'='true', 'delimiter'=',')")
+    var dfRead = spark.read.table("default.copy_tbl_parquet1")
+    dfRead.show()
+
+    spark.sql("""create table if not exists default.copy_tbl_parquet1_without_options(id string, name String) using parquet """)
+    spark.sql("copy into default.copy_tbl_parquet1_without_options from '/tmp/copy-csv' fileformat = csv")
+    dfRead = spark.read.table("default.copy_tbl_parquet1_without_options")
+    dfRead.show()
+
    // spark.sql("""create table if not exists t_delta(id string, name String) using delta """)
-    spark.sql("copy into default.t_delta from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data' fileformat = csv files=('1.csv', '2.csv')")
+   // spark.sql("copy into default.t_delta from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data' fileformat = csv files=('1.csv', '2.csv')")
     //spark.sql("copy into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data/1.csv' fileformat = csv")
 
 

@@ -2,6 +2,7 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.derby.catalog.UUID
 import org.apache.hadoop.fs.Path
+import org.apache.spark.sql
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.Attribute
@@ -98,11 +99,16 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
       if (!copyOptionsMap.isEmpty) {
         mergedOptionsMap = mergedOptionsMap.++(copyOptionsMap.get)
       }
+      var df:sql.DataFrame = None.get
       // pass comma separated list of files to load into spark dataframe
-     val qualifiedFiles =  files.map(e => String.format("%s/%s", fromLocation, e))
-      val df = sparkSession.read.options(mergedOptionsMap).format(format).load(paths = qualifiedFiles:_*)
+      if (!files.isEmpty) {
+        val qualifiedFiles = files.map(e => String.format("%s/%s", fromLocation, e))
+        df = sparkSession.read.options(mergedOptionsMap).format(format).load(paths = qualifiedFiles: _*)
+      } else {
+         df = sparkSession.read.options(mergedOptionsMap).format(format).load(fromLocation)
+      }
       val qualifiedTable = databaseName + "." + newTableName
-      df.write.insertInto(qualifiedTable)
+      df.write.options(mergedOptionsMap).insertInto(qualifiedTable)
       scala.collection.immutable.Seq.empty[Row]
     }
 
