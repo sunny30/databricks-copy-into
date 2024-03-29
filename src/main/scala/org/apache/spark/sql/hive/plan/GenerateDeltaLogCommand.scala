@@ -60,15 +60,36 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
                                            fromLocation: String,
                                            format: String,
                                            selectClause: String,
-                                           optionsMap: Option[Map[String, String]] = None,
-                                           storageMap: Option[Map[String, String]] = None) extends LeafRunnableCommand {
+                                           pattern: Option[String],
+                                           files: Seq[String],
+                                           formatOptions: Option[Map[String, String]] = None,
+                                           copyOptionsMap: Option[Map[String, String]] = None) extends LeafRunnableCommand {
 
 
   override val output: Seq[Attribute] = Nil
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
+
     import sparkSession.implicits._
-    val df = sparkSession.read.format(format).load(fromLocation)
+
+    var mergedOptionsMap: Map[String, String] = Map.empty[String, String]
+    if (!formatOptions.isEmpty) {
+      mergedOptionsMap = formatOptions.get
+    }
+    if (!copyOptionsMap.isEmpty) {
+      mergedOptionsMap = mergedOptionsMap.++(copyOptionsMap.get)
+    }
+
+    val df = if (!files.isEmpty) {
+      val qualifiedFiles = files.map(e => String.format("%s/%s", fromLocation, e))
+      sparkSession.read.options(mergedOptionsMap).format(format).load(paths = qualifiedFiles: _*)
+    } else if (!pattern.isEmpty) {
+      val qualifiedPattern = String.format("%s/%s", fromLocation, pattern.get)
+      sparkSession.read.options(mergedOptionsMap).format(format).load(qualifiedPattern)
+    } else {
+      sparkSession.read.options(mergedOptionsMap).format(format).load(fromLocation)
+    }
+
     val ttlViewName = String.format("%s_%s", "ttlView", "1")
     df.createTempView(ttlViewName)
     //    val colClauses = selectClause.split(",").map(cl => expr(cl)).toSeq

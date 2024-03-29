@@ -107,11 +107,11 @@ object App {
 //    dfRead = spark.read.table("default.copy_tbl_parquet1_without_options")
 //    dfRead.show()
 
-    spark.sql("""create table if not exists t_delta(id string, name String) using delta """)
+    //spark.sql("""create table if not exists t_delta(id string, name String) using delta """)
 
     //spark.sql("copy into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv files=('1.csv', '2.csv')")
-    spark.sql("copy into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv pattern = '*.csv'")
-    //spark.sql("copy into default.t_delta from { select * from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data/1.csv' } fileformat = csv")
+    //spark.sql("COPY into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv pattern = '*.csv'")
+    spark.sql("copy into default.t_delta from { select * from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data/' } fileformat = csv files=('1.csv', '2.csv')" )
 
 
   }
