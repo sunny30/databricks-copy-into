@@ -21,7 +21,6 @@ class CustomParser(val delegate: ParserInterface) extends ParserInterface {
     }
   }
 
-  override def parseQuery(sqlText: String): LogicalPlan = delegate.parseQuery(sqlText)
 
   override def parseExpression(sqlText: String): Expression = delegate.parseExpression(sqlText)
 

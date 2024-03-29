@@ -5,13 +5,11 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.expressions.{Cast, Literal}
-import org.apache.spark.sql.delta.SerializableFileStatus
 import org.apache.spark.sql.delta.actions.AddFile
-import org.apache.spark.sql.delta.commands.convert.ConvertUtils.timestampPartitionPattern
-import org.apache.spark.sql.delta.commands.convert.{ConvertTargetFile, ConvertUtils}
+import org.apache.spark.sql.delta.commands.ConvertTargetFile
 import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.delta.storage.LogStore
-import org.apache.spark.sql.delta.util.{DateFormatter, DeltaFileOperations, PartitionUtils, TimestampFormatter}
+import org.apache.spark.sql.delta.util.{DateFormatter, DeltaFileOperations, PartitionUtils, SerializableFileStatus, TimestampFormatter}
 import org.apache.spark.util.SerializableConfiguration
 import org.slf4j.LoggerFactory
 
@@ -24,8 +22,12 @@ import org.apache.spark.sql.hive.datashare.DataSharePartitionUtils.PartitionValu
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
 
+import scala.collection.JavaConverters.asScalaIteratorConverter
+
 
 object FSUtils {
+
+  val timestampPartitionPattern = "yyyy-MM-dd HH:mm:ss[.S]"
 
   var numFiles: Long = 0
 
@@ -130,40 +132,24 @@ object FSUtils {
     val spark = SparkSession.active
     val conf = SparkSession.active.sparkContext.broadcast(serializableConf)
     DeltaFileOperations
-      .recursiveListDirs(spark, Seq(basePath), conf, ConvertUtils.dirNameFilter)
+      .recursiveListDirs(spark, Seq(basePath), conf)
       .where("!isDir")
   }
 
 
   //all data files have uniform schema in BDF
-  def allFiles(basePath: String, schema: Option[StructType] = None): Dataset[ConvertTargetFile] = {
+  def allFiles(basePath: String, schema: Option[StructType] = None): Iterator[ConvertTargetFile] = {
     val schemaDefined = schema.isDefined
-    val files = doList(basePath).mapPartitions { iter => {
-      val fileStatuses = iter.toSeq
-      fileStatuses.map { fileStatus =>
-        if (schemaDefined) {
-          ConvertTargetFile(
-            fileStatus,
-            None,
-            Some(schema.get.toDDL))
-        } else {
-          ConvertTargetFile(
-            fileStatus,
-            None,
-            None)
-        }
-      }.toIterator
-    }
-    }
+    val files = doList(basePath).toLocalIterator().asScala.map(ConvertTargetFile(_))
 
-    files.cache()
+    //files.cache()
     files
   }
 
 
   def getPartitionValues(file: SerializableFileStatus, basePath: Path): Map[String, String] = {
-    val path = file.getHadoopPath
-    val pathStr = file.getHadoopPath.toUri.toString
+    val path = file.getPath
+    val pathStr = file.getPath.toUri.toString
     val dateFormatter = DateFormatter()
     val timestampFormatter =
       TimestampFormatter(timestampPartitionPattern, java.util.TimeZone.getDefault)
@@ -206,7 +192,7 @@ object FSUtils {
 
     numFiles = numFiles + 1
     val file = targetFile.fileStatus
-    val path = file.getHadoopPath
+    val path = file.getPath
 
     val partition = getPartitionValues(file, basePath)
 

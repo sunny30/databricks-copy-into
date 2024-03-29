@@ -7,16 +7,16 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.delta.{DeltaLog, DeltaOperations, OptimisticTransaction}
 import org.apache.spark.sql.delta.actions.{AddFile, Metadata}
-import org.apache.spark.sql.delta.commands.convert.ConvertTargetFileManifest
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.sources.DeltaSQLConf
 import org.apache.spark.sql.types.{DataType, StructField, StructType}
 import org.apache.spark.sql.delta.actions.Format
+import org.apache.spark.sql.delta.commands.DeltaCommand
 import org.apache.spark.sql.hive.datashare.DeltashareConsts.{delta_log, last_checkpoint, parquet}
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
 
-case class ConverterUtil(basePath: Option[Path], table: Option[CatalogTable], format: String) extends DeltaLogging {
+case class ConverterUtil(basePath: Option[Path], table: Option[CatalogTable], format: String) extends DeltaLogging  with DeltaCommand {
 
   def getFormat: Format = {
     Format(
@@ -94,15 +94,16 @@ case class ConverterUtil(basePath: Option[Path], table: Option[CatalogTable], fo
         numFiles,
         partitionSchema.map(_.fieldNames.toSeq).getOrElse(Nil),
         collectStats = false,
-        None,
-        sourceFormat = Some(format))
+        None
+        )
 
-      val (committedVersion, postCommitSnapshot) = txn.commitLarge(
-        spark,
+      val res = commitLarge(
+        spark = spark,
+        txn = txn,
         Iterator.single(txn.protocol) ++ addFilesIter,
         operation,
         Map.empty,
-        metrics)
+        metrics = metrics)
 
       // Delete the check point and parquet file for now which is causing issue for DeltaLog standalone read issue
       // with delta share server. And also for now this is not being used.
@@ -133,8 +134,9 @@ case class ConverterUtil(basePath: Option[Path], table: Option[CatalogTable], fo
     val statsBatchSize = conf.getConf(DeltaSQLConf.DELTA_IMPORT_BATCH_SIZE_STATS_COLLECTION)
 
     val basePath = txn.deltaLog.dataPath
-    FSUtils.allFiles(basePath.toUri.toString, Some(schema)).
-      toLocalIterator().asScala.grouped(statsBatchSize).flatMap { batch =>
+
+    FSUtils.allFiles(basePath.toUri.toString, Some(schema)).grouped(statsBatchSize).
+      flatMap { batch =>
         val adds = batch.map(
           FSUtils.createAddFile(
             _, txn.deltaLog.dataPath, fs, conf, Some(partitionSchema)))

@@ -23,26 +23,26 @@ object App {
 
     import spark.implicits._
 
-//    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
-//      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
-//      ("Robert ", "", "Williams", 2010, 3, "M", 4000L),
-//      ("Maria ", "Anne", "Jones", 2005, 5, "F", 4000L),
-//      ("Jen", "Mary", "Brown", 2010, 7, "", 2000L)
-//    )
-//    val columns = Seq("firstname", "middlename", "lastname", "dob_year",
-//      "dob_month", "gender", "salary")
-//
-//    val dfLocal = data.toDF(columns: _*)
-//    dfLocal.show()
-//    dfLocal.printSchema()
+    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
+      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
+      ("Robert ", "", "Williams", 2010, 3, "M", 4000L),
+      ("Maria ", "Anne", "Jones", 2005, 5, "F", 4000L),
+      ("Jen", "Mary", "Brown", 2010, 7, "", 2000L)
+    )
+    val columns = Seq("firstname", "middlename", "lastname", "dob_year",
+      "dob_month", "gender", "salary")
+
+    val dfLocal = data.toDF(columns: _*)
+    dfLocal.show()
+    dfLocal.printSchema()
 
 //    spark.sql("""create table if not exists tbl_csv(firstname string, middlename string, lastname string, dob_year int, dob_month int, gender string, salary long) using csv options (header=true) location '/tmp/csv/'""")
 //    dfLocal.write.insertInto("tbl_csv")
 //    spark.sql("generate deltalog for table default.tbl_csv using csv")
-
-
-
-//    //test for partition with both flavors of sql (location and table) generate delta log
+//
+//
+//
+////    //test for partition with both flavors of sql (location and table) generate delta log
 //    spark.sql("drop table if exists tbl_orc1")
 //    spark.sql("drop table if exists tbl_orc2")
 //    spark.sql("create table if not exists tbl_orc1(id string, name string) using orc partitioned by(name) " )
@@ -50,8 +50,8 @@ object App {
 //    spark.sql("""insert into tbl_orc1 values("1", "Xiaoyu"), ("2", "Bharat"), ("3", "Vivek"),("4", "Sharad") """)
 //    spark.sql("""insert into tbl_orc2 values("1", "Xiaoyu"), ("2", "Bharat"), ("3", "Vivek"),("4", "Sharad") """)
 //    val path = spark.sessionState.catalog.getTableMetadata(TableIdentifier("tbl_orc2")).storage.locationUri.get.getPath
-////    spark.sql("generate deltalog for table default.tbl_orc1 using orc")
-//    spark.sql(s"generate deltalog for location '${path}' using orc")
+//    spark.sql("generate deltalog for table default.tbl_orc1 using orc")
+   // spark.sql(s"generate deltalog for location '${path}' using orc")
 
 
 //
@@ -111,7 +111,7 @@ object App {
 
     //spark.sql("copy into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv files=('1.csv', '2.csv')")
     //spark.sql("COPY into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv pattern = '*.csv'")
-    spark.sql("copy into default.t_delta from { select * from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data/' } fileformat = csv files=('1.csv', '2.csv')" )
+   // spark.sql("copy into default.t_delta from { select * from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data/' } fileformat = csv files=('1.csv', '2.csv')" )
 
 
   }
