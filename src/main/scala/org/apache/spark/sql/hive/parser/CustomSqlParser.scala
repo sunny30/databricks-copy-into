@@ -39,8 +39,8 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
 
   override def parse(input: String): LogicalPlan = super.parse(input)
 
-  override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3
-    copy_into_location_rule1 | copy_into_location_rule2
+  override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3 | copy_into_location_rule2
+    copy_into_location_rule1
 
 
   def isValidCharacterInsideQuote(c: Char): Boolean = {
@@ -62,7 +62,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
 
 
   def projectParenClause:Parser[String] = "{" ~> rep1(acceptIf(ch => isValidCharacterInsideProjectParen(ch))("identifier expected but '" + _ + "' found"),
-    elem("identifier part", isValidCharacterInsideProjectParen(_: Char))) ^^ (_.mkString)
+    elem("identifier part", isValidCharacterInsideProjectParen(_: Char)))<~"}" ^^ (_.mkString)
 
 
   def singleQuote = "'"
@@ -203,8 +203,8 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
 
   def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat ^^ {
     case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm =>
-      val prjClause = prj_loc.split("from ")(0)
-      val loc = prj_loc.split("from ")(1).trim
+      val prjClause = prj_loc.split("from")(0)
+      val loc = prj_loc.split("from ")(1).replaceAll("'","").replaceAll(" ","")
 
       CopyIntoFromSelectClauseCommand(
       databaseName = newTable._1,

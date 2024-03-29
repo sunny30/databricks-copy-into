@@ -75,7 +75,7 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
     //    val resultDf = df.select(colClauses)
     val resultDf = sparkSession.sql(selectClause + "from " + ttlViewName)
     val qualifiedTable = databaseName + "." + newTableName
-    resultDf.write.saveAsTable(qualifiedTable)
+    resultDf.write.insertInto(qualifiedTable)
     scala.collection.immutable.Seq.empty[Row]
   }
 }
