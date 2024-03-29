@@ -22,6 +22,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   val FROM = Keyword("from")
   val FILEFORMAT = Keyword("fileformat")
   val FILES = Keyword("files")
+  val PATTERN = Keyword("pattern")
   def FORMATOPTIONS:Parser[String] = "format_options"
   def COPYOPTIONS:Parser[String] = "copy_options"
   def openParen: Parser[String] = "("
@@ -111,6 +112,12 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   def parseFormat: Parser[String] = {
     FILEFORMAT~parseEqual~sqlIdentifier^^{
       case _~_~format => format
+    }
+  }
+
+  def parsePattern: Parser[String] = {
+    PATTERN~parseEqual~parseSingleFile^^{
+      case _~_~pattern => pattern
     }
   }
 
@@ -214,17 +221,18 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     )
   }
 
-  def copy_into_location_rule3: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
-    case _ ~ _ ~ newTable ~ _ ~ loc ~ fm ~ files ~ formatOptions ~ copyOptions =>
+  def copy_into_location_rule3: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat~opt(parsePattern)~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
+    case _ ~ _ ~ newTable ~ _ ~ loc ~ fm ~ pattern ~ files ~ formatOptions ~ copyOptions =>
 
       CopyIntoFromFilesCommand(
         databaseName = newTable._1,
         newTableName = newTable._2,
         fromLocation = loc,
         format = fm,
+        pattern = pattern,
         files = files.getOrElse(Seq.empty[String]),
         formatOptions = Option.apply(formatOptions.getOrElse(Seq.empty[(String, String)]).toMap),
-        Option.apply(copyOptions.getOrElse(Seq.empty[(String, String)]).toMap)
+        Option.apply(copyOptions.getOrElse(Seq.empty[(String, String)]).toMap),
       )
   }
 }
