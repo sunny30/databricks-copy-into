@@ -15,6 +15,9 @@ target/
 *.iws
 *.iml
 *.ipr
+derby.log
+metastore_db/
+spark-warehouse/
 
 ### Eclipse ###
 .apt_generated
