@@ -186,7 +186,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     }
   }
 
-  def rule2: Parser[LogicalPlan] = GENERATE ~ DELTALOG ~ FOR ~ LOCATION ~ quoteIdent ~ USING ~ ident ^^ {
+  def rule2: Parser[LogicalPlan] = GENERATE ~ DELTALOG ~ FOR ~ LOCATION ~ parseLocation ~ USING ~ ident ^^ {
     case _ ~ _ ~ _ ~ _ ~ loc ~ _ ~ f => {
       GenerateDeltaLogCommand(None, Some(loc), f)
     }

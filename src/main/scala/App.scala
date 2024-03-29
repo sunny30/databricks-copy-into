@@ -1,6 +1,7 @@
 import io.delta.tables.DeltaTable
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.delta.DeltaLog
 import org.apache.spark.sql.hive.datashare.ConverterUtil
 import org.json4s.DefaultFormats
@@ -13,6 +14,7 @@ object App {
       .setMaster("local[2]")
       .set("spark.sql.extensions", "org.apache.spark.sql.hive.CustomExtensionSuite")
       .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+      .set("hive.exec.dynamic.partition.mode" , "nonstrict")
   }
 
   def main(args:Array[String]):Unit={
@@ -21,22 +23,37 @@ object App {
 
     import spark.implicits._
 
-//    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
-//      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
-//      ("Robert ", "", "Williams", 2010, 3, "M", 4000L),
-//      ("Maria ", "Anne", "Jones", 2005, 5, "F", 4000L),
-//      ("Jen", "Mary", "Brown", 2010, 7, "", 2000L)
-//    )
-//    val columns = Seq("firstname", "middlename", "lastname", "dob_year",
-//      "dob_month", "gender", "salary")
-//
-//    val dfLocal = data.toDF(columns: _*)
-//    dfLocal.show()
-//    dfLocal.printSchema()
-//
+    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
+      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
+      ("Robert ", "", "Williams", 2010, 3, "M", 4000L),
+      ("Maria ", "Anne", "Jones", 2005, 5, "F", 4000L),
+      ("Jen", "Mary", "Brown", 2010, 7, "", 2000L)
+    )
+    val columns = Seq("firstname", "middlename", "lastname", "dob_year",
+      "dob_month", "gender", "salary")
+
+    val dfLocal = data.toDF(columns: _*)
+    dfLocal.show()
+    dfLocal.printSchema()
+
 //    spark.sql("""create table if not exists tbl_csv(firstname string, middlename string, lastname string, dob_year int, dob_month int, gender string, salary long) using csv options (header=true) location '/tmp/csv/'""")
 //    dfLocal.write.insertInto("tbl_csv")
 //    spark.sql("generate deltalog for table default.tbl_csv using csv")
+
+
+
+    //test for partition with both flavors of sql (location and table) generate delta log
+    spark.sql("drop table if exists tbl_orc1")
+    spark.sql("drop table if exists tbl_orc2")
+    spark.sql("create table if not exists tbl_orc1(id string, name string) using orc partitioned by(name) " )
+    spark.sql("create table if not exists tbl_orc2(id string , name string ) using orc partitioned by(name) " )
+    spark.sql("""insert into tbl_orc1 values("1", "Xiaoyu"), ("2", "Bharat"), ("3", "Vivek"),("4", "Sharad") """)
+    spark.sql("""insert into tbl_orc2 values("1", "Xiaoyu"), ("2", "Bharat"), ("3", "Vivek"),("4", "Sharad") """)
+    val path = spark.sessionState.catalog.getTableMetadata(TableIdentifier("tbl_orc2")).storage.locationUri.get.getPath
+//    spark.sql("generate deltalog for table default.tbl_orc1 using orc")
+    spark.sql(s"generate deltalog for location '${path}' using orc")
+
+
 //
 //    spark.sql("""create table if not exists tbl_orc(firstname string, middlename string, lastname string, dob_year int, dob_month int, gender string, salary long) using csv options (header=true) location '/tmp/csv/'""")
 //    dfLocal.write.insertInto("tbl_orc")
