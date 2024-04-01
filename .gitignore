@@ -9,10 +9,15 @@ target/
 .idea/compiler.xml
 .idea/misc.xml
 .idea/libraries/
-/workspace.xml
+.idea/workspace.xml
+.idea/encodings.xml
+.idea/
 *.iws
 *.iml
 *.ipr
+derby.log
+metastore_db/
+spark-warehouse/
 
 ### Eclipse ###
 .apt_generated
@@ -38,3 +43,5 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+dependency-reduced-pom.xml

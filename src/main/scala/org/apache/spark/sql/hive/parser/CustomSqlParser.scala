@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
-import org.apache.spark.sql.hive.plan.{CopyIntoFromLocationCommand, GenerateDeltaLogCommand}
+import org.apache.spark.sql.hive.plan.{CopyIntoFromFilesCommand, CopyIntoFromLocationCommand, CopyIntoFromSelectClauseCommand, GenerateDeltaLogCommand}
 
 class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCustomSqlParser(parserInterface = parserInterface) {
 
@@ -21,6 +21,13 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   val INTO = Keyword("into")
   val FROM = Keyword("from")
   val FILEFORMAT = Keyword("fileformat")
+  val FILES = Keyword("files")
+  val PATTERN = Keyword("pattern")
+  def FORMATOPTIONS:Parser[String] = "format_options"
+  def COPYOPTIONS:Parser[String] = "copy_options"
+  def openParen: Parser[String] = "("
+  def closeParen: Parser[String] = ")"
+  def quoteValue:Parser[String] = """\'"""
 
 
 
@@ -33,7 +40,8 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
 
   override def parse(input: String): LogicalPlan = super.parse(input)
 
-  override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule1
+  override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3 | copy_into_location_rule2
+    copy_into_location_rule1
 
 
   def isValidCharacterInsideQuote(c: Char): Boolean = {
@@ -42,10 +50,26 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     firstCriterion && !secondCriterion
   }
 
+  def isValidCharacterInsideProjectParen(c: Char): Boolean = {
+    val firstCriterion = true
+    val secondCriterion = '}'.equals(c)
+    firstCriterion && !secondCriterion
+  }
+
   def quoteIdent: Parser[String] =
     "" ~> // handle whitespace
       rep1(acceptIf(ch => isValidCharacterInsideQuote(ch))("identifier expected but '" + _ + "' found"),
         elem("identifier part", isValidCharacterInsideQuote(_: Char))) ^^ (_.mkString)
+
+
+  def projectParenClause:Parser[String] = "{" ~> rep1(acceptIf(ch => isValidCharacterInsideProjectParen(ch))("identifier expected but '" + _ + "' found"),
+    elem("identifier part", isValidCharacterInsideProjectParen(_: Char)))<~"}" ^^ (_.mkString)
+
+
+  def singleQuote = "'"
+  def parseLocation: Parser[String] = singleQuote~>quoteIdent<~singleQuote^^{
+    case l => l
+  }
 
 
   def nonJavaident: Parser[String] =
@@ -83,9 +107,81 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     }
   }
 
+  def parseEqual: Parser[String] = "="
+
   def parseFormat: Parser[String] = {
-    FILEFORMAT~sqlIdentifier^^{
-      case _~format => format
+    FILEFORMAT~parseEqual~sqlIdentifier^^{
+      case _~_~format => format
+    }
+  }
+
+  def parsePattern: Parser[String] = {
+    PATTERN~parseEqual~parseSingleFile^^{
+      case _~_~pattern => pattern
+    }
+  }
+
+  def quote: Parser[String] = "'"
+
+  def parseFormatOptions:Parser[Seq[(String,String)]]={
+    FORMATOPTIONS~openParen~>rep1sep(parseSingleProperty,",")<~closeParen^^{
+      case props=> props
+    }
+  }
+
+  def parseCopyOptions:Parser[Seq[(String,String)]]={
+    COPYOPTIONS~openParen~>rep1sep(parseSingleProperty,",")<~closeParen^^{
+      case props=> props
+    }
+  }
+
+  def properties: Parser[String] = "properties"
+
+  def parseSingleProperty: Parser[(String, String)] = {
+    parseKey ~ parseEqual ~ parseValue ^^ {
+      case key ~ _ ~ value => (key, value)
+    }
+  }
+
+  def parseKey: Parser[String] = {
+    quote ~> keyIdent <~ quote ^^ {
+      case key => key
+    }
+  }
+
+  def keyIdent: Parser[String] = {
+    "" ~>
+      rep1(
+        acceptIf(x => isKeyCharacterValue(x))("identifier expected but '" + _ + "' found"),
+        elem("identifier part", isKeyCharacterValue(_: Char))) ^^ (_.mkString)
+
+  }
+
+  def isKeyCharacterValue(c: Char): Boolean = {
+    Character.isLetterOrDigit(c) || '.'.equals(c) || '_'.equals(c)
+  }
+
+  def parseValue: Parser[String] = {
+    nonJavaident | (quote ~> (quoteValue| quoteIdent | quote) <~ quote) ^^ {
+      case value => value
+    }
+  }
+
+  def parseSingleFile: Parser[(String)] = {
+    singleQuote~>quoteIdent<~singleQuote^^{
+      case l => l
+    }
+  }
+
+  def parseFilePaths: Parser[Seq[(String)]]={
+    openParen~>rep1sep(parseSingleFile, ",")<~closeParen^^{
+      case props=> props
+    }
+  }
+
+  def parseFiles: Parser[Seq[String]] = {
+    FILES~parseEqual~parseFilePaths^^{
+      case _~_~files => files
     }
   }
 
@@ -97,18 +193,52 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     }
   }
 
-  def rule2: Parser[LogicalPlan] = GENERATE ~ DELTALOG ~ FOR ~ LOCATION ~ quoteIdent ~ USING ~ ident ^^ {
+  def rule2: Parser[LogicalPlan] = GENERATE ~ DELTALOG ~ FOR ~ LOCATION ~ parseLocation ~ USING ~ ident ^^ {
     case _ ~ _ ~ _ ~ _ ~ loc ~ _ ~ f => {
       GenerateDeltaLogCommand(None, Some(loc), f)
     }
   }
 
-  def copy_into_location_rule1: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~quoteIdent~parseFormat^^{
+  def copy_into_location_rule1: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat^^{
     case _ ~ _ ~ newTable ~ _ ~ loc ~ fm => CopyIntoFromLocationCommand(
       databaseName = newTable._1,
       newTableName = newTable._2,
       fromLocation = loc,
       format = fm
     )
+  }
+
+  def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat~opt(parsePattern)~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
+    case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm~ pattern ~ files ~ formatOptions ~ copyOptions =>
+      val prjClause = prj_loc.split("from")(0)
+      val loc = prj_loc.split("from ")(1).replaceAll("'","").replaceAll(" ","")
+
+      CopyIntoFromSelectClauseCommand(
+        databaseName = newTable._1,
+        newTableName = newTable._2,
+        fromLocation = loc,
+        format = fm,
+        selectClause = prjClause,
+        pattern = pattern,
+        files = files.getOrElse(Seq.empty[String]),
+        formatOptions = Option.apply(formatOptions.getOrElse(Seq.empty[(String, String)]).toMap),
+        copyOptionsMap = Option.apply(copyOptions.getOrElse(Seq.empty[(String, String)]).toMap)
+
+      )
+  }
+
+  def copy_into_location_rule3: Parser[LogicalPlan] = COPY~INTO~parseTable~FROM~parseLocation~parseFormat~opt(parsePattern)~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
+    case _ ~ _ ~ newTable ~ _ ~ loc ~ fm ~ pattern ~ files ~ formatOptions ~ copyOptions =>
+
+      CopyIntoFromFilesCommand(
+        databaseName = newTable._1,
+        newTableName = newTable._2,
+        fromLocation = loc,
+        format = fm,
+        pattern = pattern,
+        files = files.getOrElse(Seq.empty[String]),
+        formatOptions = Option.apply(formatOptions.getOrElse(Seq.empty[(String, String)]).toMap),
+        Option.apply(copyOptions.getOrElse(Seq.empty[(String, String)]).toMap),
+      )
   }
 }
