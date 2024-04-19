@@ -1,10 +1,12 @@
 package org.apache.spark.sql.hive.parser
 
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
+import org.apache.spark.sql.hive.catalog.UnityCatalog
 import org.apache.spark.sql.types.{DataType, StructType}
 
 class CustomParser(val delegate: ParserInterface) extends ParserInterface {
@@ -12,6 +14,7 @@ class CustomParser(val delegate: ParserInterface) extends ParserInterface {
 
   override def parsePlan(sqlText: String): LogicalPlan = {
     try {
+      SparkSession.active.conf.set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       new CustomSqlParser(delegate).parse(sqlText) match {
         case p: LogicalPlan => p
         case _ => throw new IllegalThreadStateException("Inalid SQL")
