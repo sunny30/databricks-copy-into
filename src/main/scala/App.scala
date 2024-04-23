@@ -14,6 +14,7 @@ object App {
       .setMaster("local[2]").
       set("spark.sql.hive.metastore.version", "3.1.3").
       set("spark.sql.hive.metastore.jars", "path").
+      set("spark.sql.test.env", "true").
       set("spark.sql.hive.metastore.jars.path", "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-metastore-3.1.3.jar," +
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-exec-3.1.3.jar, " +
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/commons-logging-1.1.1.jar," +
@@ -46,8 +47,8 @@ object App {
 
     import spark.implicits._
 
-    spark.sql("create database lsdb2")
-    //spark.sql("create database cat.db")
+    //spark.sql("create database lsdb2")
+    spark.sql("create database cat.db")
 
 //    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
 //      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),

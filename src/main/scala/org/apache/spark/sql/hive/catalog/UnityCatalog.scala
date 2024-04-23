@@ -1,5 +1,6 @@
 package org.apache.spark.sql.hive.catalog
 
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogTable, CatalogTableType, CatalogUtils, ExternalCatalog}
@@ -16,9 +17,8 @@ import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+
 import scala.collection.JavaConverters._
-
-
 import java.net.URI
 import java.util
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
@@ -30,7 +30,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   private var delegatedCatalog: CatalogPlugin = null
 
-  private var externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+  private lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
       new FSMetaStoreCatalog(
         catalogName,
         sparkConf = SparkSession.active.sharedState.conf,
@@ -265,9 +265,16 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       locationUri = Option(metadata.get(SupportsNamespaces.PROP_LOCATION))
         .map(CatalogUtils.stringToURI)
         .orElse(defaultLocation)
-        .getOrElse(throw QueryExecutionErrors.missingDatabaseLocationError()),
+        .getOrElse(getDBPath(db)),
       properties = metadata.asScala.toMap --
         Seq(SupportsNamespaces.PROP_COMMENT, SupportsNamespaces.PROP_LOCATION))
+  }
+
+  def getDBPath(db: String): URI={
+    val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
+    val catalogPath = new Path(warehousePath, catalogName+".cat")
+    val dbPath = new Path(catalogPath,db+".db")
+    dbPath.toUri
   }
 
 }
