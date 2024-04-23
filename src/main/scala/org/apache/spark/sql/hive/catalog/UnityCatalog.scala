@@ -37,7 +37,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         hadoopConfig = SparkSession.active.sharedState.hadoopConf
       )
   }else{
-    SparkSession.active.sessionState.catalog.externalCatalog
+    new HMSCatalog(
+      catalogName,
+      sparkConf = SparkSession.active.sharedState.conf,
+      hadoopConfig = SparkSession.active.sharedState.hadoopConf
+    )
   }
 
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
