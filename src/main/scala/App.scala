@@ -11,7 +11,29 @@ object App {
 
   def getConf: SparkConf = {
     new SparkConf()
-      .setMaster("local[2]")
+      .setMaster("local[2]").
+      set("spark.sql.hive.metastore.version", "3.1.3").
+      set("spark.sql.hive.metastore.jars", "path").
+      set("spark.sql.test.env", "true").
+      set("spark.sql.hive.metastore.jars.path", "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-metastore-3.1.3.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-exec-3.1.3.jar, " +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/commons-logging-1.1.1.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/commons-io-2.7.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/calcite-core-1.32.0.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/thrift-1.0.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/libfb303-0.9.3.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/dropwizard-core-2.1.5.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/metrics-core-3.0.2.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-common-3.1.3.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/datanucleus-core-4.1.17.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/datanucleus-rdbms-4.1.17.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/datanucleus-api-jdo-4.2.4.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/HikariCP-2.5.1.jar," +
+        "/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/derby-10.14.2.0.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/javax.jdo-3.2.0-release.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/commons-collections-3.2.2.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/antlr-runtime-3.5.3.jar," +
+        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/servlet-api-2.3.jar")
       .set("spark.sql.extensions", "org.apache.spark.sql.hive.CustomExtensionSuite")
       .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
       .set("hive.exec.dynamic.partition.mode" , "nonstrict")
@@ -19,9 +41,14 @@ object App {
 
   def main(args:Array[String]):Unit={
     val spark = SparkSession.builder().appName("spark-3.5.1-lake").master("local").
-      config(getConf).enableHiveSupport().getOrCreate()
+      config(getConf).
+      enableHiveSupport().
+      getOrCreate()
 
     import spark.implicits._
+
+    //spark.sql("create database lsdb2")
+    spark.sql("create database cat.db")
 
 //    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
 //      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
@@ -97,8 +124,8 @@ object App {
 //    dfLocal.write.insertInto("tbl_csv")
 //    spark.sql("select * from tbl_csv")
 //
-//    spark.sql("""create table if not exists default.copy_tbl_parquet1(id string, name String) using parquet """)
-//    spark.sql("copy into default.copy_tbl_parquet1 from '/tmp/copy-csv' fileformat = csv format_options('header'='true', 'delimiter'=',')")
+   // spark.sql("""create table if not exists default.copy_tbl_parquet99(id string, name String) using parquet """)
+  //  spark.sql("copy into default.copy_tbl_parquet99 from '/tmp/copy-csv' fileformat = csv format_options('header'='true', 'delimiter'=',')")
 //    var dfRead = spark.read.table("default.copy_tbl_parquet1")
 //    dfRead.show()
 //
@@ -111,7 +138,7 @@ object App {
 
     //spark.sql("copy into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv files=('1.csv', '2.csv')")
     //spark.sql("COPY into default.t_delta from '/Users/shabaner/databricks-copy-into/src/main/resources/data' fileformat = csv pattern = '*.csv'")
-    spark.sql("copy into default.t_delta from { select * from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data/' } fileformat = csv files=('1.csv', '2.csv')" )
+  //  spark.sql("copy into default.t_delta from { select * from '/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data/' } fileformat = csv files=('1.csv', '2.csv')" )
 
 
   }
