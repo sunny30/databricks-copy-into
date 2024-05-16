@@ -4,6 +4,7 @@ import io.delta.sql.DeltaSparkSessionExtension
 import io.delta.sql.parser.DeltaSqlParser
 import org.apache.spark.sql.SparkSessionExtensions
 import org.apache.spark.sql.hive.parser.CustomParser
+import org.apache.spark.sql.hive.plan.CustomDataSourceAnalyzer
 
 class CustomExtensionSuite extends DeltaSparkSessionExtension{
 
@@ -12,8 +13,9 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     extensions.injectParser { (session, parser) =>
       val delegate = new DeltaSqlParser(parser)
       new CustomParser(delegate)
-
     }
+
+    extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
   }
 
 }

@@ -48,7 +48,10 @@ object App {
     import spark.implicits._
 
     //spark.sql("create database lsdb2")
-    spark.sql("create database cat.db")
+    spark.sql("create database cat.dbx27")
+    spark.sql("create table cat.dbx27.tt(id int) using custom")
+    spark.read.table("cat.dbx27.tt").show()
+    spark.sql("select * from cat.dbx27.tt").show()
 
 //    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
 //      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
