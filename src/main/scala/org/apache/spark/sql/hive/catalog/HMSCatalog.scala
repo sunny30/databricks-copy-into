@@ -14,9 +14,9 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.connector.catalog.SupportsNamespaces.PROP_OWNER
 import org.apache.spark.sql.hive.HiveUtils.{builtinHiveVersion, newTemporaryConfiguration}
 import org.apache.spark.sql.hive.client.HiveClientImpl.{fromHiveColumn, getHive, newHiveConf, toHiveColumn}
-import org.apache.spark.sql.hive.client.IsolatedClientLoader
+import org.apache.spark.sql.hive.client.{HiveClient, IsolatedClientLoader}
 import org.apache.spark.sql.types.StructType
-import org.apache.spark.util.{CircularBuffer, Utils}
+import org.apache.spark.util.{CircularBuffer, MutableURLClassLoader, Utils}
 import org.apache.hadoop.hive.metastore.api.{Database => HiveDatabase, Table => MetaStoreApiTable, _}
 import org.apache.hadoop.hive.metastore.{IMetaStoreClient, TableType => HiveTableType}
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -313,7 +313,7 @@ class HMSCatalog(
     val comment = properties.get("comment")
 
     CatalogTable(
-      identifier = TableIdentifier(h.getTableName, Option(h.getDbName)),
+      identifier = TableIdentifier(h.getTableName, Option(h.getDbName),Option(catalogName)),
       tableType = h.getTableType match {
         case HiveTableType.EXTERNAL_TABLE => CatalogTableType.EXTERNAL
         case HiveTableType.MANAGED_TABLE => CatalogTableType.MANAGED
@@ -365,8 +365,13 @@ class HMSCatalog(
   }
 
   override def getTable(db: String, table: String): CatalogTable = {
-    val ht = msClient.getTable(catalogName, db, table)
-    convertHiveTableToCatalogTable(new org.apache.hadoop.hive.ql.metadata.Table(ht))
+    try {
+      val ht = msClient.getTable(catalogName, db, table)
+      convertHiveTableToCatalogTable(new org.apache.hadoop.hive.ql.metadata.Table(ht))
+    }catch {
+      case ex:NoSuchObjectException => null
+      case e: Exception => throw e
+    }
   }
 
   override def getTablesByName(db: String, tables: Seq[String]): Seq[CatalogTable] = {

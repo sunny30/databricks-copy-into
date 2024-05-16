@@ -4,12 +4,14 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogFunction, CatalogStatistics, CatalogTable, CatalogTablePartition, CatalogTableType, ExternalCatalog, ExternalCatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.execution.QueryExecution
 
 import java.io.IOException
 import scala.collection.mutable
@@ -115,7 +117,11 @@ class FSMetaStoreCatalog(
   }
 
   override def getTable(db: String, table: String): CatalogTable = {
-    catalog(db).tables(table).table
+    try {
+      catalog(db).tables(table).table
+    }catch {
+      case e:Exception => null
+    }
   }
 
   override def getTablesByName(db: String, tables: Seq[String]): Seq[CatalogTable] = {
@@ -173,8 +179,7 @@ class FSMetaStoreCatalog(
       }
     } else {
       val needDefaultTableLocation =
-        tableDefinition.tableType == CatalogTableType.MANAGED &&
-          tableDefinition.storage.locationUri.isEmpty
+        tableDefinition.tableType == CatalogTableType.MANAGED
 
       val tableWithLocation = if (needDefaultTableLocation) {
         val defaultTableLocation = new Path(new Path(catalog(db).db.locationUri), table)
@@ -193,7 +198,7 @@ class FSMetaStoreCatalog(
           tableDefinition
         }
       val tableProp = tableWithLocation.properties.filter(_._1 != "comment")
-      catalog(db).tables.put(table, new TableDesc(tableWithLocation.copy(properties = tableProp)))
+      catalog(db).tables.put(table, new TableDesc(tableWithLocation.copy(identifier=TableIdentifier(tableWithLocation.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableProp)))
     }
   }
 

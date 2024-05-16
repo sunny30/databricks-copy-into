@@ -198,11 +198,21 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
     val provider = properties.getOrDefault(TableCatalog.PROP_PROVIDER, conf.defaultDataSourceName)
     val tableProperties = properties.asScala
-    val location = Option(properties.get(TableCatalog.PROP_LOCATION))
+    var location = Option(properties.get(TableCatalog.PROP_LOCATION))
+    var dbPath = getDBPath(ident.namespace.apply(0))
+    val dbStringPath = if(dbPath.toString.endsWith("/")){
+      dbPath.toString
+    }else{
+      dbPath.toString+"/"
+    }
+    location = location match {
+      case None => Some(dbStringPath+ident.name )
+      case _ =>  location
+    }
     val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
       .copy(locationUri = location.map(CatalogUtils.stringToURI))
     val isExternal = properties.containsKey(TableCatalog.PROP_EXTERNAL)
-    val tableType = if (isExternal || location.isDefined) {
+    val tableType = if (isExternal) {
       CatalogTableType.EXTERNAL
     } else {
       CatalogTableType.MANAGED
@@ -241,7 +251,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def loadTable(ident: Identifier): Table = {
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    V1Table(externalCatalog.getTable(table = tableName, db = dbName))
+    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    if(tt!=null) {
+      V1Table(externalCatalog.getTable(table = tableName, db = dbName))
+    }else{
+      null
+    }
   }
 
 
