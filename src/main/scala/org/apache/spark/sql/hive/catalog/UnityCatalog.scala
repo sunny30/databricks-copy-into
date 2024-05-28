@@ -8,8 +8,10 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.connector.catalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
-import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, Table, TableCatalog, TableChange, V1Table}
+import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
+import org.apache.spark.sql.delta.DeltaErrors
 import org.apache.spark.sql.delta.catalog.DeltaCatalog
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
@@ -17,6 +19,8 @@ import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.spark.sql.connector.catalog.TableCapability._
+import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetWrite
 
 import scala.collection.JavaConverters._
 import java.net.URI
@@ -180,7 +184,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def defaultNamespace(): Array[String] = super.defaultNamespace()
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    (new DeltaCatalog).stageCreate(ident = ident, schema,partitions = partitions, properties = properties)
+    val table = createTable(ident, schema, partitions, properties)
+    BestEffortStagedTable(ident, table, this)
   }
 
 //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
@@ -188,7 +193,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 //  }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    (new DeltaCatalog).stageCreateOrReplace(ident = ident, schema = schema,partitions = partitions, properties = properties)
+    dropTable(ident)
+    val table = createTable(ident, schema, partitions, properties)
+    BestEffortStagedTable(ident, table, this)
   }
 
 
@@ -270,6 +277,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
+
     (new DeltaCatalog).stageReplace(ident = ident, schema = schema, partitions = partitions, properties = properties)
   }
   override def name(): String = catalogName
@@ -294,6 +302,40 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val catalogPath = new Path(warehousePath, catalogName+".cat")
     val dbPath = new Path(catalogPath,db+".db")
     dbPath.toUri
+  }
+
+
+  private case class BestEffortStagedTable(
+                                            ident: Identifier,
+                                            table: Table,
+                                            catalog: TableCatalog) extends StagedTable with SupportsWrite {
+    override def abortStagedChanges(): Unit = catalog.dropTable(ident)
+
+    override def commitStagedChanges(): Unit = {}
+
+    // Pass through
+    override def name(): String = table.name()
+
+    override def schema(): StructType = table.schema()
+
+    override def partitioning(): Array[Transform] = table.partitioning()
+
+    override def capabilities(): util.Set[TableCapability] = Set(
+      ACCEPT_ANY_SCHEMA, BATCH_READ,
+      V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, OVERWRITE_DYNAMIC
+    ).asJava
+
+    override def properties(): util.Map[String, String] = table.properties()
+
+    override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = /*table match*/ {
+
+    val path = table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString
+    new WriteBuilder {
+    override def build (): Write = ParquetWrite (Seq(path), "Parquet", _ => true, info)
+    }
+//      case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
+//      case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
+    }
   }
 
 }

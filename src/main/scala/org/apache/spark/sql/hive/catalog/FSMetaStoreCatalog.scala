@@ -253,7 +253,9 @@ class FSMetaStoreCatalog(
 
   override def setCurrentDatabase(db: String): Unit = ???
 
-  override def dropTable(db: String, table: String, ignoreIfNotExists: Boolean, purge: Boolean): Unit = ???
+  override def dropTable(db: String, table: String, ignoreIfNotExists: Boolean, purge: Boolean): Unit = {
+    println("empty drop impl")
+  }
 
   override def alterTableDataSchema(db: String, table: String, newDataSchema: StructType): Unit = ???
 

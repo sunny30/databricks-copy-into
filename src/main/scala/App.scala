@@ -35,8 +35,9 @@ object App {
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/antlr-runtime-3.5.3.jar," +
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/servlet-api-2.3.jar")
       .set("spark.sql.extensions", "org.apache.spark.sql.hive.CustomExtensionSuite")
-      .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+      .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       .set("hive.exec.dynamic.partition.mode" , "nonstrict")
+      .set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
   }
 
   def main(args:Array[String]):Unit={
@@ -47,11 +48,17 @@ object App {
 
     import spark.implicits._
 
-    //spark.sql("create database lsdb2")
-    spark.sql("create database cat.dbx27")
-    spark.sql("create table cat.dbx27.tt(id int) using custom")
-    spark.read.table("cat.dbx27.tt").show()
-    spark.sql("select * from cat.dbx27.tt").show()
+
+   // spark.sql("create database lsdb2")
+    spark.sql("create database cat.dbx45")
+    spark.sql("create table cat.dbx45.tt(id int) using custom")
+    //spark.sql("create table cat.dbx28.ttp(id int) using parquet")
+    val df1 = spark.read.table("cat.dbx45.tt")
+   // val df = spark.sql("select * from cat.dbx35.tt")
+
+   // df1.show()
+   // df1.write.format("parquet").save()
+    df1.write.format("csv").saveAsTable("cat.dbx45.tt1")
 
 //    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
 //      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
@@ -63,6 +70,7 @@ object App {
 //      "dob_month", "gender", "salary")
 //
 //    val dfLocal = data.toDF(columns: _*)
+//    dfLocal.write.format("csv").saveAsTable("default.tb13")
 //    dfLocal.show()
 //    dfLocal.printSchema()
 
