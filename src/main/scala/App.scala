@@ -49,16 +49,22 @@ object App {
     import spark.implicits._
 
 
-   // spark.sql("create database lsdb2")
-    spark.sql("create database cat.dbx45")
-    spark.sql("create table cat.dbx45.tt(id int) using custom")
-    //spark.sql("create table cat.dbx28.ttp(id int) using parquet")
-    val df1 = spark.read.table("cat.dbx45.tt")
-   // val df = spark.sql("select * from cat.dbx35.tt")
 
+   // spark.sql("create database lsdb2")
+    spark.sql("create database cat.dbx83")
+    spark.sql("create table cat.dbx83.tt(id int, name string) using csv")
+
+   // spark.sql("create database cat.dbx81")
+    spark.sql("create table cat.dbx83.ttex(id int) using custom")
+    //spark.sql("create table cat.dbx28.ttp(id int) using parquet")
+    //val df1 = spark.read.table("cat.dbx68.tt")
    // df1.show()
+    val df = spark.sql("select name from cat.dbx83.tt")
+    val df2 = spark.sql("select * from cat.dbx83.ttex")
+    df.show()
+    df2.show()
    // df1.write.format("parquet").save()
-    df1.write.format("csv").saveAsTable("cat.dbx45.tt1")
+    //df1.write.format("csv").saveAsTable("cat.dbx66.tt1")
 
 //    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
 //      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
