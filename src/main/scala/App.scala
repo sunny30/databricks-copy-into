@@ -51,18 +51,21 @@ object App {
 
 
    // spark.sql("create database lsdb2")
-    spark.sql("create database cat.dbx83")
-    spark.sql("create table cat.dbx83.tt(id int, name string) using csv")
-
-   // spark.sql("create database cat.dbx81")
-    spark.sql("create table cat.dbx83.ttex(id int) using custom")
-    //spark.sql("create table cat.dbx28.ttp(id int) using parquet")
-    //val df1 = spark.read.table("cat.dbx68.tt")
-   // df1.show()
-    val df = spark.sql("select name from cat.dbx83.tt")
-    val df2 = spark.sql("select * from cat.dbx83.ttex")
+    spark.sql("create database cat.dbx97")
+    spark.sql("CREATE TABLE cat.dbx97.hive_ext (col1 String) USING hive OPTIONS ('fileformat'='orc')")
+    val df = spark.sql("select * from cat.dbx97.hive_ext")
     df.show()
-    df2.show()
+//    spark.sql("create table cat.dbx83.tt(id int, name string) using csv")
+//
+//   // spark.sql("create database cat.dbx81")
+//    spark.sql("create table cat.dbx83.ttex(id int) using custom")
+//    //spark.sql("create table cat.dbx28.ttp(id int) using parquet")
+//    //val df1 = spark.read.table("cat.dbx68.tt")
+//   // df1.show()
+//    val df = spark.sql("select name from cat.dbx83.tt")
+//    val df2 = spark.sql("select * from cat.dbx83.ttex")
+//    df.show()
+//    df2.show()
    // df1.write.format("parquet").save()
     //df1.write.format("csv").saveAsTable("cat.dbx66.tt1")
 
