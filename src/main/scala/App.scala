@@ -51,10 +51,13 @@ object App {
 
 
    // spark.sql("create database lsdb2")
-    spark.sql("create database cat.dbx97")
-    spark.sql("CREATE TABLE cat.dbx97.hive_ext (col1 String) USING hive OPTIONS ('fileformat'='orc')")
-    val df = spark.sql("select * from cat.dbx97.hive_ext")
-    df.show()
+    spark.sql("create database cat.dbx101")
+    spark.sql("CREATE TABLE cat.dbx101.delta_tb (col1 String) USING delta")
+    spark.sql("ALTER TABLE cat.dbx101.delta_tb ADD columns (LastName string, DOB timestamp)")
+//    spark.sql("create database cat.dbx97")
+//    spark.sql("CREATE TABLE cat.dbx97.hive_ext (col1 String) USING hive OPTIONS ('fileformat'='orc')")
+//    val df = spark.sql("select * from cat.dbx97.hive_ext")
+//    df.show()
 //    spark.sql("create table cat.dbx83.tt(id int, name string) using csv")
 //
 //   // spark.sql("create database cat.dbx81")

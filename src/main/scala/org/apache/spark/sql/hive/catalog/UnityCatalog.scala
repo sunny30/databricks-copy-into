@@ -12,7 +12,7 @@ import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, 
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.delta.DeltaErrors
-import org.apache.spark.sql.delta.catalog.DeltaCatalog
+import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
@@ -80,10 +80,14 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
     val catalogTable = try {
-      externalCatalog.getTable(ident.asTableIdentifier.table, ident.asTableIdentifier.database.getOrElse("default"))
+      externalCatalog.getTable(ident.asTableIdentifier.database.getOrElse("default"), ident.asTableIdentifier.table )
     } catch {
       case _: NoSuchTableException =>
         throw QueryCompilationErrors.noSuchTableError(ident)
+    }
+
+    if(catalogTable.provider.isDefined && catalogTable.provider.get.equalsIgnoreCase("delta")){
+      return (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
     }
 
     val properties = CatalogV2Util.applyPropertiesChanges(catalogTable.properties, changes)
@@ -97,18 +101,22 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       catalogTable.storage
     }
+    loadTable(ident) match {
+      case deltaTableV2: DeltaTableV2 => (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
+      case _ => try {
+        externalCatalog.alterTable(
+          catalogTable.copy(
+            properties = properties, schema = schema, owner = owner, comment = comment,
+            storage = storage))
 
-    try {
-      externalCatalog.alterTable(
-        catalogTable.copy(
-          properties = properties, schema = schema, owner = owner, comment = comment,
-          storage = storage))
-
-      V1Table(catalogTable)
-    } catch {
-      case _: NoSuchTableException =>
-        throw QueryCompilationErrors.noSuchTableError(ident)
+        V1Table(catalogTable)
+      } catch {
+        case _: NoSuchTableException =>
+          throw QueryCompilationErrors.noSuchTableError(ident)
+      }
     }
+
+
   }
 
   override def dropTable(ident: Identifier): Boolean = {
@@ -237,11 +245,24 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       tracksPartitionsInCatalog = conf.manageFilesourcePartitions,
       comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
     try {
-      externalCatalog.createTable(tableDesc, ignoreIfExists = false)
-      V1Table(tableDesc)
+      if(provider.equalsIgnoreCase("delta")){
+        (new UnityDeltaCatalog(externalCatalog)).createDeltaTable(tableDesc)
+        DeltaTableV2(
+          SparkSession.active,
+          new Path(tableDesc.location),
+          catalogTable = Some(tableDesc),
+          tableIdentifier = Some(ident.toString))
+      }else {
+        externalCatalog.createTable(tableDesc, ignoreIfExists = false)
+        V1Table(tableDesc)
+      }
     }catch {
       case e: Exception => throw e
     }
+  }
+
+  def createTable(tableDesc: CatalogTable, ignoreIfExists:Boolean):Unit={
+    externalCatalog.createTable(tableDesc, ignoreIfExists)
   }
 
   private def toOptions(properties: Map[String, String]): Map[String, String] = {
@@ -259,10 +280,20 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
     val tt = externalCatalog.getTable(table = tableName, db = dbName)
-    if(tt!=null) {
-      V1Table(externalCatalog.getTable(table = tableName, db = dbName))
-    }else{
-      null
+    if(tt == null)
+      return null
+    if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
+      DeltaTableV2(
+        SparkSession.active,
+        new Path(tt.location),
+        catalogTable = Some(tt),
+        tableIdentifier = Some(ident.toString))
+    } else {
+      if (tt != null) {
+        V1Table(externalCatalog.getTable(table = tableName, db = dbName))
+      } else {
+        null
+      }
     }
   }
 

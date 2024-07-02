@@ -4,12 +4,15 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.avro.AvroFileFormat
-import org.apache.spark.sql.catalyst.AliasIdentifier
+import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
+import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.V1Table
+import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
@@ -104,6 +107,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         op
       }
 
+    case u:UnresolvedTable =>
+      if(u.multipartIdentifier.size==3) {
+        val catName = u.multipartIdentifier(0)
+        val dbName = u.multipartIdentifier(1)
+        val tableName = u.multipartIdentifier(2)
+        val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(catName).asTableCatalog
+        val tc = sessionCatalog.loadTable(Identifier.of(Seq(dbName).toArray, tableName))
+        tc match {
+          case d: DeltaTableV2 => (ResolvedTable.create(sessionCatalog, u.multipartIdentifier.asIdentifier, d))
+          case _ => u
+        }
+      }else{
+        u
+      }
 
      // child.setAnalyzed()
     //  child

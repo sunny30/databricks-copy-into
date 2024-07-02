@@ -174,6 +174,9 @@ class FSMetaStoreCatalog(
     val db = tableDefinition.identifier.database.get
     val table = tableDefinition.identifier.table
     if (tableExists(db, table)) {
+      if(tableDefinition.provider.isDefined && tableDefinition.provider.get.equalsIgnoreCase("delta")){
+        catalog(db).tables.put(table, new TableDesc(tableDefinition.copy(identifier=TableIdentifier(tableDefinition.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableDefinition.properties)))
+      }
       if (!ignoreIfExists) {
         throw new TableAlreadyExistsException(db = db, table = table)
       }
