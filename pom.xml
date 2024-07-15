@@ -16,11 +16,22 @@
 
     <dependencies>
 
+        <!-- https://mvnrepository.com/artifact/org.apache.parquet/parquet-common -->
+        <dependency>
+            <groupId>org.apache.parquet</groupId>
+            <artifactId>parquet-common</artifactId>
+            <version>1.13.1</version>
+        </dependency>
+
         <dependency>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
             <version>3.3.6</version>
         </dependency>
+
+
+
+
 
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

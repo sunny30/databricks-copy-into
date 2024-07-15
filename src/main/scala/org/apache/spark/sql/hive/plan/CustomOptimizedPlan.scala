@@ -45,7 +45,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
     options, ifNotExists, true) =>
 
       val properties = CatalogV2Util.convertTableProperties(tableSpec)
-      val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray,mapAsJavaMap(properties))
+
 ////        ident,
 ////        getV2Columns(query.schema,false),
 ////        parts.toArray,
@@ -53,20 +53,25 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 ////      )
       val outputs = query.schema.map(s=>s.name)
      // CustomDataSourceAsSelectCommand(catalog.asTableCatalog,table.asInstanceOf[V1Table].v1Table,SaveMode.ErrorIfExists,query,outputs)
-      InsertIntoHadoopFsRelationCommand(
-        outputPath = new Path(table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString),
-        staticPartitions = Map.empty,
-        ifPartitionNotExists = false,
-        partitionColumns = Seq.empty[Attribute],
-        bucketSpec = None,
-        fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
-        Map.empty,
-        query = query.asInstanceOf[SubqueryAlias].child,
-        SaveMode.Append,
-        None,
-        None,
-        query.output.map(_.name)
-      )
+      if(properties.getOrElse("provider", "hive").equalsIgnoreCase("delta")){
+        plan
+      }else {
+        val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray,mapAsJavaMap(properties))
+        InsertIntoHadoopFsRelationCommand(
+          outputPath = new Path(table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString),
+          staticPartitions = Map.empty,
+          ifPartitionNotExists = false,
+          partitionColumns = Seq.empty[Attribute],
+          bucketSpec = None,
+          fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
+          Map.empty,
+          query = query.asInstanceOf[SubqueryAlias].child,
+          SaveMode.Append,
+          None,
+          None,
+          query.output.map(_.name)
+        )
+      }
 
 
     //ctas

@@ -37,7 +37,7 @@ object App {
       .set("spark.sql.extensions", "org.apache.spark.sql.hive.CustomExtensionSuite")
       .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       .set("hive.exec.dynamic.partition.mode" , "nonstrict")
-      .set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
+      .set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog").set("parquet.compression", "SNAPPY")
   }
 
   def main(args:Array[String]):Unit={
@@ -51,11 +51,22 @@ object App {
 
 
    // spark.sql("create database lsdb2")
-    spark.sql("create database cat.dbx101")
-    spark.sql("CREATE TABLE cat.dbx101.delta_tb (col1 String) USING delta")
-    spark.sql("ALTER TABLE cat.dbx101.delta_tb ADD columns (LastName string, DOB timestamp)")
-//    spark.sql("create database cat.dbx97")
-//    spark.sql("CREATE TABLE cat.dbx97.hive_ext (col1 String) USING hive OPTIONS ('fileformat'='orc')")
+    //spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
+    val df1 = Seq(
+      "John",
+      "Sunny",
+      "Xiaoyu",
+      "Shashi",
+      "Vivek"
+    ).toDF("col1")
+    spark.sql("create database cat.dbx102")
+//    spark.sql("CREATE TABLE cat.dbx101.delta_tb (col1 String) USING delta")
+    df1.write.format("delta").mode("append").saveAsTable("cat.dbx102.delta_tb")
+ //   val df = spark.sql("select * from cat.dbx101.delta_tb")
+ //   df.show()
+//    spark.sql("ALTER TABLE cat.dbx101.delta_tb ADD columns (LastName string, DOB timestamp)")
+ //   spark.sql("create database cat.dbx97z")
+//    spark.sql("CREATE TABLE cat.dbx97z.hive_ext (col1 String) USING hive OPTIONS ('fileformat'='orc') location '/tmp/p1'")
 //    val df = spark.sql("select * from cat.dbx97.hive_ext")
 //    df.show()
 //    spark.sql("create table cat.dbx83.tt(id int, name string) using csv")

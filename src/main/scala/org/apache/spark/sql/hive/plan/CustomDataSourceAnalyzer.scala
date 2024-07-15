@@ -40,10 +40,36 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           className = table.v1Table.provider.get,
           options = table.v1Table.storage.properties,
           catalogTable = Some(table.v1Table))
-      if(provider.equalsIgnoreCase("custom")) {
-        LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
-      }else{
-        LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
+      if (provider.equalsIgnoreCase("hive")) {
+        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
+        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
+        val dataCols = child1.output.filter(p => schemaColName.contains(p.name))
+        val partCols = child1.output.filter(p => partSchemaColNames.contains(p.name))
+        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
+        val fileCatalog = new CatalogFileIndex(
+          SparkSession.active,
+          table.v1Table,
+          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
+
+        //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
+        //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
+        val ff = getHiveTableFileFormat(table.v1Table)
+        val relation = LogicalRelation(relation = HadoopFsRelation(
+          location = fileCatalog,
+          partitionSchema = table.v1Table.partitionSchema,
+          dataSchema = table.v1Table.dataSchema,
+          fileFormat = ff,
+          options = table.v1Table.storage.properties,
+          bucketSpec = None
+        )(SparkSession.active), table = table.v1Table)
+        relation
+
+      }else {
+        if (provider.equalsIgnoreCase("custom")) {
+          LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
+        } else {
+          LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
+        }
       }
 
     //in managed catalog we have to fix this.

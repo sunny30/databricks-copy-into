@@ -215,18 +215,22 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val tableProperties = properties.asScala
     var location = Option(properties.get(TableCatalog.PROP_LOCATION))
     var dbPath = getDBPath(ident.namespace.apply(0))
+    var isExternal = false
     val dbStringPath = if(dbPath.toString.endsWith("/")){
       dbPath.toString
     }else{
       dbPath.toString+"/"
     }
     location = location match {
-      case None => Some(dbStringPath+ident.name )
-      case _ =>  location
+      case None =>
+        Some(dbStringPath+ident.name )
+      case _ =>
+        isExternal = true
+        location
     }
     val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
       .copy(locationUri = location.map(CatalogUtils.stringToURI))
-    val isExternal = properties.containsKey(TableCatalog.PROP_EXTERNAL)
+    isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
     val tableType = if (isExternal) {
       CatalogTableType.EXTERNAL
     } else {
@@ -351,22 +355,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
     override def partitioning(): Array[Transform] = table.partitioning()
 
-    override def capabilities(): util.Set[TableCapability] = Set(
-      ACCEPT_ANY_SCHEMA, BATCH_READ,
-      V1_BATCH_WRITE, OVERWRITE_BY_FILTER, TRUNCATE, OVERWRITE_DYNAMIC
-    ).asJava
+    override def capabilities(): util.Set[TableCapability] = table.capabilities()
 
     override def properties(): util.Map[String, String] = table.properties()
 
-    override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = /*table match*/ {
-
-    val path = table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString
-    new WriteBuilder {
-    override def build (): Write = ParquetWrite (Seq(path), "Parquet", _ => true, info)
-    }
-//      case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
-//      case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
+    override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = table match {
+      case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
+      case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
     }
   }
+
 
 }
