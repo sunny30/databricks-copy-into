@@ -59,9 +59,16 @@ object App {
       "Shashi",
       "Vivek"
     ).toDF("col1")
-    spark.sql("create database cat.dbx102")
-//    spark.sql("CREATE TABLE cat.dbx101.delta_tb (col1 String) USING delta")
-    df1.write.format("delta").mode("append").saveAsTable("cat.dbx102.delta_tb")
+    spark.sql("create database cat.dbx103") ;
+    spark.sql("create table cat.dbx103.torc(id string) using orc")
+    df1.write.insertInto("cat.dbx103.torc")
+    val df = spark.read.table("cat.dbx103.torc")
+    val df2 = spark.sql("select * from cat.dbx103.torc")
+    df.show()
+    df2.show()
+//    spark.sql("create database cat.dbx102")
+////    spark.sql("CREATE TABLE cat.dbx101.delta_tb (col1 String) USING delta")
+//    df1.write.format("delta").mode("append").saveAsTable("cat.dbx102.delta_tb")
  //   val df = spark.sql("select * from cat.dbx101.delta_tb")
  //   df.show()
 //    spark.sql("ALTER TABLE cat.dbx101.delta_tb ADD columns (LastName string, DOB timestamp)")

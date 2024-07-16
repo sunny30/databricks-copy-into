@@ -43,8 +43,6 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       if (provider.equalsIgnoreCase("hive")) {
         val schemaColName = table.v1Table.dataSchema.map(f => f.name)
         val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
-        val dataCols = child1.output.filter(p => schemaColName.contains(p.name))
-        val partCols = child1.output.filter(p => partSchemaColNames.contains(p.name))
         val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
         val fileCatalog = new CatalogFileIndex(
           SparkSession.active,
