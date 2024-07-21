@@ -45,6 +45,10 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
     options, ifNotExists, true) =>
 
       val properties = CatalogV2Util.convertTableProperties(tableSpec)
+      val projectPlan = query match {
+        case s:SubqueryAlias => s.child
+        case _ => query
+      }
 
 ////        ident,
 ////        getV2Columns(query.schema,false),
@@ -65,7 +69,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           bucketSpec = None,
           fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
           Map.empty,
-          query = query.asInstanceOf[SubqueryAlias].child,
+          query = projectPlan,
           SaveMode.Append,
           None,
           None,
