@@ -61,6 +61,10 @@ object App {
       "Vivek"
     ).toDF("col1")
 
+    import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
+    spark.read.format("datahub").option("st","st").model("mod",df1)
+
+
     /** *datasource csv test case start** */
     // spark.sql("create database cat.dbx103");
     //spark.sql("create table cat.dbx103.tcsv(id string) using csv")
