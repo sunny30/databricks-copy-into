@@ -78,33 +78,39 @@ object App {
 
 
     /** *datasource parquet test case start** */
-//     spark.sql("create database cat.dbx104");
-//    spark.sql("create table cat.dbx104.tparquet(id string) using parquet")
-//        //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
-//        spark.conf.set("spark.insert.catalog","cat")
-//
-//       // df1.write.mode(SaveMode.Append).insertInto("cat.dbx104.tparquet")
-//        spark.sql(""" INSERT INTO cat.dbx104.tparquet
-//                    |     VALUES ('new_value')""".stripMargin)
-//        val df = spark.read.table("cat.dbx104.tparquet")
-//        val df2 = spark.sql("select * from cat.dbx104.tparquet")
-//        df.show()
-//        df2.show()
-    /** datasource parquet test case end* */
-    spark.sql("create database cat.dbx105");
-    spark.sql("create table cat.dbx105.tdelta(id string) using delta")
+    spark.sql("create database cat.dbx106");
+    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
 
-    df1.write.mode(SaveMode.Append).insertInto("cat.dbx105.tdelta")
+    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
     spark.sql(
-      """ INSERT INTO cat.dbx105.tdelta
+      """ INSERT INTO cat.dbx106.tparquet
         |     VALUES ('new_value')""".stripMargin)
-    val df3 = spark.read.table("cat.dbx105.tdelta")
-    val df4 = spark.sql("select * from cat.dbx105.tdelta")
-    df3.show()
-    df4.show()
-    /** datasource parquet test case ends* */
+    val df = spark.read.table("cat.dbx106.tparquet")
+    val df2 = spark.sql("select * from cat.dbx106.tparquet")
+    df.show()
+    df2.show()
+    df2.write.format("orc").mode("append").saveAsTable("cat.dbx106.to")
+
+    /** datasource parquet test case end* */
+
+    /** *datasource delta test case start** */
+//    spark.sql("create database cat.dbx105");
+//    spark.sql("create table cat.dbx105.tdelta(id string) using delta")
+//    //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
+//    spark.conf.set("spark.insert.catalog", "cat")
+//
+//    df1.write.mode(SaveMode.Append).insertInto("cat.dbx105.tdelta")
+//    spark.sql(
+//      """ INSERT INTO cat.dbx105.tdelta
+//        |     VALUES ('new_value')""".stripMargin)
+//    val df3 = spark.read.table("cat.dbx105.tdelta")
+//    val df4 = spark.sql("select * from cat.dbx105.tdelta")
+//    df3.show()
+//    df4.show()
+//    df4.write.format("parquet").mode("append").saveAsTable("cat.dbx105.tp")
+    /** datasource delta test case ends* */
 
 
     /** Hive Relation testing start * */

@@ -4,7 +4,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.AliasIdentifier
-import org.apache.spark.sql.catalyst.analysis.ResolvedIdentifier
+import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, LogicalPlan, SubqueryAlias, TableSpec}
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -45,10 +45,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
     options, ifNotExists, true) =>
 
       val properties = CatalogV2Util.convertTableProperties(tableSpec)
-      val projectPlan = query match {
-        case s:SubqueryAlias => s.child
-        case _ => query
-      }
+      val projectPlan = EliminateSubqueryAliases(query)
 
 ////        ident,
 ////        getV2Columns(query.schema,false),
