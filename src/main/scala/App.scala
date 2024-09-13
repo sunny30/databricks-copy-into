@@ -61,8 +61,8 @@ object App {
       "Vivek"
     ).toDF("col1")
 
-    import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
-    spark.read.format("datahub").option("st","st").model("mod",df1)
+   // import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
+  //  spark.read.format("datahub").option("st","st").model("mod",df1)
 
 
     /** *datasource csv test case start** */
@@ -82,25 +82,30 @@ object App {
 
 
     /** *datasource parquet test case start** */
-    spark.sql("create database cat.dbx106");
-    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
+//    spark.sql("create database cat.dbx106");
+//    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
 
-    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
-    spark.sql(
-      """ INSERT INTO cat.dbx106.tparquet
-        |     VALUES ('new_value')""".stripMargin)
-    val df = spark.read.table("cat.dbx106.tparquet")
-    val df2 = spark.sql("select * from cat.dbx106.tparquet")
-    df.show()
-    df2.show()
-    df2.write.format("orc").mode("append").saveAsTable("cat.dbx106.to")
+//    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
+//    spark.sql(
+//      """ INSERT INTO cat.dbx106.tparquet
+//        |     VALUES ('new_value')""".stripMargin)
+//    val df = spark.read.table("cat.dbx106.tparquet")
+//    val df2 = spark.sql("select * from cat.dbx106.tparquet")
+//    df.show()
+//    df2.show()
+//    df2.write.format("orc").mode("append").saveAsTable("cat.dbx106.to")
 
     /** datasource parquet test case end* */
 
     /** *datasource delta test case start** */
-//    spark.sql("create database cat.dbx105");
+    spark.sql("create database cat.dbx106");
+    spark.sql("create table cat.dbx106.ttex(id int) using custom")
+    spark.sql(
+          """ INSERT INTO cat.dbx106.ttex
+            |     VALUES (1)""".stripMargin)
+
 //    spark.sql("create table cat.dbx105.tdelta(id string) using delta")
 //    //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
 //    spark.conf.set("spark.insert.catalog", "cat")

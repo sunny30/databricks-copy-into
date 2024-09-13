@@ -26,7 +26,9 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = buildScan()
 
-  override def insert(data: DataFrame, overwrite: Boolean): Unit = ???
+  override def insert(data: DataFrame, overwrite: Boolean): Unit = {
+    println("Inside insert")
+  }
 
 
 }
