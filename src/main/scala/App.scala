@@ -101,10 +101,17 @@ object App {
 
     /** *datasource delta test case start** */
     spark.sql("create database cat.dbx106");
-    spark.sql("create table cat.dbx106.ttex(id int) using custom")
-    spark.sql(
-          """ INSERT INTO cat.dbx106.ttex
-            |     VALUES (1)""".stripMargin)
+    spark.sql("create table cat.dbx106.ttex(id string) using custom")
+
+//        spark.sql(
+//              """ INSERT OVERWRITE TABLE cat.dbx106.ttex
+//                |     VALUES ('Sunny')""".stripMargin)
+//    spark.sql(
+//          """ INSERT INTO cat.dbx106.ttex
+//            |     VALUES (1)""".stripMargin)
+    //df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
+
+    df1.write.mode(SaveMode.Overwrite).insertInto("cat.dbx106.ttex")
 
 //    spark.sql("create table cat.dbx105.tdelta(id string) using delta")
 //    //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")

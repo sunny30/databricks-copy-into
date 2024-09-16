@@ -192,20 +192,40 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val catalogTable = sessionCatalog.loadTable(Identifier.of(Seq(dbName).toArray, tableName))
       val ct = catalogTable.asInstanceOf[V1Table].v1Table
       q.setAnalyzed()
-      InsertIntoHadoopFsRelationCommand(
-        outputPath = new Path(ct.storage.locationUri.get.toString),
-        staticPartitions = Map.empty,
-        ifPartitionNotExists = false,
-        partitionColumns = ct.partitionColumnNames.map(UnresolvedAttribute.quoted),
-        bucketSpec = None,
-        fileFormat = getFileFormat(ct.provider.getOrElse("csv")),
-        options = Map.empty,
-        query = q,
-        mode = SaveMode.Append,
-        catalogTable = Some(ct),
-        fileIndex = None,
-        outputColumnNames = ct.schema.map(f => f.name)
-      )
+
+      if(ct.provider.getOrElse("custom").equalsIgnoreCase("custom")){
+        val table = ct
+        val dataSource = DataSource(
+          session,
+          // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+          // inferred at runtime. We should still support it.
+          userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+          partitionColumns = table.partitionColumnNames,
+          bucketSpec = table.bucketSpec,
+          className = table.provider.get,
+          options = table.storage.properties,
+          catalogTable = Some(table)
+        )
+
+        val relation = LogicalRelation(dataSource.resolveRelation(false), table)
+        InsertIntoStatement(relation, m, a, q, f, ip, c)
+
+      }else {
+        InsertIntoHadoopFsRelationCommand(
+          outputPath = new Path(ct.storage.locationUri.get.toString),
+          staticPartitions = Map.empty,
+          ifPartitionNotExists = false,
+          partitionColumns = ct.partitionColumnNames.map(UnresolvedAttribute.quoted),
+          bucketSpec = None,
+          fileFormat = getFileFormat(ct.provider.getOrElse("csv")),
+          options = Map.empty,
+          query = q,
+          mode = SaveMode.Append,
+          catalogTable = Some(ct),
+          fileIndex = None,
+          outputColumnNames = ct.schema.map(f => f.name)
+        )
+      }
 
     case InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
       d.table match {
