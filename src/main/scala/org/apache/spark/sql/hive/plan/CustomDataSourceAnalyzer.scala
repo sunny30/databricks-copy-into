@@ -5,8 +5,9 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, TableIdentifier}
-import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedAttribute, UnresolvedRelation, UnresolvedTable}
+import org.apache.spark.sql.catalyst.analysis.{NamedRelation, ResolvedTable, UnresolvedAttribute, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
+import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, Project, SubqueryAlias}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -38,7 +39,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   }
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
-    case DataSourceV2Relation(table: V1Table, _, _, _, _) =>
+    case DataSourceV2Relation(table: V1Table, output:Seq[AttributeReference], _, _, _) =>
 
       val provider = table.v1Table.provider.getOrElse("custom")
       val dataSource = DataSource(
@@ -80,14 +81,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           bucketSpec = None
         )(SparkSession.active), table = table.v1Table)
 
-        relation
+        val resolvedLeafPlan = relation.copy(output = output)
+        resolvedLeafPlan
 
       } else {
-        if (provider.equalsIgnoreCase("custom")) {
+       val leafPlan =  if (provider.equalsIgnoreCase("custom")) {
           LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
         } else {
           LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
         }
+        val resolvedLeafPlan = leafPlan.copy(output = output)
+
+        resolvedLeafPlan.resolved
+        resolvedLeafPlan.setAnalyzed()
+        resolvedLeafPlan
       }
 
     //in managed catalog we have to fix this.
@@ -272,7 +279,23 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
 
-    case p: LogicalPlan => p
+
+
+    case p: LogicalPlan => p resolveOperatorsUp  {
+      case r:NamedRelation => apply(r)
+      case u:UnresolvedLeafNode => apply(u)
+//      case pr@Project(plist, p@Project(projectList, child)) =>
+//
+//        val res =  pr.copy(projectList, p)
+//        res.resolved
+//        res.setAnalyzed()
+//        res
+      case p: LogicalPlan =>
+        val pl = ResolveReferences(p)
+        pl.resolved
+        pl.setAnalyzed()
+      pl
+    }
   }
 
   def getHiveTableFileFormat(table: CatalogTable): FileFormat = {

@@ -52,14 +52,14 @@ object App {
 
     // spark.sql("create database lsdb2")
     //spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
-    val df1 = Seq(
-      "John",
-      "Sunny",
-      "Xiaoyu",
-      "Shashi",
-      "Bharath",
-      "Vivek"
-    ).toDF("col1")
+//    val df1 = Seq(
+//      "John",
+//      "Sunny",
+//      "Xiaoyu",
+//      "Shashi",
+//      "Bharath",
+//      "Vivek"
+//    ).toDF("col1")
 
    // import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
   //  spark.read.format("datahub").option("st","st").model("mod",df1)
@@ -101,7 +101,8 @@ object App {
 
     /** *datasource delta test case start** */
     spark.sql("create database cat.dbx106");
-    spark.sql("create table cat.dbx106.ttex(id string) using custom")
+    spark.sql("create table cat.dbx106.ttex(id int) using custom")
+    spark.sql("select id from  cat.dbx106.ttex where id<10 ").show()
 
 //        spark.sql(
 //              """ INSERT OVERWRITE TABLE cat.dbx106.ttex
@@ -111,7 +112,7 @@ object App {
 //            |     VALUES (1)""".stripMargin)
     //df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
 
-    df1.write.mode(SaveMode.Overwrite).insertInto("cat.dbx106.ttex")
+  //  df1.write.mode(SaveMode.Overwrite).insertInto("cat.dbx106.ttex")
 
 //    spark.sql("create table cat.dbx105.tdelta(id string) using delta")
 //    //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
