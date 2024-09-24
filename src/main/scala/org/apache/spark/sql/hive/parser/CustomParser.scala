@@ -17,7 +17,7 @@ class CustomParser(val delegate: ParserInterface) extends ParserInterface {
       SparkSession.active.conf.set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       new CustomSqlParser(delegate).parse(sqlText) match {
         case p: LogicalPlan => p
-        case _ => throw new IllegalThreadStateException("Inalid SQL")
+        case _ => throw new IllegalThreadStateException("Invalid SQL")
       }
     } catch {
       case e: Exception => throw e

@@ -100,9 +100,9 @@ object App {
     /** datasource parquet test case end* */
 
     /** *datasource delta test case start** */
-    spark.sql("create database cat.dbx106");
-    spark.sql("create table cat.dbx106.ttex(id int) using custom")
-    spark.sql("select id from  cat.dbx106.ttex where id<10 ").show()
+//    spark.sql("create database cat.dbx106");
+//    spark.sql("create table cat.dbx106.ttex(id int) using custom")
+//    spark.sql("select id from  cat.dbx106.ttex where id<10 ").show()
 
 //        spark.sql(
 //              """ INSERT OVERWRITE TABLE cat.dbx106.ttex
