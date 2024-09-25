@@ -82,10 +82,14 @@ object App {
 
 
     /** *datasource parquet test case start** */
-//    spark.sql("create database cat.dbx106");
+    spark.sql("create database cat.dbx107");
 //    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
+
+    spark.sql("create table cat.dbx107.tt(id int)")
+
+    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
 
 //    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
 //    spark.sql(

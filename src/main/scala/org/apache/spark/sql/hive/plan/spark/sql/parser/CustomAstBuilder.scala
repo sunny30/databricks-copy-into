@@ -1,5 +1,6 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.CreateViewContext
@@ -8,6 +9,8 @@ import org.apache.spark.sql.catalyst.trees.TreePattern.PARAMETER
 import org.apache.spark.sql.errors.QueryParsingErrors
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.execution.command.CreateViewCommand
+import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.hive.plan.spark.sql.execution.NonDefaultCatalogCreateViewCommand
 
 import scala.collection.JavaConverters.asScalaBufferConverter
 
@@ -58,20 +61,40 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     // To lift this we would need to reconstitute the body with parameter markers replaced with the
     // values given at CREATE VIEW time, or we would need to store the parameter values alongside
     // the text.
-    checkInvalidParameter(qPlan, "CREATE VIEW body")
+    //checkInvalidParameter(qPlan, "CREATE VIEW body")
     if (viewType == PersistedView) {
       val originalText = source(ctx.query)
       assert(Option(originalText).isDefined,
         "'originalText' must be provided to create permanent view")
-      CreateView(
-        withIdentClause(ctx.identifierReference(), UnresolvedIdentifier(_)),
-        userSpecifiedColumns,
-        visitCommentSpecList(ctx.commentSpec()),
-        properties,
-        Some(originalText),
-        qPlan,
-        ctx.EXISTS != null,
-        ctx.REPLACE != null)
+
+      val nameParts = withIdentClause(ctx.identifierReference(),
+        UnresolvedIdentifier(_)).
+        asInstanceOf[UnresolvedIdentifier].nameParts
+
+      if(nameParts.size==3){
+        NonDefaultCatalogCreateViewCommand(
+          TableIdentifier(table = nameParts(2), database = Some(nameParts(1)), catalog = Some(nameParts(0))),
+          userSpecifiedColumns,
+          visitCommentSpecList(ctx.commentSpec()),
+          properties,
+          Option(source(ctx.query)),
+          qPlan,
+          ctx.EXISTS != null,
+          ctx.REPLACE != null,
+          viewType = viewType
+        )
+
+      }else {
+        CreateView(
+          withIdentClause(ctx.identifierReference(), UnresolvedIdentifier(_)),
+          userSpecifiedColumns,
+          visitCommentSpecList(ctx.commentSpec()),
+          properties,
+          Some(originalText),
+          qPlan,
+          ctx.EXISTS != null,
+          ctx.REPLACE != null)
+      }
     } else {
       // Disallows 'CREATE TEMPORARY VIEW IF NOT EXISTS' to be consistent with
       // 'CREATE TEMPORARY TABLE'
@@ -101,18 +124,18 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     }
   }
 
-  private def checkInvalidParameter(plan: LogicalPlan, statement: String):
-  Unit = {
-    plan.foreach { p =>
-      p.expressions.foreach { expr =>
-        if (expr.containsPattern(PARAMETER)) {
-          throw QueryParsingErrors.parameterMarkerNotAllowed(statement, p.origin)
-        }
-      }
-    }
-    plan.children.foreach(p => checkInvalidParameter(p, statement))
-    plan.innerChildren.collect {
-      case child: LogicalPlan => checkInvalidParameter(child, statement)
-    }
-  }
+//  private def checkInvalidParameter(plan: LogicalPlan, statement: String):
+//  Unit = {
+//    plan.foreach { p =>
+//      p.expressions.foreach { expr =>
+//        if (expr.containsPattern(PARAMETER)) {
+//          throw QueryParsingErrors.parameterMarkerNotAllowed(statement, p.origin)
+//        }
+//      }
+//    }
+//    plan.children.foreach(p => checkInvalidParameter(p, statement))
+//    plan.innerChildren.collect {
+//      case child: LogicalPlan => checkInvalidParameter(child, statement)
+//    }
+//  }
 }

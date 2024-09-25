@@ -16,13 +16,14 @@ class CustomSparkSQLParser extends SparkSqlParser{
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText){ parser =>
 
     val ctx = parser.singleStatement()
-    withOrigin(ctx, Some(sqlText))
-    astBuilder.visitSingleStatement (ctx) match {
+    withOrigin(ctx, Some(sqlText)) {
+      astBuilder.visitSingleStatement(ctx) match {
 
-      case plan: LogicalPlan => plan
-      case _ => deltaSqlAstBuilder.visit(parser.singleStatement()) match {
-        case pl: LogicalPlan => pl
-        case _ => throw new IllegalArgumentException("Invalid SQL")
+        case plan: LogicalPlan => plan
+        case _ => deltaSqlAstBuilder.visit(parser.singleStatement()) match {
+          case pl: LogicalPlan => pl
+          case _ => throw new IllegalArgumentException("Invalid SQL")
+        }
       }
     }
 
