@@ -34,7 +34,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   private var delegatedCatalog: CatalogPlugin = null
 
-  private lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+  lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
       new FSMetaStoreCatalog(
         catalogName,
         sparkConf = SparkSession.active.sharedState.conf,

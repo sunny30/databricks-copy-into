@@ -12,6 +12,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.hive.catalog.FSMetaStoreCatalog.{DatabaseDesc, TableDesc}
 
 import java.io.IOException
 import scala.collection.mutable
@@ -34,16 +35,6 @@ class FSMetaStoreCatalog(
     }
   }
 
-  private class TableDesc(var table: CatalogTable) {
-    var partitions = new mutable.HashMap[TablePartitionSpec, CatalogTablePartition]
-  }
-
-  private class DatabaseDesc(var db: CatalogDatabase) {
-    val tables = new mutable.HashMap[String, TableDesc]
-    val functions = new mutable.HashMap[String, CatalogFunction]
-  }
-
-  private val catalog = new scala.collection.mutable.HashMap[String, DatabaseDesc]
 
 
   override def databaseExists(db: String): Boolean = {
@@ -64,7 +55,7 @@ class FSMetaStoreCatalog(
         properties = dbDefinition.properties,
         locationUri = dbPath.toUri
       )
-      catalog.put(dbName, new DatabaseDesc(newDb))
+      FSMetaStoreCatalog.catalog.put(dbName, new DatabaseDesc(newDb))
     }
   }
 
@@ -94,7 +85,8 @@ class FSMetaStoreCatalog(
 
   override def getDatabase(db: String): CatalogDatabase = {
     if(databaseExists(db)){
-      catalog(db).db
+      FSMetaStoreCatalog.catalog(db).db
+
     }else{
       throw new IllegalArgumentException("database does not exist")
     }
@@ -118,14 +110,14 @@ class FSMetaStoreCatalog(
 
   override def getTable(db: String, table: String): CatalogTable = {
     try {
-      catalog(db).tables(table).table
+      FSMetaStoreCatalog.catalog(db).tables(table).table
     }catch {
       case e:Exception => null
     }
   }
 
   override def getTablesByName(db: String, tables: Seq[String]): Seq[CatalogTable] = {
-    tables.flatMap(catalog(db).tables.get).map(_.table)
+    tables.flatMap(FSMetaStoreCatalog.catalog(db).tables.get).map(_.table)
   }
 
   override def listPartitionsByFilter(db: String, table: String, predicates: Seq[Expression], defaultTimeZoneId: String): Seq[CatalogTablePartition] = {
@@ -152,7 +144,7 @@ class FSMetaStoreCatalog(
 
     val spec = toCatalogPartitionSpec(partSpec)
     //requirePartitionsExist(db, table, Seq(spec))
-    catalog(db).tables(table).partitions(spec)
+    FSMetaStoreCatalog.catalog(db).tables(table).partitions(spec)
 
   }
 
@@ -175,7 +167,7 @@ class FSMetaStoreCatalog(
     val table = tableDefinition.identifier.table
     if (tableExists(db, table)) {
       if(tableDefinition.provider.isDefined && tableDefinition.provider.get.equalsIgnoreCase("delta")){
-        catalog(db).tables.put(table, new TableDesc(tableDefinition.copy(identifier=TableIdentifier(tableDefinition.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableDefinition.properties)))
+        FSMetaStoreCatalog.catalog(db).tables.put(table, new TableDesc(tableDefinition.copy(identifier=TableIdentifier(tableDefinition.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableDefinition.properties)))
       }
       if (!ignoreIfExists) {
         throw new TableAlreadyExistsException(db = db, table = table)
@@ -185,7 +177,7 @@ class FSMetaStoreCatalog(
         tableDefinition.tableType == CatalogTableType.MANAGED
 
       val tableWithLocation = if (needDefaultTableLocation) {
-        val defaultTableLocation = new Path(new Path(catalog(db).db.locationUri), table)
+        val defaultTableLocation = new Path(new Path(FSMetaStoreCatalog.catalog(db).db.locationUri), table)
         try {
           // val fs = defaultTableLocation.getFileSystem(hadoopConfig)
           fs.mkdirs(defaultTableLocation)
@@ -201,7 +193,7 @@ class FSMetaStoreCatalog(
           tableDefinition
         }
       val tableProp = tableWithLocation.properties.filter(_._1 != "comment")
-      catalog(db).tables.put(table, new TableDesc(tableWithLocation.copy(identifier=TableIdentifier(tableWithLocation.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableProp)))
+      FSMetaStoreCatalog.catalog(db).tables.put(table, new TableDesc(tableWithLocation.copy(identifier=TableIdentifier(tableWithLocation.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableProp)))
     }
   }
 
@@ -235,7 +227,7 @@ class FSMetaStoreCatalog(
 
 
   override def listTables(db: String): Seq[String] = synchronized {
-    catalog(db).tables.keySet.toSeq.sorted
+    FSMetaStoreCatalog.catalog(db).tables.keySet.toSeq.sorted
   }
 
   override def renamePartitions(db: String, table: String, specs: Seq[TablePartitionSpec], newSpecs: Seq[TablePartitionSpec]): Unit = {
@@ -247,7 +239,7 @@ class FSMetaStoreCatalog(
   }
 
   override def listTables(db: String, pattern: String): Seq[String] = {
-    catalog(db).tables.keySet.toSeq.filter(n => n.matches(pattern)).sorted
+    FSMetaStoreCatalog.catalog(db).tables.keySet.toSeq.filter(n => n.matches(pattern)).sorted
   }
 
   override def alterPartitions(db: String, table: String, parts: Seq[CatalogTablePartition]): Unit = {
@@ -277,4 +269,20 @@ class FSMetaStoreCatalog(
   override def listPartitionNames(db: String, table: String, partialSpec: Option[TablePartitionSpec]): Seq[String] = ???
 
   override def listPartitions(db: String, table: String, partialSpec: Option[TablePartitionSpec]): Seq[CatalogTablePartition] = ???
+}
+
+object FSMetaStoreCatalog{
+
+  private class TableDesc(var table: CatalogTable) {
+    var partitions = new mutable.HashMap[TablePartitionSpec, CatalogTablePartition]
+  }
+
+  private class DatabaseDesc(var db: CatalogDatabase) {
+    val tables = new mutable.HashMap[String, TableDesc]
+    val functions = new mutable.HashMap[String, CatalogFunction]
+  }
+
+  private val catalog = new scala.collection.mutable.HashMap[String, DatabaseDesc]
+
+
 }

@@ -82,7 +82,7 @@ object App {
 
 
     /** *datasource parquet test case start** */
-    spark.sql("create database cat.dbx107");
+    spark.sql("create database if not exists cat.dbx107");
 //    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
