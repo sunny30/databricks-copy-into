@@ -8,15 +8,19 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.connector.catalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
-import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, Table, TableCatalog, TableChange, V1Table}
+import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.delta.catalog.DeltaCatalog
+import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
+import org.apache.spark.sql.delta.DeltaErrors
+import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.spark.sql.connector.catalog.TableCapability._
+import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetWrite
 
 import scala.collection.JavaConverters._
 import java.net.URI
@@ -30,7 +34,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   private var delegatedCatalog: CatalogPlugin = null
 
-  private lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+  lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
       new FSMetaStoreCatalog(
         catalogName,
         sparkConf = SparkSession.active.sharedState.conf,
@@ -76,10 +80,14 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
     val catalogTable = try {
-      externalCatalog.getTable(ident.asTableIdentifier.table, ident.asTableIdentifier.database.getOrElse("default"))
+      externalCatalog.getTable(ident.asTableIdentifier.database.getOrElse("default"), ident.asTableIdentifier.table )
     } catch {
       case _: NoSuchTableException =>
         throw QueryCompilationErrors.noSuchTableError(ident)
+    }
+
+    if(catalogTable.provider.isDefined && catalogTable.provider.get.equalsIgnoreCase("delta")){
+      return (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
     }
 
     val properties = CatalogV2Util.applyPropertiesChanges(catalogTable.properties, changes)
@@ -93,18 +101,22 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       catalogTable.storage
     }
+    loadTable(ident) match {
+      case deltaTableV2: DeltaTableV2 => (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
+      case _ => try {
+        externalCatalog.alterTable(
+          catalogTable.copy(
+            properties = properties, schema = schema, owner = owner, comment = comment,
+            storage = storage))
 
-    try {
-      externalCatalog.alterTable(
-        catalogTable.copy(
-          properties = properties, schema = schema, owner = owner, comment = comment,
-          storage = storage))
-
-      V1Table(catalogTable)
-    } catch {
-      case _: NoSuchTableException =>
-        throw QueryCompilationErrors.noSuchTableError(ident)
+        V1Table(catalogTable)
+      } catch {
+        case _: NoSuchTableException =>
+          throw QueryCompilationErrors.noSuchTableError(ident)
+      }
     }
+
+
   }
 
   override def dropTable(ident: Identifier): Boolean = {
@@ -180,7 +192,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def defaultNamespace(): Array[String] = super.defaultNamespace()
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    (new DeltaCatalog).stageCreate(ident = ident, schema,partitions = partitions, properties = properties)
+    val table = createTable(ident, schema, partitions, properties)
+    BestEffortStagedTable(ident, table, this)
   }
 
 //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
@@ -188,7 +201,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 //  }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    (new DeltaCatalog).stageCreateOrReplace(ident = ident, schema = schema,partitions = partitions, properties = properties)
+    dropTable(ident)
+    val table = createTable(ident, schema, partitions, properties)
+    BestEffortStagedTable(ident, table, this)
   }
 
 
@@ -198,11 +213,25 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
     val provider = properties.getOrDefault(TableCatalog.PROP_PROVIDER, conf.defaultDataSourceName)
     val tableProperties = properties.asScala
-    val location = Option(properties.get(TableCatalog.PROP_LOCATION))
+    var location = Option(properties.get(TableCatalog.PROP_LOCATION))
+    var dbPath = getDBPath(ident.namespace.apply(0))
+    var isExternal = false
+    val dbStringPath = if(dbPath.toString.endsWith("/")){
+      dbPath.toString
+    }else{
+      dbPath.toString+"/"
+    }
+    location = location match {
+      case None =>
+        Some(dbStringPath+ident.name )
+      case _ =>
+        isExternal = true
+        location
+    }
     val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
       .copy(locationUri = location.map(CatalogUtils.stringToURI))
-    val isExternal = properties.containsKey(TableCatalog.PROP_EXTERNAL)
-    val tableType = if (isExternal || location.isDefined) {
+    isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
+    val tableType = if (isExternal) {
       CatalogTableType.EXTERNAL
     } else {
       CatalogTableType.MANAGED
@@ -220,11 +249,24 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       tracksPartitionsInCatalog = conf.manageFilesourcePartitions,
       comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
     try {
-      externalCatalog.createTable(tableDesc, ignoreIfExists = false)
-      V1Table(tableDesc)
+      if(provider.equalsIgnoreCase("delta")){
+        (new UnityDeltaCatalog(externalCatalog)).createDeltaTable(tableDesc)
+        DeltaTableV2(
+          SparkSession.active,
+          new Path(tableDesc.location),
+          catalogTable = Some(tableDesc),
+          tableIdentifier = Some(ident.toString))
+      }else {
+        externalCatalog.createTable(tableDesc, ignoreIfExists = false)
+        V1Table(tableDesc)
+      }
     }catch {
       case e: Exception => throw e
     }
+  }
+
+  def createTable(tableDesc: CatalogTable, ignoreIfExists:Boolean):Unit={
+    externalCatalog.createTable(tableDesc, ignoreIfExists)
   }
 
   private def toOptions(properties: Map[String, String]): Map[String, String] = {
@@ -241,7 +283,22 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def loadTable(ident: Identifier): Table = {
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    V1Table(externalCatalog.getTable(table = tableName, db = dbName))
+    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    if(tt == null)
+      return null
+    if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
+      DeltaTableV2(
+        SparkSession.active,
+        new Path(tt.location),
+        catalogTable = Some(tt),
+        tableIdentifier = Some(ident.toString))
+    } else {
+      if (tt != null) {
+        V1Table(externalCatalog.getTable(table = tableName, db = dbName))
+      } else {
+        null
+      }
+    }
   }
 
 
@@ -255,6 +312,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
+
     (new DeltaCatalog).stageReplace(ident = ident, schema = schema, partitions = partitions, properties = properties)
   }
   override def name(): String = catalogName
@@ -280,5 +338,32 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val dbPath = new Path(catalogPath,db+".db")
     dbPath.toUri
   }
+
+
+  private case class BestEffortStagedTable(
+                                            ident: Identifier,
+                                            table: Table,
+                                            catalog: TableCatalog) extends StagedTable with SupportsWrite {
+    override def abortStagedChanges(): Unit = catalog.dropTable(ident)
+
+    override def commitStagedChanges(): Unit = {}
+
+    // Pass through
+    override def name(): String = table.name()
+
+    override def schema(): StructType = table.schema()
+
+    override def partitioning(): Array[Transform] = table.partitioning()
+
+    override def capabilities(): util.Set[TableCapability] = table.capabilities()
+
+    override def properties(): util.Map[String, String] = table.properties()
+
+    override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = table match {
+      case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
+      case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
+    }
+  }
+
 
 }
