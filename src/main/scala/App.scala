@@ -82,14 +82,26 @@ object App {
 
 
     /** *datasource parquet test case start** */
+   // spark.sharedState.externalCatalog
     spark.sql("create database if not exists cat.dbx107");
 //    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
 
-    spark.sql("create table cat.dbx107.tt(id int)")
+
+
+
+      spark.sql("create table cat.dbx107.tt(id int)")
+
+    spark.sql(
+      """ INSERT INTO cat.dbx107.tt
+        |     VALUES (1), (2), (3)""".stripMargin)
+
+
 
     spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
+
+    spark.sql("select * from cat.dbx107.v").show()
 
 //    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
 //    spark.sql(
