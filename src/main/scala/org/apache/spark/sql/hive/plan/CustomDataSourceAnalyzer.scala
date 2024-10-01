@@ -9,7 +9,7 @@ import org.apache.spark.sql.catalyst.analysis.{GetColumnByOrdinal, GetViewColumn
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, NamedExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan, Project, SubqueryAlias, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, InsertIntoStatement, LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -29,6 +29,7 @@ import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
+
 import java.util.Locale
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -364,7 +365,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //          )
           //val relation = DeltaRelation.fromV2Relation(dtb, d, new CaseInsensitiveStringMap(dtb.properties()))
           //val newi = InsertIntoStatement(relation, m, a, q, f, ip,c)
-          new DeltaAnalysis(SparkSession.active).apply( CustomResolveInsertInto(i))
+          val retPlan = new DeltaAnalysis(SparkSession.active).apply( CustomResolveInsertInto(i))
+          retPlan
         case v:V1Table =>
 
           val ct = d.table.asInstanceOf[V1Table].v1Table
@@ -404,6 +406,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           }
       }
       }
+
+
+    case ab@AppendData(table@DataSourceV2Relation(v:DeltaTableV2, _, _, _, _), p:Project, writeOptions, isByName, write, analyzedQuery) =>
+      if(v.v1Table.provider.isDefined && v.v1Table.provider.get.equalsIgnoreCase("delta"))
+        ab.copy(analyzedQuery = Some(p))
+      else
+        ab
 
 
 

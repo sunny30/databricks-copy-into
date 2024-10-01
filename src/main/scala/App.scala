@@ -99,7 +99,7 @@ object App {
 
 
 
-    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt where id<3")
+    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
 
     spark.sql("select * from cat.dbx107.v").show()
 
