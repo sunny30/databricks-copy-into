@@ -91,7 +91,7 @@ object App {
 
 
 
-      spark.sql("create table cat.dbx107.tt(id int)")
+      spark.sql("create table cat.dbx107.tt(id int) using delta")
 
     spark.sql(
       """ INSERT INTO cat.dbx107.tt
@@ -99,7 +99,7 @@ object App {
 
 
 
-    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
+    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt where id<3")
 
     spark.sql("select * from cat.dbx107.v").show()
 

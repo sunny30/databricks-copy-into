@@ -16,6 +16,7 @@ import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.V1Table
 import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog}
+import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaRelation}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.errors.QueryCompilationErrors
@@ -28,8 +29,10 @@ import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
-
 import java.util.Locale
+import scala.collection.JavaConverters.mapAsScalaMapConverter
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
+
 
 class CustomDataSourceAnalyzer(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging {
@@ -345,9 +348,23 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         )
       }
 
-    case InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
+    case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
       d.table match {
-        case dtb: DeltaTableV2 => plan
+        case dtb: DeltaTableV2 =>
+//          val dataSource = DataSource(
+//            session,
+//            // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+//            // inferred at runtime. We should still support it.
+//            userSpecifiedSchema = if (dtb.schema.isEmpty) None else Some(dtb.schema),
+//            partitionColumns = dtb.v1Table.partitionColumnNames,
+//            bucketSpec = None,
+//            className = "delta",
+//            options = dtb.properties().asScala.toMap+("path"-> dtb.properties().get("location").toString),
+//            catalogTable = Some(dtb.v1Table)
+//          )
+          //val relation = DeltaRelation.fromV2Relation(dtb, d, new CaseInsensitiveStringMap(dtb.properties()))
+          //val newi = InsertIntoStatement(relation, m, a, q, f, ip,c)
+          new DeltaAnalysis(SparkSession.active).apply( CustomResolveInsertInto(i))
         case v:V1Table =>
 
           val ct = d.table.asInstanceOf[V1Table].v1Table
