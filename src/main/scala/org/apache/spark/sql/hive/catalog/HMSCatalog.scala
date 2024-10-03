@@ -1,6 +1,8 @@
 package org.apache.spark.sql.hive.catalog
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
+import org.apache.hadoop.hive.common.StatsSetupConst
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.apache.hadoop.hive.metastore.IMetaStoreClient
@@ -9,27 +11,33 @@ import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogDatabase, CatalogFunction, CatalogStatistics, CatalogStorageFormat, CatalogTable, CatalogTablePartition, CatalogTableType, CatalogUtils, ExternalCatalog}
+import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogDatabase, CatalogFunction, CatalogStatistics, CatalogStorageFormat, CatalogTable, CatalogTablePartition, CatalogTableType, CatalogUtils, ExternalCatalog, ExternalCatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.connector.catalog.SupportsNamespaces.PROP_OWNER
 import org.apache.spark.sql.hive.HiveUtils.{builtinHiveVersion, newTemporaryConfiguration}
-import org.apache.spark.sql.hive.client.HiveClientImpl.{fromHiveColumn, getHive, newHiveConf, toHiveColumn}
+import org.apache.spark.sql.hive.client.HiveClientImpl.{fromHiveColumn, getHive, newHiveConf, toHiveColumn, toHivePartition, toHiveTableType}
 import org.apache.spark.sql.hive.client.{HiveClient, IsolatedClientLoader}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.{CircularBuffer, MutableURLClassLoader, Utils}
 import org.apache.hadoop.hive.metastore.api.{Database => HiveDatabase, Table => MetaStoreApiTable, _}
 import org.apache.hadoop.hive.metastore.{IMetaStoreClient, TableType => HiveTableType}
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.NoSuchDatabaseException
+import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, NoSuchPartitionsException, NoSuchTableException}
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_ASC
 import org.apache.hadoop.hive.ql.metadata.{Hive, HiveException, Partition => HivePartition, Table => HiveTable}
+import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.escapePathName
+import org.apache.spark.sql.execution.datasources.PartitioningUtils
+import org.apache.spark.sql.hive.HiveExternalCatalog.{STATISTICS_COL_STATS_PREFIX, STATISTICS_NUM_ROWS, STATISTICS_TOTAL_SIZE}
+import org.apache.spark.sql.hive.HiveUtils
+import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
 import java.io.PrintStream
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Locale
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 class HMSCatalog(
@@ -413,33 +421,244 @@ class HMSCatalog(
     }
   }
 
-  override def listViews(db: String, pattern: String): Seq[String] = ???
+  def toHivePartition(
+                       p: CatalogTablePartition,
+                       ht: HiveTable): HivePartition = {
+    val tpart = new org.apache.hadoop.hive.metastore.api.Partition
+    val partValues = ht.getPartCols.asScala.map { hc =>
+      p.spec.getOrElse(hc.getName, throw new IllegalArgumentException(
+        s"Partition spec is missing a value for column '${hc.getName}': ${p.spec}"))
+    }
+    val storageDesc = new StorageDescriptor
+    val serdeInfo = new SerDeInfo
+    p.storage.locationUri.map(CatalogUtils.URIToString(_)).foreach(storageDesc.setLocation)
+    p.storage.inputFormat.foreach(storageDesc.setInputFormat)
+    p.storage.outputFormat.foreach(storageDesc.setOutputFormat)
+    p.storage.serde.foreach(serdeInfo.setSerializationLib)
+    serdeInfo.setParameters(p.storage.properties.asJava)
+    storageDesc.setSerdeInfo(serdeInfo)
+    tpart.setDbName(ht.getDbName)
+    tpart.setTableName(ht.getTableName)
+    tpart.setValues(partValues.asJava)
+    tpart.setSd(storageDesc)
+    tpart.setCreateTime(MILLISECONDS.toSeconds(p.createTime).toInt)
+    tpart.setLastAccessTime(MILLISECONDS.toSeconds(p.lastAccessTime).toInt)
+    tpart.setParameters(mutable.Map(p.parameters.toSeq: _*).asJava)
+    tpart.setCatName(catalogName)
+    new HivePartition(ht, tpart)
+  }
+
+  /**
+   * Build the native partition metadata from Hive's Partition.
+   */
+  def fromHivePartition(hp: HivePartition): CatalogTablePartition = {
+    val apiPartition = hp.getTPartition
+    val properties: Map[String, String] = if (hp.getParameters != null) {
+      hp.getParameters.asScala.toMap
+    } else {
+      Map.empty
+    }
+    CatalogTablePartition(
+      spec = Option(hp.getSpec).map(_.asScala.toMap).getOrElse(Map.empty),
+      storage = CatalogStorageFormat(
+        locationUri = Option(CatalogUtils.stringToURI(apiPartition.getSd.getLocation)),
+        inputFormat = Option(apiPartition.getSd.getInputFormat),
+        outputFormat = Option(apiPartition.getSd.getOutputFormat),
+        serde = Option(apiPartition.getSd.getSerdeInfo.getSerializationLib),
+        compressed = apiPartition.getSd.isCompressed,
+        properties = Option(apiPartition.getSd.getSerdeInfo.getParameters)
+          .map(_.asScala.toMap).orNull),
+      createTime = apiPartition.getCreateTime.toLong * 1000,
+      lastAccessTime = apiPartition.getLastAccessTime.toLong * 1000,
+      parameters = properties,
+      stats = readHiveStats(properties))
+  }
+
+  private def readHiveStats(properties: Map[String, String]): Option[CatalogStatistics] = {
+    val totalSize = properties.get(StatsSetupConst.TOTAL_SIZE).filter(_.nonEmpty).map(BigInt(_))
+    val rawDataSize = properties.get(StatsSetupConst.RAW_DATA_SIZE).filter(_.nonEmpty)
+      .map(BigInt(_))
+    val rowCount = properties.get(StatsSetupConst.ROW_COUNT).filter(_.nonEmpty).map(BigInt(_))
+    // NOTE: getting `totalSize` directly from params is kind of hacky, but this should be
+    // relatively cheap if parameters for the table are populated into the metastore.
+    // Currently, only totalSize, rawDataSize, and rowCount are used to build the field `stats`
+    // TODO: stats should include all the other two fields (`numFiles` and `numPartitions`).
+    // (see StatsSetupConst in Hive)
+
+    // When table is external, `totalSize` is always zero, which will influence join strategy.
+    // So when `totalSize` is zero, use `rawDataSize` instead. When `rawDataSize` is also zero,
+    // return None.
+    // In Hive, when statistics gathering is disabled, `rawDataSize` and `numRows` is always
+    // zero after INSERT command. So they are used here only if they are larger than zero.
+    if (totalSize.isDefined && totalSize.get > 0L) {
+      Some(CatalogStatistics(sizeInBytes = totalSize.get, rowCount = rowCount.filter(_ > 0)))
+    } else if (rawDataSize.isDefined && rawDataSize.get > 0) {
+      Some(CatalogStatistics(sizeInBytes = rawDataSize.get, rowCount = rowCount.filter(_ > 0)))
+    } else {
+      // TODO: still fill the rowCount even if sizeInBytes is empty. Might break anything?
+      None
+    }
+  }
+
+
+  override def listViews(db: String, pattern: String): Seq[String] = {
+    val hiveTableType = toHiveTableType(CatalogTableType.VIEW)
+    val tables = listTables(db)
+    msClient.getTableObjectsByName(catalogName, db, tables.asJava)
+      .asScala.
+      filter(t => t.getTableType.equalsIgnoreCase(hiveTableType.toString)).map(t=> t.getTableName)
+
+  }
+
+  override protected def requireDbExists(db: String): Unit = {
+    if (!databaseExists(db)) {
+      throw new NoSuchDatabaseException(db)
+    }
+  }
+
+  override protected def requireTableExists(db: String, table: String):Unit={
+    if (!tableExists(db, table)) {
+      throw new NoSuchTableException(db = db, table = table)
+    }
+  }
 
   override def loadTable(db: String, table: String, loadPath: String, isOverwrite: Boolean, isSrcLocal: Boolean): Unit = ???
 
 
   // Partitions TBD
-  override def loadPartition(db: String, table: String, loadPath: String, partition: TablePartitionSpec, isOverwrite: Boolean, inheritTableSpecs: Boolean, isSrcLocal: Boolean): Unit = ???
+  override def loadPartition(db: String, table: String, loadPath: String, partition: TablePartitionSpec, isOverwrite: Boolean, inheritTableSpecs: Boolean, isSrcLocal: Boolean): Unit = {
+    ???
+  }
 
   override def loadDynamicPartitions(db: String, table: String, loadPath: String, partition: TablePartitionSpec, replace: Boolean, numDP: Int): Unit = ???
 
-  override def createPartitions(db: String, table: String, parts: Seq[CatalogTablePartition], ignoreIfExists: Boolean): Unit = ???
+  override def createPartitions(db: String, table: String, parts: Seq[CatalogTablePartition], ignoreIfExists: Boolean): Unit = {
+    requireTableExists(db, table)
+
+    val tableMeta = getTable(db, table)
+    val ht = msClient.getTable(catalogName, db, table)
+    val partitionColumnNames = tableMeta.partitionColumnNames
+    val tablePath = new Path(tableMeta.location)
+    val partsWithLocation = parts.map { p =>
+      // Ideally we can leave the partition location empty and let Hive metastore to set it.
+      // However, Hive metastore is not case preserving and will generate wrong partition location
+      // with lower cased partition column names. Here we set the default partition location
+      // manually to avoid this problem.
+      val partitionPath = p.storage.locationUri.map(uri => new Path(uri)).getOrElse {
+        ExternalCatalogUtils.generatePartitionPath(p.spec, partitionColumnNames, tablePath)
+      }
+      p.copy(storage = p.storage.copy(locationUri = Some(partitionPath.toUri)))
+    }
+    val metaStoreParts = partsWithLocation
+      .map(p => p.copy(spec = toMetaStorePartitionSpec(p.spec)))
+    val javaListOfPartitions = metaStoreParts.
+      map(p => toHivePartition(p, new org.apache.hadoop.hive.ql.metadata.Table(ht))).
+      map(p=> p.getTPartition).
+      asJava
+    msClient.add_partitions(javaListOfPartitions)
+  }
+
+  private def toMetaStorePartitionSpec(spec: TablePartitionSpec): TablePartitionSpec = {
+    // scalastyle:off caselocale
+    val lowNames = spec.map { case (k, v) => k.toLowerCase -> v }
+    ExternalCatalogUtils.convertNullPartitionValues(lowNames)
+    // scalastyle:on caselocale
+  }
 
   override def dropPartitions(db: String, table: String, parts: Seq[TablePartitionSpec], ignoreIfNotExists: Boolean, purge: Boolean, retainData: Boolean): Unit = ???
 
   override def renamePartitions(db: String, table: String, specs: Seq[TablePartitionSpec], newSpecs: Seq[TablePartitionSpec]): Unit = ???
 
-  override def alterPartitions(db: String, table: String, parts: Seq[CatalogTablePartition]): Unit = ???
+  override def alterPartitions(db: String, table: String, newParts: Seq[CatalogTablePartition]): Unit = {
+    val metaStoreParts = newParts.map(p => p.copy(spec = toMetaStorePartitionSpec(p.spec)))
+    // convert partition statistics to properties so that we can persist them through hive api
+    val withStatsProps = metaStoreParts.map { p =>
+      if (p.stats.isDefined) {
+        val statsProperties = statsToProperties(p.stats.get)
+        p.copy(parameters = p.parameters ++ statsProperties)
+      } else {
+        p
+      }
+    }
+    val ht = new org.apache.hadoop.hive.ql.metadata.Table(msClient.getTable(catalogName,db,table))
+    val hps = withStatsProps.map { toHivePartition( _,ht).getTPartition}.asJava
+    msClient.alter_partitions(catalogName, db, table, hps)
 
-  override def getPartition(db: String, table: String, spec: TablePartitionSpec): CatalogTablePartition = ???
 
-  override def getPartitionOption(db: String, table: String, spec: TablePartitionSpec): Option[CatalogTablePartition] = ???
+  }
 
-  override def listPartitionNames(db: String, table: String, partialSpec: Option[TablePartitionSpec]): Seq[String] = ???
+  private def statsToProperties(stats: CatalogStatistics): Map[String, String] = {
 
-  override def listPartitions(db: String, table: String, partialSpec: Option[TablePartitionSpec]): Seq[CatalogTablePartition] = ???
+    val statsProperties = new mutable.HashMap[String, String]()
+    statsProperties += STATISTICS_TOTAL_SIZE -> stats.sizeInBytes.toString()
+    if (stats.rowCount.isDefined) {
+      statsProperties += STATISTICS_NUM_ROWS -> stats.rowCount.get.toString()
+    }
 
-  override def listPartitionsByFilter(db: String, table: String, predicates: Seq[Expression], defaultTimeZoneId: String): Seq[CatalogTablePartition] = ???
+    stats.colStats.foreach { case (colName, colStat) =>
+      colStat.toMap(colName).foreach { case (k, v) =>
+        // Fully qualified name used in table properties for a particular column stat.
+        // For example, for column "mycol", and "min" stat, this should return
+        // "spark.sql.statistics.colStats.mycol.min".
+        statsProperties += (STATISTICS_COL_STATS_PREFIX + k -> v)
+      }
+    }
+
+    statsProperties.toMap
+  }
+
+  override def getPartition(db: String, table: String, spec: TablePartitionSpec): CatalogTablePartition = {
+    getPartitionOption(db,table, spec).getOrElse(None)
+  }
+
+  override def getPartitionOption(db: String, table: String, spec: TablePartitionSpec): Option[CatalogTablePartition] = {
+    val ht = new org.apache.hadoop.hive.ql.metadata.Table(msClient.getTable(catalogName,db,table))
+    var noPartition = false
+    val jpartVals = ht.getPartCols.asScala.map(f => {
+
+      spec.get(f.getName)
+
+    }).filter(_.isDefined).map(_.get).asJava
+    val hp = msClient.getPartition(catalogName, db, table, jpartVals)
+    Some(fromHivePartition(new org.apache.hadoop.hive.ql.metadata.Partition(ht,hp)))
+  }
+
+  override def listPartitionNames(db: String, table: String, partialSpec: Option[TablePartitionSpec]): Seq[String] = {
+    val catalogTable = getTable(db, table)
+    val partColNameMap = buildLowerCasePartColNameMap(catalogTable).mapValues(escapePathName)
+    val clientPartitionNames =  msClient.listPartitionNames(catalogName, db, table, -1).asScala
+
+    clientPartitionNames.map { partitionPath =>
+      val partSpec = PartitioningUtils.parsePathFragmentAsSeq(partitionPath)
+      partSpec.map { case (partName, partValue) =>
+        // scalastyle:off caselocale
+        partColNameMap(partName.toLowerCase) + "=" + escapePathName(partValue)
+        // scalastyle:on caselocale
+      }.mkString("/")
+    }
+
+  }
+
+  private def buildLowerCasePartColNameMap(table: CatalogTable): Map[String, String] = {
+    val actualPartColNames = table.partitionColumnNames
+    // scalastyle:off caselocale
+    actualPartColNames.map(colName => (colName.toLowerCase, colName)).toMap
+    // scalastyle:on caselocale
+  }
+
+  override def listPartitions(db: String, table: String, partialSpec: Option[TablePartitionSpec]): Seq[CatalogTablePartition] = {
+    val hivePartitions = msClient.listPartitions(catalogName, db, table, -1).asScala
+    val ht = new org.apache.hadoop.hive.ql.metadata.Table(msClient.getTable(catalogName,db,table))
+    val catalogsPartitions = hivePartitions.map( hp => {
+      val hiveMetadataPartition = new org.apache.hadoop.hive.ql.metadata.Partition(ht,hp)
+      fromHivePartition(hiveMetadataPartition)
+    }).toSeq
+    catalogsPartitions
+  }
+
+  override def listPartitionsByFilter(db: String, table: String, predicates: Seq[Expression], defaultTimeZoneId: String): Seq[CatalogTablePartition] = {
+    listPartitions(db,table)
+  }
 
 
   // Function are not the major part for ExternalCatalog

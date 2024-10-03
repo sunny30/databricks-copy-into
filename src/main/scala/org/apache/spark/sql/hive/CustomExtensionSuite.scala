@@ -10,6 +10,7 @@ import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimized
 class CustomExtensionSuite extends DeltaSparkSessionExtension{
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
+
     super.apply(extensions)
     extensions.injectParser { (session, parser) =>
      // val delegate = new DeltaSqlParser(parser)
@@ -20,6 +21,8 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
     extensions.injectOptimizerRule(CustomOptimizedPlan)
     extensions.injectPlannerStrategy(_ => CustomStrategy)
+
+
 
   }
 

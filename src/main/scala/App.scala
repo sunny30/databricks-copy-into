@@ -91,7 +91,7 @@ object App {
 
 
 
-      spark.sql("create table cat.dbx107.tt(id int)")
+      spark.sql("create table cat.dbx107.tt(id int) using delta")
 
     spark.sql(
       """ INSERT INTO cat.dbx107.tt
