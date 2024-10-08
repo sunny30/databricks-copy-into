@@ -61,7 +61,14 @@ object App {
 //      "Vivek"
 //    ).toDF("col1")
 
-   // import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
+
+        val df1 = Seq(
+          1,
+          2
+        ).toDF("col1")
+
+
+    // import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
   //  spark.read.format("datahub").option("st","st").model("mod",df1)
 
 
@@ -83,7 +90,7 @@ object App {
 
     /** *datasource parquet test case start** */
    // spark.sharedState.externalCatalog
-    spark.sql("create database if not exists cat.dbx107");
+  //  spark.sql("create database if not exists cat.dbx107");
 //    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
@@ -91,11 +98,11 @@ object App {
 
 
    // spark.sql("create database cat.dbx107")
-      spark.sql("create table cat.dbx107.tt(id int) using delta")
+  //    spark.sql("create table cat.dbx107.tt(id int) using delta")
 
-    spark.sql(
-      """ INSERT INTO cat.dbx107.tt
-        |     VALUES (1), (2), (3)""".stripMargin)
+//    spark.sql(
+//      """ INSERT INTO cat.dbx107.tt
+//        |     VALUES (1), (2), (3)""".stripMargin)
 
 
 
@@ -118,7 +125,7 @@ object App {
     /** *datasource delta test case start** */
     spark.sql("create database cat.dbx106");
     spark.sql("create table cat.dbx106.ttex(id int) using custom")
-//    spark.sql("select id from  cat.dbx106.ttex where id<10 ").show()
+    spark.sql("select * from  cat.dbx106.ttex").show()
     spark.read.table("cat.dbx106.ttex").show()
 
 //        spark.sql(
@@ -127,7 +134,7 @@ object App {
     spark.sql(
           """ INSERT INTO cat.dbx106.ttex
             |     VALUES (1)""".stripMargin)
-    //df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
+    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
 
   //  df1.write.mode(SaveMode.Overwrite).insertInto("cat.dbx106.ttex")
 

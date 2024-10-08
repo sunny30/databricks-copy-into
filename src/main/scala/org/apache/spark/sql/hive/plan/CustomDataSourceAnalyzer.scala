@@ -23,7 +23,7 @@ import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.{CatalogFileIndex, DataSource, FileFormat, HadoopFsRelation, InsertIntoHadoopFsRelationCommand, LogicalRelation}
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -415,29 +415,31 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         ab
 
 
+    case p: LogicalPlan => p resolveOperatorsUp {
+      case ds@DataSourceV2ScanRelation(relation: DataSourceV2Relation, scan, output, keyGroupedPartitioning, ordering) =>
+        println("this is DataSourceV2Scan")
+        println(s"${ds.toString()}")
+        ds
+      case d: DataSourceV2Relation =>
+        apply(d)
 
 
-
-    case p: LogicalPlan => p resolveOperatorsUp  {
-      case r:NamedRelation => apply(r)
-      case u:UnresolvedLeafNode => apply(u)
-
-//      case pr@Project(plist, p@Project(projectList, child)) =>
-//
-//        val res =  pr.copy(projectList, p)
-//        res.resolved
-//        res.setAnalyzed()
-//        res
+      case u: UnresolvedLeafNode => apply(u)
+      //      case pr@Project(plist, p@Project(projectList, child)) =>
+      //
+      //        val res =  pr.copy(projectList, p)
+      //        res.resolved
+      //        res.setAnalyzed()
+      //        res
       case p: LogicalPlan =>
         p match {
-          case in:InsertIntoStatement => in //return as it is
+          case in: InsertIntoStatement => in //return as it is
           case _ =>
             val pl = ResolveReferences(p)
             pl.resolved
             pl.setAnalyzed()
             pl
         }
-
     }
   }
 
