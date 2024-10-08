@@ -421,6 +421,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     case p: LogicalPlan => p resolveOperatorsUp  {
       case r:NamedRelation => apply(r)
       case u:UnresolvedLeafNode => apply(u)
+
 //      case pr@Project(plist, p@Project(projectList, child)) =>
 //
 //        val res =  pr.copy(projectList, p)
@@ -428,10 +429,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        res.setAnalyzed()
 //        res
       case p: LogicalPlan =>
-        val pl = ResolveReferences(p)
-        pl.resolved
-        pl.setAnalyzed()
-      pl
+        p match {
+          case in:InsertIntoStatement => in //return as it is
+          case _ =>
+            val pl = ResolveReferences(p)
+            pl.resolved
+            pl.setAnalyzed()
+            pl
+        }
+
     }
   }
 

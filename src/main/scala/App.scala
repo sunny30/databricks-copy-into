@@ -90,7 +90,7 @@ object App {
 
 
 
-
+   // spark.sql("create database cat.dbx107")
       spark.sql("create table cat.dbx107.tt(id int) using delta")
 
     spark.sql(
@@ -99,9 +99,9 @@ object App {
 
 
 
-    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
+ //   spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
 
-    spark.sql("select * from cat.dbx107.v").show()
+ //   spark.sql("select * from cat.dbx107.v").show()
 
 //    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
 //    spark.sql(
@@ -116,16 +116,17 @@ object App {
     /** datasource parquet test case end* */
 
     /** *datasource delta test case start** */
-//    spark.sql("create database cat.dbx106");
-//    spark.sql("create table cat.dbx106.ttex(id int) using custom")
+    spark.sql("create database cat.dbx106");
+    spark.sql("create table cat.dbx106.ttex(id int) using custom")
 //    spark.sql("select id from  cat.dbx106.ttex where id<10 ").show()
+    spark.read.table("cat.dbx106.ttex").show()
 
 //        spark.sql(
 //              """ INSERT OVERWRITE TABLE cat.dbx106.ttex
-//                |     VALUES ('Sunny')""".stripMargin)
-//    spark.sql(
-//          """ INSERT INTO cat.dbx106.ttex
-//            |     VALUES (1)""".stripMargin)
+  //              |     VALUES ('Sunny')""".stripMargin)
+    spark.sql(
+          """ INSERT INTO cat.dbx106.ttex
+            |     VALUES (1)""".stripMargin)
     //df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
 
   //  df1.write.mode(SaveMode.Overwrite).insertInto("cat.dbx106.ttex")

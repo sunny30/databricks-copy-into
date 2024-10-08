@@ -608,7 +608,7 @@ class HMSCatalog(
   }
 
   override def getPartition(db: String, table: String, spec: TablePartitionSpec): CatalogTablePartition = {
-    getPartitionOption(db,table, spec).getOrElse(None)
+    getPartitionOption(db,table, spec).getOrElse(null)
   }
 
   override def getPartitionOption(db: String, table: String, spec: TablePartitionSpec): Option[CatalogTablePartition] = {
