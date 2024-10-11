@@ -61,7 +61,14 @@ object App {
 //      "Vivek"
 //    ).toDF("col1")
 
-   // import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
+
+        val df1 = Seq(
+          1,
+          2
+        ).toDF("col1")
+
+
+    // import org.apache.spark.sql.hive.util.DataFrameReaderExtension._
   //  spark.read.format("datahub").option("st","st").model("mod",df1)
 
 
@@ -83,25 +90,25 @@ object App {
 
     /** *datasource parquet test case start** */
    // spark.sharedState.externalCatalog
-    spark.sql("create database if not exists cat.dbx107");
+  //  spark.sql("create database if not exists cat.dbx107");
 //    spark.sql("create table cat.dbx106.tparquet(id string) using parquet")
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
 
 
 
+   // spark.sql("create database cat.dbx107")
+  //    spark.sql("create table cat.dbx107.tt(id int) using delta")
 
-      spark.sql("create table cat.dbx107.tt(id int) using delta")
-
-    spark.sql(
-      """ INSERT INTO cat.dbx107.tt
-        |     VALUES (1), (2), (3)""".stripMargin)
+//    spark.sql(
+//      """ INSERT INTO cat.dbx107.tt
+//        |     VALUES (1), (2), (3)""".stripMargin)
 
 
 
-    spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
+ //   spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
 
-    spark.sql("select * from cat.dbx107.v").show()
+ //   spark.sql("select * from cat.dbx107.v").show()
 
 //    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.tparquet")
 //    spark.sql(
@@ -118,15 +125,16 @@ object App {
     /** *datasource delta test case start** */
 //    spark.sql("create database cat.dbx106");
 //    spark.sql("create table cat.dbx106.ttex(id int) using custom")
-//    spark.sql("select id from  cat.dbx106.ttex where id<10 ").show()
-
-//        spark.sql(
-//              """ INSERT OVERWRITE TABLE cat.dbx106.ttex
-//                |     VALUES ('Sunny')""".stripMargin)
+//    spark.sql("select * from  cat.dbx106.ttex").show()
+//    spark.read.table("cat.dbx106.ttex").show()
+//
+////        spark.sql(
+////              """ INSERT OVERWRITE TABLE cat.dbx106.ttex
+//  //              |     VALUES ('Sunny')""".stripMargin)
 //    spark.sql(
 //          """ INSERT INTO cat.dbx106.ttex
 //            |     VALUES (1)""".stripMargin)
-    //df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
+//    df1.write.mode(SaveMode.Append).insertInto("cat.dbx106.ttex")
 
   //  df1.write.mode(SaveMode.Overwrite).insertInto("cat.dbx106.ttex")
 
@@ -147,17 +155,40 @@ object App {
 
 
     /** Hive Relation testing start * */
-//    spark.sql("create database cat.dbx102");
-//    spark.sql("CREATE TABLE cat.dbx102.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
-//    spark.conf.set("spark.insert.catalog","cat")
-//    df1.write.mode(SaveMode.Append).insertInto("cat.dbx102.hive_tbl")
+    spark.sql("create database cat.dbx108");
+    spark.conf.set("spark.insert.catalog","cat")
+//    df1.write.mode(SaveMode.Append).insertInto("cat.dbx108.hive_tbl")
 //    //    spark.sql(""" INSERT INTO cat.dbx103.tcsv
 //
-//    spark.sql(""" INSERT INTO cat.dbx102.hive_tbl VALUES ('new_value')""".stripMargin)
-//    val df3 = spark.sql("select * from cat.dbx102.hive_tbl")
-//    val df4 = spark.read.table("cat.dbx102.hive_tbl")
-//    df3.show()
-//    df4.show()
+    spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
+    spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
+    val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
+    val df4 = spark.read.table("cat.dbx108.hive_tbl")
+    df3.show()
+    df4.show()
+    spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
+    val df5 = spark.read.table("cat.dbx108.v1")
+    df5.show()
+
+    spark.sql("CREATE TABLE cat.dbx108.csv_tbl (col1 String) USING csv")
+    spark.sql(""" INSERT INTO cat.dbx108.csv_tbl VALUES ('new_value')""".stripMargin)
+    spark.sql("select * from cat.dbx108.csv_tbl").show()
+    spark.read.table("cat.dbx108.csv_tbl").show()
+
+    spark.sql("""create view cat.dbx108.v2(c) as select * from cat.dbx108.csv_tbl""")
+    spark.read.table("cat.dbx108.v2").show()
+    spark.sql("select * from cat.dbx108.v2").show()
+
+    spark.sql("CREATE TABLE cat.dbx108.delta_tbl (col1 String) USING delta")
+    spark.sql(""" INSERT INTO cat.dbx108.delta_tbl VALUES ('new_value')""".stripMargin)
+    spark.sql("select * from cat.dbx108.delta_tbl").show()
+    spark.read.table("cat.dbx108.delta_tbl").show()
+
+
+    spark.sql("""create view cat.dbx108.v3(c) as select * from cat.dbx108.delta_tbl""")
+    spark.read.table("cat.dbx108.v3").show()
+    spark.sql("select * from cat.dbx108.v3").show()
+
     /** Hive Relation testing end * */
 
     //    spark.sql("create database cat.dbx102")
