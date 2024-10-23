@@ -2,8 +2,10 @@ package org.apache.spark.sql.hive.experiment.sql
 
 object SQLDetailsUtil {
 
-  case class QualifiedRelation(dbName: String, tableName: String)
+  abstract class PlanDetails()
+
+  case class RelationDetails(dbName: String, tableName: String) extends PlanDetails
 
   case class QualifiedColumn(dbName: String, tableName: String, columnName: String)
-  case class PlanDetails(optype: String, attributes: Seq[String], expressions: Seq[QualifiedColumn],lineageInfo: Option[Map[String, String]]=None)
+  case class InterimPlanDetails(optype: String, attributes: Seq[QualifiedColumn], expressions: Seq[String], lineageInfo: Option[Map[String, String]]=None) extends PlanDetails
 }

@@ -1,55 +1,98 @@
 package org.apache.spark.sql.hive.experiment.sql
 
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Distinct, Except, Expand, Filter, Generate, GlobalLimit, Intersect, Join, LocalLimit, LogicalPlan, LogicalPlanVisitor, Offset, Pivot, Project, RebalancePartitions, Repartition, RepartitionByExpression, Sample, ScriptTransformation, Sort, Tail, Union, Window, WithCTE}
-import org.apache.spark.sql.hive.experiment.sql.SQLDetailsUtil.{PlanDetails, QualifiedColumn}
+import org.apache.spark.sql.hive.experiment.sql.SQLDetailsUtil.{InterimPlanDetails, PlanDetails, QualifiedColumn}
 
-object ParsedPlanMetadataVisitor extends LogicalPlanVisitor[PlanDetails]{
+object ParsedPlanMetadataVisitor extends LogicalPlanVisitor[PlanDetails] {
 
-  override def default(p: LogicalPlan):PlanDetails = PlanDetails("NA", Seq.empty[String], Seq.empty[QualifiedColumn])
+  def attributeDetails(at: Attribute): QualifiedColumn = {
+    val ats = at.asInstanceOf[UnresolvedAttribute]
+    if (ats.nameParts.length == 3) {
+      QualifiedColumn(ats.nameParts(0), ats.nameParts(1), ats.nameParts(2))
+    } else if (ats.nameParts.length == 2) {
+      QualifiedColumn("default", ats.nameParts(0), ats.nameParts(1))
+    } else {
+      QualifiedColumn("default", "default", ats.nameParts(0))
+    }
+  }
 
-  override def visitAggregate(p: Aggregate): PlanDetails = ???
+  override def default(p: LogicalPlan): InterimPlanDetails = InterimPlanDetails("NA", Seq.empty[QualifiedColumn], Seq.empty[String])
 
-  override def visitDistinct(p: Distinct): PlanDetails = ???
+  override def visitAggregate(p: Aggregate): InterimPlanDetails = {
+    val colDetails = p.aggregateExpressions.flatMap(e =>
+      e.references.map(at => attributeDetails(at)
+      )
+    )
 
-  override def visitExcept(p: Except): PlanDetails = ???
+    val sqlExpressions = p.aggregateExpressions.map(e => e.sql)
+    InterimPlanDetails(p.toString(), colDetails, sqlExpressions)
+  }
 
-  override def visitExpand(p: Expand): PlanDetails = ???
+  override def visitDistinct(p: Distinct): InterimPlanDetails = {
+    val colDetails = p.distinctKeys.flatMap(e =>
+      e.flatMap(ex => ex.references.map(at =>
+        attributeDetails(at)
+      )
+      )
+    ).toSeq
 
-  override def visitFilter(p: Filter): PlanDetails = ???
+    val sqlExpressions = p.distinctKeys.flatMap(ex => ex.map(e => e.sql)).toSeq
+    InterimPlanDetails(p.toString(), colDetails, sqlExpressions)
+  }
 
-  override def visitGenerate(p: Generate): PlanDetails = ???
+  override def visitExcept(p: Except): InterimPlanDetails = ???
 
-  override def visitGlobalLimit(p: GlobalLimit): PlanDetails = ???
+  override def visitExpand(p: Expand): InterimPlanDetails = ???
 
-  override def visitOffset(p: Offset): PlanDetails = ???
+  override def visitFilter(p: Filter): InterimPlanDetails = {
+    val colDetails = p.condition.references.map(at => attributeDetails(at)).toSeq
+    val sqlExpressions = Seq(p.condition.sql)
+    InterimPlanDetails(p.toString(), colDetails, sqlExpressions)
 
-  override def visitIntersect(p: Intersect): PlanDetails = ???
+  }
 
-  override def visitJoin(p: Join): PlanDetails = ???
+  override def visitGenerate(p: Generate): InterimPlanDetails = ???
 
-  override def visitLocalLimit(p: LocalLimit): PlanDetails = ???
+  override def visitGlobalLimit(p: GlobalLimit): InterimPlanDetails = ???
 
-  override def visitPivot(p: Pivot): PlanDetails = ???
+  override def visitOffset(p: Offset): InterimPlanDetails = ???
 
-  override def visitProject(p: Project): PlanDetails = ???
+  override def visitIntersect(p: Intersect): InterimPlanDetails = ???
 
-  override def visitRepartition(p: Repartition): PlanDetails = ???
+  override def visitJoin(p: Join): InterimPlanDetails = ???
 
-  override def visitRepartitionByExpr(p: RepartitionByExpression): PlanDetails = ???
+  override def visitLocalLimit(p: LocalLimit): InterimPlanDetails = ???
 
-  override def visitRebalancePartitions(p: RebalancePartitions): PlanDetails = ???
+  override def visitPivot(p: Pivot): InterimPlanDetails = ???
 
-  override def visitSample(p: Sample): PlanDetails = ???
+  override def visitProject(p: Project): InterimPlanDetails = {
+    val colDetails = p.projectList.flatMap(ne => ne.flatMap(e => e.references.map(at => {
+      attributeDetails(at)
+    })))
 
-  override def visitScriptTransform(p: ScriptTransformation): PlanDetails = ???
+    val sqlExpressions = p.projectList.flatMap(ex => ex.map(e => e.sql)).toSeq
+    InterimPlanDetails(p.toString(), colDetails, sqlExpressions)
+  }
 
-  override def visitUnion(p: Union): PlanDetails = ???
+  override def visitRepartition(p: Repartition): InterimPlanDetails = ???
 
-  override def visitWindow(p: Window): PlanDetails = ???
+  override def visitRepartitionByExpr(p: RepartitionByExpression): InterimPlanDetails = ???
 
-  override def visitTail(p: Tail): PlanDetails = ???
+  override def visitRebalancePartitions(p: RebalancePartitions): InterimPlanDetails = ???
 
-  override def visitSort(sort: Sort): PlanDetails = ???
+  override def visitSample(p: Sample): InterimPlanDetails = ???
 
-  override def visitWithCTE(p: WithCTE): PlanDetails = ???
+  override def visitScriptTransform(p: ScriptTransformation): InterimPlanDetails = ???
+
+  override def visitUnion(p: Union): InterimPlanDetails = ???
+
+  override def visitWindow(p: Window): InterimPlanDetails = ???
+
+  override def visitTail(p: Tail): InterimPlanDetails = ???
+
+  override def visitSort(sort: Sort): InterimPlanDetails = ???
+
+  override def visitWithCTE(p: WithCTE): InterimPlanDetails = ???
 }

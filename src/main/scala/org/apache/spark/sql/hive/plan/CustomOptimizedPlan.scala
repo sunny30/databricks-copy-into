@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive.plan
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.{SaveMode, SparkSession}
-import org.apache.spark.sql.catalyst.AliasIdentifier
+import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker}
 import org.apache.spark.sql.catalyst.analysis.{EliminateSubqueryAliases, ResolvedIdentifier}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, LogicalPlan, SubqueryAlias, TableSpec}
@@ -40,42 +40,51 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
     }
   }
 
-  override def apply(plan: LogicalPlan): LogicalPlan = plan match {
-    case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
-    options, ifNotExists, true) =>
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    println(plan.toString())
+    plan match {
 
-      val properties = CatalogV2Util.convertTableProperties(tableSpec)
-      val projectPlan = EliminateSubqueryAliases(query)
+      case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
+      _, _, _) =>
+        println("Inside CTAS")
+        val properties = CatalogV2Util.convertTableProperties(tableSpec)
+        val projectPlan = EliminateSubqueryAliases(query)
 
-////        ident,
-////        getV2Columns(query.schema,false),
-////        parts.toArray,
-////        properties.asJava
-////      )
-      val outputs = query.schema.map(s=>s.name)
-     // CustomDataSourceAsSelectCommand(catalog.asTableCatalog,table.asInstanceOf[V1Table].v1Table,SaveMode.ErrorIfExists,query,outputs)
-      if(properties.getOrElse("provider", "hive").equalsIgnoreCase("delta")){
-        plan
-      }else {
-        val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray,mapAsJavaMap(properties))
-        InsertIntoHadoopFsRelationCommand(
-          outputPath = new Path(table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString),
-          staticPartitions = Map.empty,
-          ifPartitionNotExists = false,
-          partitionColumns = Seq.empty[Attribute],
-          bucketSpec = None,
-          fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
-          Map.empty,
-          query = projectPlan,
-          SaveMode.Append,
-          None,
-          None,
-          query.output.map(_.name)
-        )
-      }
+        ////        ident,
+        ////        getV2Columns(query.schema,false),
+        ////        parts.toArray,
+        ////        properties.asJava
+        ////      )
+        val outputs = query.schema.map(s => s.name)
+        // CustomDataSourceAsSelectCommand(catalog.asTableCatalog,table.asInstanceOf[V1Table].v1Table,SaveMode.ErrorIfExists,query,outputs)
+        if (properties.getOrElse("provider", "hive").equalsIgnoreCase("delta")) {
+//          val newQuery = spark.sessionState.analyzer.executeAndCheck(query, new QueryPlanningTracker())
+//          newQuery.setAnalyzed()
+//          println("Inside delta block")
+//          ctas.setAnalyzed()
+//          ctas.copy(query = newQuery)
+          plan
+        } else {
+          val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+          InsertIntoHadoopFsRelationCommand(
+            outputPath = new Path(table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString),
+            staticPartitions = Map.empty,
+            ifPartitionNotExists = false,
+            partitionColumns = Seq.empty[Attribute],
+            bucketSpec = None,
+            fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
+            Map.empty,
+            query = projectPlan,
+            SaveMode.Append,
+            None,
+            None,
+            query.output.map(_.name)
+          )
+        }
 
 
-    //ctas
-    case p: LogicalPlan => plan
+      //ctas
+      case p: LogicalPlan => plan
+    }
   }
 }

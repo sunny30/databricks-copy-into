@@ -9,7 +9,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdin
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, NamedExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, InsertIntoStatement, LogicalPlan, Project, SubqueryAlias, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, InsertIntoStatement, LogicalPlan, Project, SubqueryAlias, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -155,7 +155,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
 
     case u@UnresolvedRelation(multipartIdentifier:Seq[String], _,_ ) =>
-
+      println("Inside Unresolved "+u.toString())
       val res = if (multipartIdentifier.size == 3) {
         (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
       } else if (multipartIdentifier.size == 2) {
@@ -208,6 +208,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case DataSourceV2Relation(table: V1Table, output:Seq[AttributeReference], _, _, _) =>
 
+      println("Inside DataSourceV2Relation ")
       if(table.v1Table.tableType == CatalogTableType.VIEW){
        return  getViewPlan(table)
       }
@@ -270,6 +271,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //in managed catalog we have to fix this.
     case x@Project(p, child@SubqueryAlias(identifier, child1: DataSourceV2Relation))
       if child1.catalog.isDefined =>
+
+      println("Inside Project over DataSourceV2Relation" )
       x.setAnalyzed()
       //      child.setAnalyzed()
       //      child1.setAnalyzed()
@@ -339,6 +342,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
     case u: UnresolvedTable =>
+      println("Inside UnresolvedTable")
       if (u.multipartIdentifier.size == 3) {
         val catName = u.multipartIdentifier(0)
         val dbName = u.multipartIdentifier(1)
@@ -356,6 +360,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     // child.setAnalyzed()
     //  child
     case InsertIntoStatement(u: UnresolvedRelation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) =>
+      println("InsertIntoStatement with UnresolvedRelation")
       val (catalogName, dbName, tableName) = if (u.multipartIdentifier.size == 2) {
         //extract catalog name from conf
         if (SparkSession.active.conf.contains("spark.insert.catalog")) {
@@ -408,6 +413,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
+      println("InsertIntoStatement with DataSourceV2Relation")
       d.table match {
         case dtb: DeltaTableV2 =>
 //          val dataSource = DataSource(
@@ -467,6 +473,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
     case ab@AppendData(table@DataSourceV2Relation(v:DeltaTableV2, _, _, _, _), p:Project, writeOptions, isByName, write, analyzedQuery) =>
+      print("Insie append data")
       if(v.v1Table.provider.isDefined && v.v1Table.provider.get.equalsIgnoreCase("delta"))
         ab.copy(analyzedQuery = Some(p))
       else
@@ -497,15 +504,29 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       //        res.setAnalyzed()
       //        res
       case p: LogicalPlan =>
+        println("Default plan is "+ p.toString())
+        if(p.toString().contains("AppendData")){
+          println("got you")
+        }
         p match {
+          case ctas: CreateTableAsSelect =>
+            ctas
+
           case in: InsertIntoStatement =>
             in //return as it is
 
           case ab@AppendData(table@DataSourceV2Relation(v: DeltaTableV2, _, _, _, _), _, _, _, _, _) =>
-            if (v.v1Table.provider.isDefined && v.v1Table.provider.get.equalsIgnoreCase("delta"))
+            println("Inside append data")
+            if (v.v1Table.provider.isDefined && v.v1Table.provider.get.equalsIgnoreCase("delta")) {
+              println("Inside delta analyzer block")
               ab.copy(analyzedQuery = Some(ab.query))
-            else
+            } else {
               ab
+            }
+
+          case abd@AppendData(table:DataSourceV2Relation, _, _, _, _, _) =>
+            println("Inside append data")
+            abd.copy(analyzedQuery = Some(abd.query))
 
           case _ =>
             val pl = ResolveReferences(p)

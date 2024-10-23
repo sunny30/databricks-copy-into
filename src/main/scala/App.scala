@@ -95,7 +95,26 @@ object App {
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     spark.conf.set("spark.insert.catalog", "cat")
 
+//    spark.sql("create database cat.dbx111")
+//    val df2 = spark.read.format("csv").option("header","false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
+//    df2.write.format("csv").saveAsTable("cat.dbx111.tt1")
+//    df2.write.format("parquet").saveAsTable("cat.dbx111.ttp")
+//    df2.write.format("delta").saveAsTable("cat.dbx111.ttd")
+//    spark.sql("CREATE TABLE cat.dbx111.delta_tbl (col1 String) USING delta")
+//    spark.sql(""" INSERT INTO cat.dbx111.delta_tbl VALUES ('new_value')""".stripMargin)
+//    df1.write.insertInto("cat.dbx111.delta_tbl")
+//    spark.sql("select * from cat.dbx111.delta_tbl").show()
+//    spark.read.table("cat.dbx111.delta_tbl").show()
+//
+//    df2.write.insertInto("cat.dbx111.ttp")
+//    spark.read.table("cat.dbx111.ttp").show()
 
+
+        spark.sql("create database cat.dbx111")
+        val df2 = spark.read.format("csv").option("header","false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
+        df2.write.format("csv").mode(SaveMode.Overwrite)saveAsTable("cat.dbx111.tt1")
+        df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx111.ttp")
+        df2.write.format("delta").mode(SaveMode.Overwrite)saveAsTable("cat.dbx111.ttd")
 
    // spark.sql("create database cat.dbx107")
   //    spark.sql("create table cat.dbx107.tt(id int) using delta")
@@ -119,6 +138,16 @@ object App {
 //    df.show()
 //    df2.show()
 //    df2.write.format("orc").mode("append").saveAsTable("cat.dbx106.to")
+
+//    spark.sql("create database cat.dbx110")
+//    spark.sql("create table cat.dbx110.tcsv(id string, name String, age int) using csv")
+//    spark.sql(
+//            """ INSERT INTO cat.dbx110.tcsv
+//              |     VALUES ('id1', 'sharad', 30), ('id2', 'Xiaoyu', 32), ('id3', 'Bharath', 29), ('id4', 'Shiv', 32)""".stripMargin)
+//    spark.sql("""select age, name from cat.dbx110.tcsv""").show()
+
+
+
 
     /** datasource parquet test case end* */
 
@@ -155,39 +184,39 @@ object App {
 
 
     /** Hive Relation testing start * */
-    spark.sql("create database cat.dbx108");
+//    spark.sql("create database cat.dbx108");
     spark.conf.set("spark.insert.catalog","cat")
 //    df1.write.mode(SaveMode.Append).insertInto("cat.dbx108.hive_tbl")
 //    //    spark.sql(""" INSERT INTO cat.dbx103.tcsv
 //
-    spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
-    spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
-    val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
-    val df4 = spark.read.table("cat.dbx108.hive_tbl")
-    df3.show()
-    df4.show()
-    spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
-    val df5 = spark.read.table("cat.dbx108.v1")
-    df5.show()
-
-    spark.sql("CREATE TABLE cat.dbx108.csv_tbl (col1 String) USING csv")
-    spark.sql(""" INSERT INTO cat.dbx108.csv_tbl VALUES ('new_value')""".stripMargin)
-    spark.sql("select * from cat.dbx108.csv_tbl").show()
-    spark.read.table("cat.dbx108.csv_tbl").show()
-
-    spark.sql("""create view cat.dbx108.v2(c) as select * from cat.dbx108.csv_tbl""")
-    spark.read.table("cat.dbx108.v2").show()
-    spark.sql("select * from cat.dbx108.v2").show()
-
-    spark.sql("CREATE TABLE cat.dbx108.delta_tbl (col1 String) USING delta")
-    spark.sql(""" INSERT INTO cat.dbx108.delta_tbl VALUES ('new_value')""".stripMargin)
-    spark.sql("select * from cat.dbx108.delta_tbl").show()
-    spark.read.table("cat.dbx108.delta_tbl").show()
-
-
-    spark.sql("""create view cat.dbx108.v3(c) as select * from cat.dbx108.delta_tbl""")
-    spark.read.table("cat.dbx108.v3").show()
-    spark.sql("select * from cat.dbx108.v3").show()
+//    spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
+//    spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
+//    val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
+//    val df4 = spark.read.table("cat.dbx108.hive_tbl")
+//    df3.show()
+//    df4.show()
+//    spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
+//    val df5 = spark.read.table("cat.dbx108.v1")
+//    df5.show()
+//
+//    spark.sql("CREATE TABLE cat.dbx108.csv_tbl (col1 String) USING csv")
+//    spark.sql(""" INSERT INTO cat.dbx108.csv_tbl VALUES ('new_value')""".stripMargin)
+//    spark.sql("select * from cat.dbx108.csv_tbl").show()
+//    spark.read.table("cat.dbx108.csv_tbl").show()
+//
+//    spark.sql("""create view cat.dbx108.v2(c) as select * from cat.dbx108.csv_tbl""")
+//    spark.read.table("cat.dbx108.v2").show()
+//    spark.sql("select * from cat.dbx108.v2").show()
+//
+//    spark.sql("CREATE TABLE cat.dbx108.delta_tbl (col1 String) USING delta")
+//    spark.sql(""" INSERT INTO cat.dbx108.delta_tbl VALUES ('new_value')""".stripMargin)
+//    spark.sql("select * from cat.dbx108.delta_tbl").show()
+//    spark.read.table("cat.dbx108.delta_tbl").show()
+//
+//
+//    spark.sql("""create view cat.dbx108.v3(c) as select * from cat.dbx108.delta_tbl""")
+//    spark.read.table("cat.dbx108.v3").show()
+//    spark.sql("select * from cat.dbx108.v3").show()
 
     /** Hive Relation testing end * */
 
@@ -213,7 +242,8 @@ object App {
     //    df.show()
     //    df2.show()
     // df1.write.format("parquet").save()
-    //df1.write.format("csv").saveAsTable("cat.dbx66.tt1")
+
+//    df1.write.format("csv").saveAsTable("cat.dbx66.tt1")
 
     //    val data = Seq(("James ", "", "Smith", 2018, 1, "M", 3000L),
     //      ("Michael ", "Rose", "", 2010, 3, "M", 4000L),
