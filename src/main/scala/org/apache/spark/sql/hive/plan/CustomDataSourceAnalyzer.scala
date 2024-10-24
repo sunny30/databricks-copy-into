@@ -9,7 +9,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdin
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, NamedExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, InsertIntoStatement, LogicalPlan, Project, SubqueryAlias, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, InsertIntoStatement, LogicalPlan, Project, ReplaceTableAsSelect, SubqueryAlias, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -509,7 +509,21 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           println("got you")
         }
         p match {
+
+          case rtas@ReplaceTableAsSelect(name, partitioning, query, tableSpec, writeOptions, orCreate, isAnalyzed) =>{
+            val optionString = writeOptions.map(t=>t._1+"::"+t._2).mkString("||")
+            println("RTAS Option String: "+optionString)
+            if(tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")){
+              CreateTableAsSelect(name, partitioning = partitioning, query = query, tableSpec = tableSpec, writeOptions = writeOptions, ignoreIfExists = false, isAnalyzed = isAnalyzed)
+            }else{
+              rtas
+            }
+          }
+
+
           case ctas: CreateTableAsSelect =>
+            val optionString = ctas.writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
+            println("CTAS Option String: " + optionString)
             ctas
 
           case in: InsertIntoStatement =>
