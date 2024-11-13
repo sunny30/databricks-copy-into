@@ -8,7 +8,7 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.connector.catalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
-import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, V1Table}
+import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.delta.DeltaErrors
@@ -16,11 +16,10 @@ import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
-import org.apache.spark.sql.execution.datasources.v2.V2SessionCatalog
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-import org.apache.spark.sql.connector.catalog.TableCapability._
-import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetWrite
+
+import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 
 import scala.collection.JavaConverters._
 import java.net.URI
@@ -109,7 +108,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
             properties = properties, schema = schema, owner = owner, comment = comment,
             storage = storage))
 
-        V1Table(catalogTable)
+        V2Table(catalogTable)
       } catch {
         case _: NoSuchTableException =>
           throw QueryCompilationErrors.noSuchTableError(ident)
@@ -258,7 +257,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           tableIdentifier = Some(ident.toString))
       }else {
         externalCatalog.createTable(tableDesc, ignoreIfExists = false)
-        V1Table(tableDesc)
+        V2Table(tableDesc)
       }
     }catch {
       case e: Exception => throw e
@@ -294,7 +293,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         tableIdentifier = Some(ident.toString))
     } else {
       if (tt != null) {
-        V1Table(externalCatalog.getTable(table = tableName, db = dbName))
+        V2Table(externalCatalog.getTable(table = tableName, db = dbName))
       } else {
         null
       }
