@@ -2,6 +2,7 @@ package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier}
+import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.CreateViewContext
 import org.apache.spark.sql.catalyst.plans.logical.{CreateView, LogicalPlan}
@@ -10,7 +11,7 @@ import org.apache.spark.sql.errors.QueryParsingErrors
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.hive.plan.spark.sql.execution.NonDefaultCatalogCreateViewCommand
+import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
 
 import scala.collection.JavaConverters.asScalaBufferConverter
 
@@ -121,6 +122,24 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
           ctx.REPLACE != null,
           viewType = viewType)
       })
+    }
+  }
+
+  override def visitDropView(ctx: SqlBaseParser.DropViewContext): AnyRef = withOrigin (ctx) {
+
+    val nameParts = withIdentClause(ctx.identifierReference(),
+      UnresolvedIdentifier(_)).
+      asInstanceOf[UnresolvedIdentifier].nameParts
+    if(nameParts.size == 3){
+      val catalogName = nameParts(0)
+      val dbName = nameParts(1)
+      val tableName = nameParts(2)
+      val isExists = ctx.EXISTS !=null
+      NonDefaultCatalogDropViewCommand(catalogName, dbName, tableName, isExists)
+    }else {
+      DropView(
+        withIdentClause(ctx.identifierReference, UnresolvedIdentifier(_, allowTemp = true)),
+        ctx.EXISTS != null)
     }
   }
 

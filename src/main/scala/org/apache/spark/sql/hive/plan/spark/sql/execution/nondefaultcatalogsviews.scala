@@ -11,7 +11,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.connector.catalog.Identifier
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.command.ViewHelper.generateViewProperties
-import org.apache.spark.sql.execution.command.{CreateViewCommand, RunnableCommand}
+import org.apache.spark.sql.execution.command.{CreateViewCommand, LeafRunnableCommand, RunnableCommand}
 import org.apache.spark.sql.hive.catalog.{FSMetaStoreCatalog, HMSCatalog}
 import org.apache.spark.sql.types.MetadataBuilder
 
@@ -115,5 +115,34 @@ case class NonDefaultCatalogCreateViewCommand(
       comment = comment
     )
   }
+
+}
+
+
+case class NonDefaultCatalogDropViewCommand(catalogName: String,
+                                            dbName: String,
+                                            tableName: String,
+                                            isExists: Boolean) extends LeafRunnableCommand {
+
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+
+    val sessionExternalCatalog = sparkSession.sessionState.catalogManager.catalog(catalogName).asTableCatalog
+    //val tc = sessionCatalog.loadTable(Identifier.of(Seq(dbName).toArray, tableName))
+    val tableIdent = Identifier.of(Seq(dbName).toArray, tableName)
+    if (sessionExternalCatalog.tableExists(tableIdent)) {
+      sessionExternalCatalog.dropTable(tableIdent)
+      Seq.empty[Row]
+    } else {
+      if (isExists) {
+        Seq.empty[Row]
+      } else {
+        throw QueryCompilationErrors.noSuchTableError(
+          Seq(catalogName + "." + dbName + "." + tableName))
+      }
+    }
+
+  }
+
 
 }

@@ -18,6 +18,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.v2.{AtomicReplaceTableAsSelectExec, DataSourceV2Relation, ReplaceTableAsSelectExec}
 import org.apache.spark.sql.execution.datasources.{FileFormat, InsertIntoHadoopFsRelationCommand, LogicalRelation}
 import org.apache.spark.sql.hive.orc.OrcFileFormat
+import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.internal.StaticSQLConf.WAREHOUSE_PATH
 import org.apache.spark.sql.types.StructType
 
@@ -74,14 +75,22 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           if(catalog.asTableCatalog.tableExists(ident)){
             catalog.asTableCatalog.dropTable(ident)
           }
-          val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+          val table = if(spark.conf.get("spark.sql.test.env").equalsIgnoreCase("false"))
+             catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+          else{
+            if(catalog.asTableCatalog.tableExists(ident)) {
+              catalog.asTableCatalog.loadTable(ident)
+            } else{
+              catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+            }
+          }
           InsertIntoHadoopFsRelationCommand(
-            outputPath = new Path(table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString),
+            outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
             partitionColumns = Seq.empty[Attribute],
             bucketSpec = None,
-            fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
+            fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
             Map.empty,
             query = projectPlan,
             SaveMode.Overwrite,
@@ -115,12 +124,12 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         } else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
           InsertIntoHadoopFsRelationCommand(
-            outputPath = new Path(table.asInstanceOf[V1Table].v1Table.storage.locationUri.get.toString),
+            outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
             partitionColumns = Seq.empty[Attribute],
             bucketSpec = None,
-            fileFormat = getFileFormat(table.asInstanceOf[V1Table].v1Table.provider.getOrElse("csv")),
+            fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
             Map.empty,
             query = projectPlan,
             SaveMode.Append,
