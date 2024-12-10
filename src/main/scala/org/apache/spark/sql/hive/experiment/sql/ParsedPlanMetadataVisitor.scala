@@ -1,8 +1,9 @@
 package org.apache.spark.sql.hive.experiment.sql
 
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.calcite.sql.parser.SqlParser
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedStar}
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Distinct, Except, Expand, Filter, Generate, GlobalLimit, Intersect, Join, LocalLimit, LogicalPlan, LogicalPlanVisitor, Offset, Pivot, Project, RebalancePartitions, Repartition, RepartitionByExpression, Sample, ScriptTransformation, Sort, Tail, Union, Window, WithCTE}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Distinct, Except, Expand, Filter, Generate, GlobalLimit, Intersect, Join, LeafNode, LocalLimit, LogicalPlan, LogicalPlanVisitor, Offset, Pivot, Project, RebalancePartitions, Repartition, RepartitionByExpression, Sample, ScriptTransformation, Sort, Tail, Union, Window, WithCTE}
 import org.apache.spark.sql.hive.experiment.sql.SQLDetailsUtil.{InterimPlanDetails, PlanDetails, QualifiedColumn}
 
 object ParsedPlanMetadataVisitor extends LogicalPlanVisitor[PlanDetails] {
@@ -68,9 +69,20 @@ object ParsedPlanMetadataVisitor extends LogicalPlanVisitor[PlanDetails] {
   override def visitPivot(p: Pivot): InterimPlanDetails = ???
 
   override def visitProject(p: Project): InterimPlanDetails = {
-    val colDetails = p.projectList.flatMap(ne => ne.flatMap(e => e.references.map(at => {
-      attributeDetails(at)
-    })))
+
+    val colDetails = p.projectList.flatMap(ne => ne match {
+      case u: UnresolvedStar =>
+       val dt =  p.collectLeaves().map(pl => pl match {
+          case l:LeafNode =>
+            (new SQLParser).getRelationDetails(l)
+          case pl:LogicalPlan => ParsedPlanMetadataVisitor.visit(pl)
+        })
+       dt.flatMap( d => d.getRelationalDetails.map(x => QualifiedColumn(x.dbName, x.tableName, "*")))
+      case _ => ne.flatMap(e => e.references.map(at => {
+        attributeDetails(at)
+      }
+    ))
+    })
 
     val sqlExpressions = p.projectList.flatMap(ex => ex.map(e => e.sql)).toSeq
     InterimPlanDetails(p.toString(), colDetails, sqlExpressions)
