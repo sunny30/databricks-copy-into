@@ -17,9 +17,11 @@ class SQLParser extends SparkSqlParser{
         val mident = p.asInstanceOf[UnresolvedRelation]
       .multipartIdentifier
         if(mident.length == 2){
-          RelationDetails(mident(0), mident(1))
+          RelationDetails("hive",mident(0), mident(1))
+        } else if (mident.length == 3) {
+          RelationDetails(mident(0), mident(1), mident(2))
         }else {
-          RelationDetails("default", mident(0))
+          RelationDetails("hive","default", mident(0))
         }
       })
   }
@@ -29,11 +31,11 @@ class SQLParser extends SparkSqlParser{
     val mident = p.asInstanceOf[UnresolvedRelation]
       .multipartIdentifier
     if (mident.length == 2) {
-      RelationDetails(mident(0), mident(1))
+      RelationDetails("hive", mident(0), mident(1))
     }else if(mident.length == 3){
-      RelationDetails(mident(1), mident(2))
+      RelationDetails(mident(0),mident(1), mident(2))
     } else {
-      RelationDetails("default", mident(0))
+      RelationDetails("hive","default", mident(0))
     }
   }
 
