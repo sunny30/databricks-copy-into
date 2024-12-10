@@ -10,12 +10,14 @@ object ParsedPlanMetadataVisitor extends LogicalPlanVisitor[PlanDetails] {
 
   def attributeDetails(at: Attribute): QualifiedColumn = {
     val ats = at.asInstanceOf[UnresolvedAttribute]
-    if (ats.nameParts.length == 3) {
-      QualifiedColumn(ats.nameParts(0), ats.nameParts(1), ats.nameParts(2))
+    if (ats.nameParts.length == 4) {
+      QualifiedColumn(ats.nameParts(0), ats.nameParts(1), ats.nameParts(2), ats.nameParts(3))
+    } else if (ats.nameParts.length == 3) {
+      QualifiedColumn("hive",ats.nameParts(0), ats.nameParts(1), ats.nameParts(2))
     } else if (ats.nameParts.length == 2) {
-      QualifiedColumn("default", ats.nameParts(0), ats.nameParts(1))
-    } else {
-      QualifiedColumn("default", "default", ats.nameParts(0))
+      QualifiedColumn("hive", "default", ats.nameParts(0), ats.nameParts(1))
+    }else {
+      QualifiedColumn("hive","default", "default", ats.nameParts(0))
     }
   }
 
@@ -77,7 +79,7 @@ object ParsedPlanMetadataVisitor extends LogicalPlanVisitor[PlanDetails] {
             (new SQLParser).getRelationDetails(l)
           case pl:LogicalPlan => ParsedPlanMetadataVisitor.visit(pl)
         })
-       dt.flatMap( d => d.getRelationalDetails.map(x => QualifiedColumn(x.dbName, x.tableName, "*")))
+       dt.flatMap( d => d.getRelationalDetails.map(x => QualifiedColumn(x.catalogName,x.dbName, x.tableName, "*")))
       case _ => ne.flatMap(e => e.references.map(at => {
         attributeDetails(at)
       }
