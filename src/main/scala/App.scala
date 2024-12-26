@@ -70,8 +70,10 @@ object App {
     ).toDF("col1")
 
 
-        spark.sql("create database cat.dbx118");
-        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
+    spark.sql("select fadd('', 1, 2) from values (1, 2, 3)").show()
+
+//        spark.sql("create database cat.dbx118");
+//        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
 //        df1.write.format("parquet").mode(SaveMode.Append).insertInto("cat.test_sudeep.jsonn_tbl")
 //        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
 //        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()

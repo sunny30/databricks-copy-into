@@ -3,6 +3,7 @@ package org.apache.spark.sql.hive
 import io.delta.sql.DeltaSparkSessionExtension
 import io.delta.sql.parser.DeltaSqlParser
 import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.hive.customnativefunctions.CustomAdd
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy}
@@ -21,7 +22,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
     extensions.injectOptimizerRule(CustomOptimizedPlan)
     extensions.injectPlannerStrategy(_ => CustomStrategy)
-
+    extensions.injectFunction(CustomAdd.fd)
 
 
 
