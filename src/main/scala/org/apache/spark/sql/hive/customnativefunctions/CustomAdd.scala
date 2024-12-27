@@ -2,38 +2,54 @@ package org.apache.spark.sql.hive.customnativefunctions
 
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
-import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, Expression, ExpressionInfo, ImplicitCastInputTypes}
+import org.apache.spark.sql.catalyst.expressions.{BinaryExpression, CreateNamedStruct, Expression, ExpressionInfo, ImplicitCastInputTypes, Literal}
 import org.apache.spark.sql.catalyst.util.TypeUtils
 import org.apache.spark.sql.hive.extra.FunctionDescription
-import org.apache.spark.sql.types.{AbstractDataType, DataType, DecimalType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StructType}
+import org.apache.spark.sql.types.{AbstractDataType, DataType, DecimalType, DoubleType, FloatType, IntegerType, LongType, NumericType, ShortType, StringType, StructType}
+import org.apache.spark.sql.functions._
 
 case class CustomAdd(name: String, left: Expression, right: Expression) extends BinaryExpression with ImplicitCastInputTypes {
 
   override def eval(input: InternalRow): Any = super.eval(input)
 
   override protected def nullSafeEval(input1: Any, input2: Any): Any = {
-    dataType match {
+    left.dataType match {
       case DecimalType.Fixed(precision, scale) => TypeUtils.getNumeric(dataType).plus(input1, input2)
       case LongType => input1.asInstanceOf[Long] + input2.asInstanceOf[Long]
       case IntegerType => input1.asInstanceOf[Int] + input2.asInstanceOf[Int]
       case s:StructType =>
-        val field1 = input1.asInstanceOf[StructType].fields.filter(f => f.name.equalsIgnoreCase(name)).head
-        val field2 = input2.asInstanceOf[StructType].fields.filter(f => f.name.equalsIgnoreCase(name)).head
-      val ans = field1.dataType match {
-        case DecimalType.Fixed(precision, scale) => TypeUtils.getNumeric(dataType).plus(field1, field2)
-        case LongType => field1.asInstanceOf[Long] + field2.asInstanceOf[Long]
-        case IntegerType => field1.asInstanceOf[Int] + field2.asInstanceOf[Int]
+        val field1 = left.asInstanceOf[CreateNamedStruct]
+        val field2 = right.asInstanceOf[CreateNamedStruct]
+        var structMap1 = ( field1.nameExprs.map(e => e.toString())  zip field1.valExprs).toMap
+        val structMap2 = ( field2.nameExprs.map(e => e.toString())  zip field2.valExprs).toMap
+        var f1 = structMap1(name)
+        val f2 = structMap2(name)
+
+      val ans = f1.dataType match {
+        case DecimalType.Fixed(precision, scale) => TypeUtils.getNumeric(dataType).plus(f1, f2)
+        case LongType => f1.asInstanceOf[Long] + f2.asInstanceOf[Long]
+        case IntegerType => f1.asInstanceOf[Literal].value.asInstanceOf[Int] + f2.asInstanceOf[Literal].value.asInstanceOf[Int]
         case _ => throw new UnsupportedOperationException("not supported")
       }
-      input1.asInstanceOf[StructType]
+        structMap1 = structMap1 + (name->lit(ans).expr)
+        val expressions = structMap1.map(kv => Seq(lit(kv._1).expr, kv._2)).flatten.toList
+        val result = CreateNamedStruct(expressions)
+        printJson(result)
       case _ =>   throw new UnsupportedOperationException("not supported")
 
     }
   }
 
+  override def prettyName: String = "fadd"
+
+  def printJson(result: CreateNamedStruct): String = {
+    var structMap1 = ( result.nameExprs.map(e => e.toString())  zip result.valExprs).toMap
+    structMap1.mkString(",")
+  }
+
   def symbol = "+"
 
-  override  def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+  final override  protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
     dataType match {
       case LongType | IntegerType | DoubleType | FloatType | ShortType =>
 
@@ -53,7 +69,10 @@ case class CustomAdd(name: String, left: Expression, right: Expression) extends 
 
   }
 
-  override def dataType: DataType = left.dataType
+  override def dataType: DataType = left.dataType match {
+    case s:StructType => StringType
+    case _ => left.dataType
+  }
 
   override protected def withNewChildrenInternal(newLeft: Expression, newRight: Expression): Expression = {
     copy(left = newLeft, right = newRight)
