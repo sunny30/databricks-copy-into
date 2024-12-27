@@ -3,11 +3,13 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.SparkConf
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenContext
 import org.apache.spark.sql.delta.DeltaLog
 import org.apache.spark.sql.hive.datashare.{ConverterUtil, FSUtils}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.DiscoverCatalogPartition
 import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods
+import org.apache.spark.sql.functions._
 
 object App {
 
@@ -50,6 +52,7 @@ object App {
       getOrCreate()
 
     import spark.implicits._
+   // import spark.sqlContext.implicits._
 
 
     // spark.sql("create database lsdb2")
@@ -65,13 +68,22 @@ object App {
 
 
     val df1 = Seq(
-      1,
-      2
-    ).toDF("col1")
+      (1,2),
+      (2,3)
+    ).toDF("col1", "col2")
 
+  //  df1.withColumn("col3", expr("fadd('',col1, col2)")).show()
+  //  df1.selectExpr("fadd('',col1, col2)").show
 
-        spark.sql("create database cat.dbx118");
-        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
+  spark.sql("select fadd('a',  named_struct('a', 1, 'b', 2, 'c', 3),  named_struct('a', 2, 'b', 6, 'c', 3))").show(40,false)
+
+//    val codegenContext = new CodegenContext
+//    val exprCode = expr("fadd('',1, 2)").expr.genCode(codegenContext)
+//    println(exprCode.code.toString())
+  //  spark.sql("select fadd('', 1, 2) from values (1, 2, 3)").show()
+
+//        spark.sql("create database cat.dbx118");
+//        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
 //        df1.write.format("parquet").mode(SaveMode.Append).insertInto("cat.test_sudeep.jsonn_tbl")
 //        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
 //        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()
