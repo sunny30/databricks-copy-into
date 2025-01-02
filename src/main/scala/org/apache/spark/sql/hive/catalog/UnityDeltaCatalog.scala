@@ -9,12 +9,11 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelpe
 import org.apache.spark.sql.connector.catalog.{CatalogPlugin, Identifier, Table, TableCatalog, TableChange, V1Table}
 import org.apache.spark.sql.connector.catalog.TableChange.{AddColumn, ColumnChange, ColumnPosition, DeleteColumn, RemoveProperty, RenameColumn, SetProperty, UpdateColumnComment, UpdateColumnNullability, UpdateColumnPosition, UpdateColumnType}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
-import org.apache.spark.sql.delta.{DeltaConfigs, DeltaErrors}
+import org.apache.spark.sql.delta.{DeltaConfigs, DeltaErrors, UnityCreateDeltaTableCommand}
 import org.apache.spark.sql.delta.commands.{AlterTableAddColumnsDeltaCommand, AlterTableAddConstraintDeltaCommand, AlterTableChangeColumnDeltaCommand, AlterTableDropColumnsDeltaCommand, AlterTableDropConstraintDeltaCommand, AlterTableDropFeatureDeltaCommand, AlterTableReplaceColumnsDeltaCommand, AlterTableSetLocationDeltaCommand, AlterTableSetPropertiesDeltaCommand, AlterTableUnsetPropertiesDeltaCommand, TableCreationModes}
 import org.apache.spark.sql.delta.constraints.{AddConstraint, DropConstraint}
 import org.apache.spark.sql.delta.sources.DeltaSQLConf
 import org.apache.spark.sql.delta.tablefeatures.DropFeature
-import org.apache.spark.sql.hive.plan.delta.UnityCreateDeltaTableCommand
 import org.apache.spark.sql.types.StructField
 import org.apache.spark.sql.hive.catalog.UnityCatalog
 
