@@ -9,14 +9,14 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdin
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaUpdateTable, DeserializeToObject, InsertIntoStatement, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DeserializeToObject, InsertIntoStatement, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableUpdate}
+import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.DeleteCommand
 import org.apache.spark.sql.delta.util.AnalysisHelper
@@ -519,6 +519,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             }else{
               d
             }
+
+          case m: DeltaMergeInto =>
+            PreprocessTableMerge(session.sqlContext.conf).apply(m)
+
           case u:DeltaUpdateTable =>
             PreprocessTableUpdate.apply(session.sqlContext.conf).toCommand(u)
 
