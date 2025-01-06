@@ -10,6 +10,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.execution.DiscoverCatalogPartiti
 import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 
 object App {
 
@@ -53,6 +54,14 @@ object App {
 
     import spark.implicits._
    // import spark.sqlContext.implicits._
+
+
+   // val hpl = CustomSparkSQLParser.parsePlan("describe history cat.db.tb")
+
+
+    val cbpl = CustomSparkSQLParser.parsePlan("create table cat.db.tb(id int, name string) using delta cluster by(id)")
+
+    cbpl
 
 
     // spark.sql("create database lsdb2")
