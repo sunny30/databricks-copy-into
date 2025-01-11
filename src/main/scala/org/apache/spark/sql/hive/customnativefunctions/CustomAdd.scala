@@ -50,12 +50,34 @@ case class CustomAdd(name: String, left: Expression, right: Expression) extends 
   def symbol = "+"
 
   final override  protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
+
     dataType match {
-      case LongType | IntegerType | DoubleType | FloatType | ShortType =>
+      case IntegerType | ShortType =>
 
         nullSafeCodeGen(ctx, ev, (eval1, eval2) => {
           s"""
-             |${ev.value} = $eval1 $symbol $eval2;
+             |${ev.value} =  java.lang.Integer.sum($eval1, $eval2);
+           """.stripMargin
+        })
+
+      case LongType =>
+        nullSafeCodeGen(ctx, ev, (eval1, eval2) => {
+          s"""
+             |${ev.value} = java.lang.Long.sum($eval1, $eval2);
+           """.stripMargin
+        })
+
+      case DoubleType =>
+        nullSafeCodeGen(ctx, ev, (eval1, eval2) => {
+          s"""
+             |${ev.value} = java.lang.Double.sum($eval1, $eval2);
+           """.stripMargin
+        })
+
+      case FloatType =>
+        nullSafeCodeGen(ctx, ev, (eval1, eval2) => {
+          s"""
+             |${ev.value} = java.lang.Float.sum($eval1, $eval2);
            """.stripMargin
         })
 
