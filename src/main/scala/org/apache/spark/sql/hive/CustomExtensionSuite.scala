@@ -23,6 +23,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     extensions.injectOptimizerRule(CustomOptimizedPlan)
     extensions.injectPlannerStrategy(_ => CustomStrategy)
     extensions.injectFunction(CustomAdd.fd)
+   // super.apply(extensions)
 
 
 

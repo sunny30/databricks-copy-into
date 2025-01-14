@@ -11,14 +11,14 @@ import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
 import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
-import org.apache.spark.sql.delta.DeltaErrors
+import org.apache.spark.sql.delta.{DeltaErrors, UnityDeltaCatalog}
 import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
+import org.apache.spark.sql.delta.commands.TableCreationModes
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
-
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 
 import scala.collection.JavaConverters._
@@ -209,58 +209,71 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def createTable(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): Table = {
 
     import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TransformHelper
-    val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
-    val provider = properties.getOrDefault(TableCatalog.PROP_PROVIDER, conf.defaultDataSourceName)
-    val tableProperties = properties.asScala
+
+    var isExternal = false
     var location = Option(properties.get(TableCatalog.PROP_LOCATION))
     var dbPath = getDBPath(ident.namespace.apply(0))
-    var isExternal = false
-    val dbStringPath = if(dbPath.toString.endsWith("/")){
+    val dbStringPath = if (dbPath.toString.endsWith("/")) {
       dbPath.toString
-    }else{
-      dbPath.toString+"/"
+    } else {
+      dbPath.toString + "/"
     }
     location = location match {
       case None =>
-        Some(dbStringPath+ident.name )
+        Some(dbStringPath + ident.name)
       case _ =>
         isExternal = true
         location
     }
-    val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
-      .copy(locationUri = location.map(CatalogUtils.stringToURI))
     isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
-    val tableType = if (isExternal) {
-      CatalogTableType.EXTERNAL
-    } else {
-      CatalogTableType.MANAGED
-    }
+    val locationUri = location.map(CatalogUtils.stringToURI)
 
-    val tableDesc = CatalogTable(
-      identifier = ident.asTableIdentifier,
-      tableType = tableType,
-      storage = storage,
-      schema = schema,
-      provider = Some(provider),
-      partitionColumnNames = partitionColumns,
-      bucketSpec = maybeBucketSpec,
-      properties = tableProperties.toMap,
-      tracksPartitionsInCatalog = conf.manageFilesourcePartitions,
-      comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
-    try {
-      if(provider.equalsIgnoreCase("delta")){
-        (new UnityDeltaCatalog(externalCatalog)).createDeltaTable(tableDesc)
-        DeltaTableV2(
-          SparkSession.active,
-          new Path(tableDesc.location),
-          catalogTable = Some(tableDesc),
-          tableIdentifier = Some(ident.toString))
-      }else {
+    val provider = properties.getOrDefault(TableCatalog.PROP_PROVIDER, conf.defaultDataSourceName)
+    if(provider.equalsIgnoreCase("delta")){
+      new UnityDeltaCatalog(externalCatalog).createDeltaTable(
+        ident,
+        schema,
+        partitions,
+        properties,
+        Map.empty,
+        sourceQuery = None,
+        TableCreationModes.Create,
+        location.getOrElse(""),
+        isExternal
+      )
+
+    }else {
+      val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
+
+      val tableProperties = properties.asScala
+      var location = Option(properties.get(TableCatalog.PROP_LOCATION))
+      var isExternal = false
+      val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
+        .copy(locationUri = location.map(CatalogUtils.stringToURI))
+      isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
+      val tableType = if (isExternal) {
+        CatalogTableType.EXTERNAL
+      } else {
+        CatalogTableType.MANAGED
+      }
+
+      val tableDesc = CatalogTable(
+        identifier = ident.asTableIdentifier,
+        tableType = tableType,
+        storage = storage,
+        schema = schema,
+        provider = Some(provider),
+        partitionColumnNames = partitionColumns,
+        bucketSpec = maybeBucketSpec,
+        properties = tableProperties.toMap,
+        tracksPartitionsInCatalog = conf.manageFilesourcePartitions,
+        comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
+      try {
         externalCatalog.createTable(tableDesc, ignoreIfExists = false)
         V2Table(tableDesc)
+      } catch {
+        case e: Exception => throw e
       }
-    }catch {
-      case e: Exception => throw e
     }
   }
 

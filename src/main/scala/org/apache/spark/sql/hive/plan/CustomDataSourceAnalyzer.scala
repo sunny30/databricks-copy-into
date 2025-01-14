@@ -7,16 +7,16 @@ import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
 import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
-import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaUpdateTable, InsertIntoStatement, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DeserializeToObject, InsertIntoStatement, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableUpdate}
+import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.DeleteCommand
 import org.apache.spark.sql.delta.util.AnalysisHelper
@@ -484,7 +484,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
       case d: DataSourceV2Relation =>
         println("this is DataSourceV2"+d.toString())
-        apply(d)
+        if(d.table.isInstanceOf[DeltaTableV2]){
+          DeltaRelation.fromV2Relation(d.table.asInstanceOf[DeltaTableV2], d, d.options)
+
+        }else {
+          apply(d)
+        }
 
       case u:UnresolvedRelation =>
         println("this is for view "+u.toString())
@@ -505,8 +510,21 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           println("got you")
         }
         p match {
-//          case u:DeltaUpdateTable =>
-//            PreprocessTableUpdate.apply(session.sqlContext.conf)
+
+          case d: DeserializeToObject =>
+            if(!d.resolved) {
+              val deserExp = ResolveReferences.resolveExpressionByPlanChildren(d.deserializer, d)
+              val resolveAttr = ResolveReferences.resolveExpressionByPlanChildren(d.outputObjAttr, d).asInstanceOf[Attribute]
+              d.copy(deserializer = deserExp, outputObjAttr = resolveAttr)
+            }else{
+              d
+            }
+
+          case m: DeltaMergeInto =>
+            PreprocessTableMerge(session.sqlContext.conf).apply(m)
+
+          case u:DeltaUpdateTable =>
+            PreprocessTableUpdate.apply(session.sqlContext.conf).toCommand(u)
 
           case d: DeltaDelete =>
             d.condition.foreach { cond =>
@@ -578,7 +596,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           case _ =>
             val pl = ResolveReferences(p)
             pl.resolved
-            pl.setAnalyzed()
+          //  pl.setAnalyzed()
             pl
         }
     }

@@ -64,7 +64,7 @@
         <dependency>
             <groupId>io.delta</groupId>
             <artifactId>delta-storage</artifactId>
-            <version>3.0.0</version>
+            <version>3.2.0</version>
             <!--            <scope>provided</scope>-->
         </dependency>
 
@@ -186,7 +186,7 @@
         <dependency>
             <groupId>io.delta</groupId>
             <artifactId>delta-spark_2.12</artifactId>
-            <version>3.0.0</version>
+            <version>3.2.0</version>
 <!--            <scope>provided</scope>-->
         </dependency>
 

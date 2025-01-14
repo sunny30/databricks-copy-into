@@ -99,7 +99,7 @@ case class ConverterUtil(basePath: Option[Path], table: Option[CatalogTable], fo
 
       val (committedVersion, postCommitSnapshot) = txn.commitLarge(
         spark,
-        Iterator.single(txn.protocol) ++ addFilesIter,
+        Iterator.single(txn.protocol) ++ addFilesIter,Some(txn.protocol),
         operation,
         Map.empty,
         metrics)

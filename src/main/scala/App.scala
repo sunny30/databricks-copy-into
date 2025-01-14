@@ -10,6 +10,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.execution.DiscoverCatalogPartiti
 import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 
 object App {
 
@@ -55,6 +56,14 @@ object App {
    // import spark.sqlContext.implicits._
 
 
+   // val hpl = CustomSparkSQLParser.parsePlan("describe history cat.db.tb")
+
+
+  //  val cbpl = CustomSparkSQLParser.parsePlan("create table cat.db.tb(id int, name string) using delta cluster by(id)")
+
+  //  cbpl
+
+
     // spark.sql("create database lsdb2")
     //spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
     //    val df1 = Seq(
@@ -75,7 +84,7 @@ object App {
   //  df1.withColumn("col3", expr("fadd('',col1, col2)")).show()
   //  df1.selectExpr("fadd('',col1, col2)").show
 
-  spark.sql("select fadd('a',  named_struct('a', 1, 'b', 2, 'c', 3),  named_struct('a', 2, 'b', 6, 'c', 3))").show(40,false)
+ // spark.sql("select fadd('a',  named_struct('a', 1, 'b', 2, 'c', 3),  named_struct('a', 2, 'b', 6, 'c', 3))").show(40,false)
 
 //    val codegenContext = new CodegenContext
 //    val exprCode = expr("fadd('',1, 2)").expr.genCode(codegenContext)
@@ -158,24 +167,74 @@ object App {
     //df1.write.format("csv").mode("append").saveAsTable("cat.dbx103.tcsv")
     //    spark.conf.set("spark.insert.catalog", "cat")
     //
-   //     spark.sql("create database cat.dbx116")
+
     //    val df2 = spark.read.format("csv").option("header","false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
     //    df2.write.format("csv").saveAsTable("cat.dbx113.tt1")
     //    df2.write.format("parquet").saveAsTable("cat.dbx113.ttp")
-     //   df2.write.format("delta").saveAsTable("cat.dbx116.ttd")
-    //   spark.sql("CREATE TABLE cat.dbx116.ttd (col1 String) USING delta")
-    //    spark.sql(""" INSERT INTO cat.dbx116.ttd VALUES ('99'), ('6'), ('7')""".stripMargin)
-      //  df2.write.insertInto("cat.dbx116.ttd")
-     //   spark.sql("select * from cat.dbx116.ttd").show()
-     //   spark.read.table("cat.dbx116.ttd").show()
-   //     spark.sql("update cat.dbx116.ttd set col1 = 'six' where col1 = '6' ").show()
-     //   spark.read.table("cat.dbx116.ttd").show()
- //   spark.sql("select * from cat.dbx116.ttd").show()
+    //   df2.write.format("delta").saveAsTable("cat.dbx116.ttd")
 
-    //
-    //    df2.write.insertInto("cat.dbx113.ttp")
-    //    spark.read.table("cat.dbx113.ttp").show()
-    //
+    /****-----delta merge update and delete table issue ------****/
+//    spark.sql("create database cat.dbx116")
+////
+//    spark.sql("CREATE TABLE cat.dbx116.ttd (col1 String) USING delta")
+//    spark.sql(""" INSERT INTO cat.dbx116.ttd VALUES ('99'), ('6'), ('7')""".stripMargin)
+//    df2.write.insertInto("cat.dbx116.ttd")
+//    spark.sql("select * from cat.dbx116.ttd").show()
+//    spark.read.table("cat.dbx116.ttd").show()
+//    spark.sql("update cat.dbx116.ttd set col1 = 'six' where col1 = '6' ").show()
+//    spark.sql("select col1 from cat.dbx116.ttd").show()
+////    spark.sql("select * from cat.dbx116.ttd").show()
+//    spark.sql("delete from cat.dbx116.ttd where col1 = '99'")
+//    spark.read.table("cat.dbx116.ttd").show()
+//    spark.sql("describe history cat.dbx116.ttd").show
+//    spark.sql("describe detail cat.dbx116.ttd").show
+//
+//     //   spark.read.table("cat.dbx116.ttd").show()
+// //   spark.sql("select * from cat.dbx116.ttd").show()
+//
+//    //
+//    //    df2.write.insertInto("cat.dbx113.ttp")
+//    //    spark.read.table("cat.dbx113.ttp").show()
+//    //
+//    /**---normal data source table operation ----**/
+//
+//
+//    spark.sql("create database cat.dbx119")
+//    spark.sql("create table cat.dbx119.ttp(c1 int, c2 int) using parquet")
+//    spark.sql("""insert into cat.dbx119.ttp values (1,11), (2,22), (3,33)""")
+//    spark.sql("select * from cat.dbx119.ttp where c1>1").show
+//
+//    spark.sql("create view cat.dbx119.v(id, id11) as select * from  cat.dbx119.ttp")
+//    spark.sql("select * from cat.dbx119.v").show()
+//    spark.sql("select c1, c2, fadd('', c1, c2) as c3 from cat.dbx119.ttp").show
+//    spark.sql("""create table cat.dbx119.ttd(c1 int, c2 int) using delta cluster by(c1)""")
+
+
+    /**---end of normal data source table operation ----**/
+
+    /*delta merge*/
+    spark.sql("create database cat.dbx120")
+    spark.sql("create table cat.dbx120.ttp(c1 int, c2 int) using parquet")
+    spark.sql("""insert into cat.dbx120.ttp values (1,11), (2,22), (3,33)""")
+    spark.sql("create table cat.dbx120.ttd(c1 int, c2 int) using delta")
+    spark.sql("""insert into cat.dbx120.ttd values (1,111), (4,44), (33,33)""")
+    spark.sql(
+      """merge into cat.dbx120.ttd using cat.dbx120.ttp on cat.dbx120.ttd.c1 = cat.dbx120.ttp.c1
+        |WHEN MATCHED THEN UPDATE SET
+        |c1 = cat.dbx120.ttp.c1,
+        |c2 = cat.dbx120.ttp.c2
+        |WHEN NOT MATCHED
+        |  THEN INSERT (
+        |  c1,
+        |  c2)
+        |  values(
+        |  cat.dbx120.ttp.c1,
+        |  cat.dbx120.ttp.c2)""".stripMargin)
+    spark.read.table("cat.dbx120.ttd").show()
+    spark.sql("describe history cat.dbx120.ttd").show()
+
+
+
     //
     //    spark.sql("create database cat.dbx112")
     //  //  val df2 = spark.read.format("csv").option("header", "false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
