@@ -213,43 +213,51 @@ object App {
     /**---end of normal data source table operation ----**/
 
     /*delta merge*/
-    spark.sql("create database cat.dbx120")
-    spark.sql("create table cat.dbx120.ttp(c1 int, c2 int) using parquet")
-    spark.sql("""insert into cat.dbx120.ttp values (1,11), (2,22), (3,33)""")
-    spark.sql("create table cat.dbx120.ttd(c1 int, c2 int) using delta")
-    spark.sql("""insert into cat.dbx120.ttd values (1,111), (4,44), (33,33)""")
-    spark.sql(
-      """merge into cat.dbx120.ttd using cat.dbx120.ttp on cat.dbx120.ttd.c1 = cat.dbx120.ttp.c1
-        |WHEN MATCHED THEN UPDATE SET
-        |c1 = cat.dbx120.ttp.c1,
-        |c2 = cat.dbx120.ttp.c2
-        |WHEN NOT MATCHED
-        |  THEN INSERT (
-        |  c1,
-        |  c2)
-        |  values(
-        |  cat.dbx120.ttp.c1,
-        |  cat.dbx120.ttp.c2)""".stripMargin)
-    spark.read.table("cat.dbx120.ttd").show()
-    spark.sql("describe history cat.dbx120.ttd").show()
+//    spark.sql("create database cat.dbx120")
+//    spark.sql("create table cat.dbx120.ttp(c1 int, c2 int) using parquet")
+//    spark.sql("""insert into cat.dbx120.ttp values (1,11), (2,22), (3,33)""")
+//    spark.sql("create table cat.dbx120.ttd(c1 int, c2 int) using delta")
+//    spark.sql("""insert into cat.dbx120.ttd values (1,111), (4,44), (33,33)""")
+//    spark.sql(
+//      """merge into cat.dbx120.ttd using cat.dbx120.ttp on cat.dbx120.ttd.c1 = cat.dbx120.ttp.c1
+//        |WHEN MATCHED THEN UPDATE SET
+//        |c1 = cat.dbx120.ttp.c1,
+//        |c2 = cat.dbx120.ttp.c2
+//        |WHEN NOT MATCHED
+//        |  THEN INSERT (
+//        |  c1,
+//        |  c2)
+//        |  values(
+//        |  cat.dbx120.ttp.c1,
+//        |  cat.dbx120.ttp.c2)""".stripMargin)
+//    spark.read.table("cat.dbx120.ttd").show()
+//    spark.sql("describe history cat.dbx120.ttd").show()
+
+
+    /***Codegen for custom functions path ***/
+    spark.sql("create database cat.dbx121")
+    spark.sql("create table cat.dbx121.ttp(c1 int, c2 int) using parquet")
+    spark.sql("""insert into cat.dbx121.ttp values (1,11), (2,22), (3,33)""")
+    spark.sql("select c1, c2, fibo(c1) as c3 from cat.dbx121.ttp").show
+    /***Codegen for custom functions path ***/
 
 
 
-    //
-    //    spark.sql("create database cat.dbx112")
-    //  //  val df2 = spark.read.format("csv").option("header", "false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
-    //    //df2.write.format("csv").mode(SaveMode.Overwrite).saveAsTable ("cat.dbx112.tt1")
-    //    df2.write.format("csv").mode(SaveMode.Append).saveAsTable ("cat.dbx112.tt1")
-    //    df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
-    ////    df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
-    //    df2.write.format("delta").mode(SaveMode.Overwrite)saveAsTable("cat.dbx112.ttd")
-
-    // spark.sql("create database cat.dbx107")
-    //    spark.sql("create table cat.dbx107.tt(id int) using delta")
-
-    //    spark.sql(
-    //      """ INSERT INTO cat.dbx107.tt
-    //        |     VALUES (1), (2), (3)""".stripMargin)
+//
+//        spark.sql("create database cat.dbx112")
+//      //  val df2 = spark.read.format("csv").option("header", "false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
+//        //df2.write.format("csv").mode(SaveMode.Overwrite).saveAsTable ("cat.dbx112.tt1")
+//        df2.write.format("csv").mode(SaveMode.Append).saveAsTable ("cat.dbx112.tt1")
+//        df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
+//    //    df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
+//        df2.write.format("delta").mode(SaveMode.Overwrite)saveAsTable("cat.dbx112.ttd")
+//
+//     spark.sql("create database cat.dbx107")
+//        spark.sql("create table cat.dbx107.tt(id int) using delta")
+//
+//        spark.sql(
+//          """ INSERT INTO cat.dbx107.tt
+//            |     VALUES (1), (2), (3)""".stripMargin)
 
 
     //   spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
