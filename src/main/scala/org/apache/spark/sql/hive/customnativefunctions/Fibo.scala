@@ -23,7 +23,7 @@ case class Fibo(child:Expression) extends UnaryExpression with ImplicitCastInput
 
   override def prettyName: String = "fibo"
 
-  override def nullable: Boolean = super.nullable
+  override def nullable: Boolean = false
 
   final override  protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode ={
 

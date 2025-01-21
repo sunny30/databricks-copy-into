@@ -235,10 +235,11 @@ object App {
 
 
     /***Codegen for custom functions path ***/
-    spark.sql("create database cat.dbx121")
-    spark.sql("create table cat.dbx121.ttp(c1 int, c2 int) using parquet")
-    spark.sql("""insert into cat.dbx121.ttp values (1,11), (2,22), (3,33)""")
-    spark.sql("select c1, c2, fibo(c1) as c3 from cat.dbx121.ttp").show
+    spark.sql("create database if not exists cat.dbx121")
+    spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
+    spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
+    spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
+  //  spark.sql("select c1, c2, fibo(c1) as c3, query_model('model',c2) as c4 from cat.dbx121.ttp1").show
     /***Codegen for custom functions path ***/
 
 
