@@ -16,9 +16,9 @@ case class ModelFunc(name: String, child: Expression) extends UnaryExpression wi
 
     child.dataType match {
       case StringType => val inputAsString = input1.toString
-      ModelFunc.evalString(inputAsString)
+      ModelFunc.evalString(name,inputAsString)
 
-      case s:StructType => ModelFunc.evalStruct(s)
+      case s:StructType => ModelFunc.evalStruct(name,s)
 
       case _ => throw new IllegalArgumentException("not supported data type")
     }
@@ -35,8 +35,8 @@ case class ModelFunc(name: String, child: Expression) extends UnaryExpression wi
   final override  protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode ={
     val clazz = ModelFunc.getClass.getCanonicalName.stripSuffix("$")
     child.dataType match {
-      case StringType => defineCodeGen(ctx, ev, str => s"$clazz.evalString($str)")
-      case s: StructType => defineCodeGen(ctx, ev, str => s"$clazz.evalStruct($str)")
+      case StringType => defineCodeGen(ctx, ev, str => s"$clazz.evalString($name,$str)")
+      case s: StructType => defineCodeGen(ctx, ev, str => s"$clazz.evalStruct($name, $str)")
       case _ => throw new IllegalArgumentException("not supported data type")
     }
 
@@ -53,13 +53,14 @@ case class ModelFunc(name: String, child: Expression) extends UnaryExpression wi
 
 object ModelFunc{
 
-  def evalString(input:String):UTF8String={
+  def evalString(modelName: String, input:String):UTF8String={
     UTF8String.fromString(input)
    // input
   }
 
-  def evalStruct(input: StructType):String = {
-    input.prettyJson
+  def evalStruct(modelName: String, input: StructType):UTF8String = {
+    UTF8String.fromString(input.prettyJson)
+
   }
 
   val fd: FunctionDescription = (
