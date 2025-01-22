@@ -49,11 +49,17 @@ case class CustomAdd(name: String, left: Expression, right: Expression) extends 
 
   def symbol = "+"
 
+  override def nullable: Boolean = false
+
   final override  protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
 
     dataType match {
       case IntegerType | ShortType =>
-
+        val funcName = ctx.freshName("func")
+//        val addFunc = ctx.addNewFunction(funcName,
+//          s"""public Integer ${funcName}(String a, String b){
+//             |retrun a+b ;
+//             |}""".stripMargin)
         nullSafeCodeGen(ctx, ev, (eval1, eval2) => {
           s"""
              |${ev.value} =  java.lang.Integer.sum($eval1, $eval2);
