@@ -3,6 +3,7 @@ package org.apache.spark.sql.hive.customnativefunctions
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
 import org.apache.spark.sql.catalyst.expressions.{Expression, ExpressionInfo, ImplicitCastInputTypes, UnaryExpression}
+import org.apache.spark.sql.hive.classloader.reflection.ReflectionUtil
 import org.apache.spark.sql.hive.extra.FunctionDescription
 import org.apache.spark.sql.types.{AbstractDataType, DataType, StringType, StructType}
 import org.apache.spark.unsafe.types
@@ -54,7 +55,7 @@ case class ModelFunc(name: String, child: Expression) extends UnaryExpression wi
 object ModelFunc{
 
   def evalString(modelName: String, input:String):UTF8String={
-    UTF8String.fromString(input)
+    UTF8String.fromString(ReflectionUtil.reflectThis("org.apache.spark.sql.hive.classloader.reflection.SubjectClass1", "inputText",modelName, input))
    // input
   }
 
