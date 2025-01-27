@@ -11,7 +11,7 @@ case class Fibo(child:Expression) extends UnaryExpression with ImplicitCastInput
   override def eval(input: InternalRow): Any = super.eval(input)
 
   override protected def nullSafeEval(input1: Any):Any={
-
+    println("eval is invoked")
     child.dataType match {
       case IntegerType =>
         val n = input1.asInstanceOf[Int]
