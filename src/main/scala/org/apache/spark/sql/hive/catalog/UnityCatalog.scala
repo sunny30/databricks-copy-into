@@ -270,7 +270,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
       try {
         externalCatalog.createTable(tableDesc, ignoreIfExists = false)
-        V2Table(tableDesc)
+        loadTable(ident)
       } catch {
         case e: Exception => throw e
       }

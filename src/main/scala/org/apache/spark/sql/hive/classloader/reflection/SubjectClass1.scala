@@ -8,6 +8,7 @@ class SubjectClass1 {
   var extra: String = _ ;
   def this(name:String, value:Int, extra:String=null) {
     this()
+    println("Inside constructor")
     this.name = name
     this.value = value
     this.extra = extra
@@ -16,7 +17,7 @@ class SubjectClass1 {
   }
 
   def inputText(input:String):String = {
-    input
+    input+name
   }
 
 
