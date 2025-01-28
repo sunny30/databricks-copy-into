@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive
 import io.delta.sql.DeltaSparkSessionExtension
 import io.delta.sql.parser.DeltaSqlParser
 import org.apache.spark.sql.SparkSessionExtensions
-import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboIter, ModelFunc}
+import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFuncIn, FiboIter, ModelFunc}
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy}
@@ -26,6 +26,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     extensions.injectFunction(Fibo.fd)
     extensions.injectFunction(ModelFunc.fd)
     extensions.injectFunction(FiboIter.fd)
+    extensions.injectFunction(FiboFuncIn.fd)
    // super.apply(extensions)
 
 

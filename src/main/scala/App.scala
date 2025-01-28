@@ -241,7 +241,7 @@ object App {
     spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
     spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
    // spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
-    spark.sql("select c1, c2, fiboiter(c1) as c3 from cat.dbx121.ttp1").show
+    spark.sql("select c1, c2, fiboinline(c1) as c3 from cat.dbx121.ttp1").show
   //  spark.sql("select fibo(4) as c4").show
     /***Codegen for custom functions path ***/
 
