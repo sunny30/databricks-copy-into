@@ -47,11 +47,14 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     )
   }
 
+  var proxyCatalog: ProxyCatalog = null ;
+
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
     // TODO
     log.info("Inside Catalog Plugin Initialize")
     // Initialize the catalog with the corresponding name
     this.catalogName = name
+    proxyCatalog = new ProxyCatalog(catalogName = catalogName, proxyDBName = None)
     // Initialize the catalog in any other provider that we can integrate with
   }
 
@@ -69,9 +72,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def listTables(namespace: Array[String]): Array[Identifier] = {
     namespace match {
       case Array(db) =>
-        externalCatalog.listTables(db).map(tb => TableIdentifier(tb, Some(db)))
-          .map(ident => Identifier.of(ident.database.map(Array(_)).getOrElse(Array()), ident.table))
-          .toArray
+        if(proxyCatalog.databaseExists(db)){
+          proxyCatalog.listTables(db).map(tb => TableIdentifier(tb, Some(db)))
+            .map(ident => Identifier.of(ident.database.map(Array(_)).getOrElse(Array()), ident.table))
+            .toArray
+        }else {
+          externalCatalog.listTables(db).map(tb => TableIdentifier(tb, Some(db)))
+            .map(ident => Identifier.of(ident.database.map(Array(_)).getOrElse(Array()), ident.table))
+            .toArray
+        }
       case _ =>
         throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
@@ -132,8 +141,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     externalCatalog.renameTable(db = dbName, oldName = oldTableName, newName = newTableName)
   }
   override def listNamespaces(): Array[Array[String]] = {
-      externalCatalog.
-        listDatabases().
+    (externalCatalog.
+        listDatabases() ++ proxyCatalog.listDatabase()).
         map(x => Array(x)).
         toArray
   }
@@ -142,7 +151,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     namespace match {
       case Array() =>
         listNamespaces()
-      case Array(db) if externalCatalog.databaseExists(db) =>
+      case Array(db) if (externalCatalog.databaseExists(db) || proxyCatalog.databaseExists(db)) =>
         Array()
       case _ =>
         throw QueryCompilationErrors.noSuchNamespaceError(namespace)
@@ -150,8 +159,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadNamespaceMetadata(namespace: Array[String]): util.Map[String, String] = {
+
+
     namespace match {
-      case Array(db) => externalCatalog.getDatabase(db).properties.asJava
+      case Array(db) =>
+      if(proxyCatalog.databaseExists(db)) {
+        proxyCatalog.getDatabase(db).properties.asJava
+      }else{
+        externalCatalog.getDatabase(db).properties.asJava
+      }
       case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
   }
@@ -295,7 +311,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def loadTable(ident: Identifier): Table = {
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    val tt = if(proxyCatalog.tableExists(db = dbName, table = tableName)) {
+      proxyCatalog.getTable(db = dbName, table = tableName)
+    }else {
+      externalCatalog.getTable(table = tableName, db = dbName)
+    }
+
     if(tt == null)
       return null
     if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
@@ -306,7 +327,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         tableIdentifier = Some(ident.toString))
     } else {
       if (tt != null) {
-        V2Table(externalCatalog.getTable(table = tableName, db = dbName))
+        V2Table(tt)
       } else {
         null
       }

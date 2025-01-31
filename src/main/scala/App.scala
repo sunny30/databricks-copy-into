@@ -81,6 +81,14 @@ object App {
       (2,3)
     ).toDF("col1", "col2")
 
+
+
+    /***Proxy Catalog start***/
+    spark.sql("SHOW SCHEMAS IN cat").show(200, false)
+    spark.sql("describe database cat.reservedb").show
+    spark.sql("show tables in cat.reservedb").show
+    spark.sql("describe extended cat.reservedb.resevetbl").show()
+    /****Proxy catalog end***/
   //  df1.withColumn("col3", expr("fadd('',col1, col2)")).show()
   //  df1.selectExpr("fadd('',col1, col2)").show
 
@@ -235,13 +243,13 @@ object App {
 
 
     /***Codegen for custom functions path ***/
-    spark.sql("create database if not exists cat.dbx121")
+   // spark.sql("create database if not exists cat.dbx121")
 //    df1.write.format("orc").saveAsTable("cat.dbx121.tbsv")
 //    spark.read.table("cat.dbx121.tbsv").show()
-    spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
-    spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
+ //   spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
+  //  spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
    // spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
-    spark.sql("select c1, c2, fiboinline(c1) as c3 from cat.dbx121.ttp1").show
+ //   spark.sql("select c1, c2, fiboinline(c1) as c3 from cat.dbx121.ttp1").show
   //  spark.sql("select fibo(4) as c4").show
     /***Codegen for custom functions path ***/
 
@@ -321,20 +329,20 @@ object App {
 
 
     /** Hive Relation testing start * */
-    //    spark.sql("create database cat.dbx108");
+     //   spark.sql("create database cat.dbx108");
     //  spark.conf.set("spark.insert.catalog","cat")
-    //    df1.write.mode(SaveMode.Append).insertInto("cat.dbx108.hive_tbl")
+//        df1.write.mode(SaveMode.Append).insertInto("cat.dbx108.hive_tbl")
     //    //    spark.sql(""" INSERT INTO cat.dbx103.tcsv
     //
-    //    spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
-    //    spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
-    //    val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
-    //    val df4 = spark.read.table("cat.dbx108.hive_tbl")
-    //    df3.show()
-    //    df4.show()
-    //    spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
-    //    val df5 = spark.read.table("cat.dbx108.v1")
-    //    df5.show()
+//        spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
+//        spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
+//        val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
+//        val df4 = spark.read.table("cat.dbx108.hive_tbl")
+//        df3.show()
+//        df4.show()
+//        spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
+//        val df5 = spark.read.table("cat.dbx108.v1")
+//        df5.show()
     //
     //    spark.sql("CREATE TABLE cat.dbx108.csv_tbl (col1 String) USING csv")
     //    spark.sql(""" INSERT INTO cat.dbx108.csv_tbl VALUES ('new_value')""".stripMargin)
