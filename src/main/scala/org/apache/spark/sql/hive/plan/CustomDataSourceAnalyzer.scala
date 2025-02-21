@@ -477,6 +477,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
     case p: LogicalPlan => p resolveOperatorsUp {
+
+      case prj@Project(projectList, s@SubqueryAlias(_, view: View)) =>
+      //  prj.copy(view.output)
+        prj.setAnalyzed()
+        val ats = getResolvedProjectAttributes(prj, view)
+        prj.copy(ats)
+
       case ds@DataSourceV2ScanRelation(relation: DataSourceV2Relation, scan, output, keyGroupedPartitioning, ordering) =>
         println("this is DataSourceV2Scan")
         println(s"${ds.toString()}")
@@ -592,6 +599,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               case _ => overwriteByExpression
             }
 
+          case prj@Project(projectList, s@SubqueryAlias(id:Identifier, view:View)) =>
+            prj.copy(view.output)
+
 
           case _ =>
             val pl = ResolveReferences(p)
@@ -656,6 +666,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
       case _ => ab
     }
+  }
+
+  def getResolvedProjectAttributes(prj:Project, view:View):Seq[Attribute] = {
+    view.output.filter(at=> prj.projectList.map(pat => pat.name).contains(at.name))
   }
 
 

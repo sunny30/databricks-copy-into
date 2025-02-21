@@ -84,10 +84,10 @@ object App {
 
 
     /***Proxy Catalog start***/
-    spark.sql("SHOW SCHEMAS IN cat").show(200, false)
-    spark.sql("describe database cat.reservedb").show
-    spark.sql("show tables in cat.reservedb").show
-    spark.sql("describe extended cat.reservedb.resevetbl").show()
+//    spark.sql("SHOW SCHEMAS IN cat").show(200, false)
+//    spark.sql("describe database cat.reservedb").show
+//    spark.sql("show tables in cat.reservedb").show
+//    spark.sql("describe extended cat.reservedb.resevetbl").show()
     /****Proxy catalog end***/
   //  df1.withColumn("col3", expr("fadd('',col1, col2)")).show()
   //  df1.selectExpr("fadd('',col1, col2)").show
@@ -109,20 +109,20 @@ object App {
           6,
           7
         ).toDF("col1")
-//    df1.write.format("delta").saveAsTable("cat.dbx117.delta_tbl")
-//    spark.sql("describe formatted cat.dbx117.delta_tbl").show()
-//    spark.sql("describe formatted cat.dbx117.json_tbl").show()
-        //df2.write.format("parquet").mode("overwrite").insertInto("cat.test_sudeep.jsonn_tbl")
-//        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
-//        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()
-//        spark.sql("insert into cat.test_sudeep.jsonn_tbl values (5), (4)")
-//        spark.sql("select * from cat.test_sudeep.jsonn_tbl where col1>4").show()
-//
-//
-//        spark.sql("create view cat.test_sudeep.v1(c) as select * from cat.test_sudeep.jsonn_tbl where col1>4")
-//
-//
-//        spark.sql("select * from cat.test_sudeep.v1").show()
+    spark.sql("create database cat.test_sudeep");
+//    df1.write.format("delta").saveAsTable("cat.dbx122.delta_tbl")
+//    spark.sql("describe formatted cat.dbx122.delta_tbl").show()
+//    spark.sql("describe formatted cat.dbx122.json_tbl").show()
+    df1.write.format("parquet").mode("overwrite").saveAsTable("cat.test_sudeep.json_tbl")
+    df1.write.format("parquet").mode("append").insertInto("cat.test_sudeep.json_tbl")
+    spark.read.table("cat.test_sudeep.json_tbl").show()
+    spark.sql("select * from cat.test_sudeep.json_tbl").show()
+    spark.sql("insert into cat.test_sudeep.json_tbl values (5,8), (4,7), (6,9)")
+    spark.sql("select * from cat.test_sudeep.json_tbl where col1>4").show()
+    spark.sql("create view cat.test_sudeep.v1(cl1, cl2) as select * from cat.test_sudeep.json_tbl where col1>4")
+
+   // spark.sql("select * from cat.test_sudeep.json_tbl limit 2").show()
+    spark.sql("select cl1 from cat.test_sudeep.v1 limit 2").show()
 //        spark.sql("drop view cat.test_sudeep.v1")
 //
 //        spark.sql("create database cat.customdb")
