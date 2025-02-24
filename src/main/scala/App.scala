@@ -109,20 +109,33 @@ object App {
           6,
           7
         ).toDF("col1")
-    spark.sql("create database cat.test_sudeep");
+
+    /**gen_ai*/
+
+    spark.sql("create database cat.gen_ai")
+    spark.sql("create table cat.gen_ai.tbl(c1 string)")
+    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
+  //  spark.sql("select query_model('a1', 'values') as c2").show
+    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
+
+
+
+    /**gen_ai end*/
+   // spark.sql("create database cat.test_sudeep");
+
 //    df1.write.format("delta").saveAsTable("cat.dbx122.delta_tbl")
 //    spark.sql("describe formatted cat.dbx122.delta_tbl").show()
 //    spark.sql("describe formatted cat.dbx122.json_tbl").show()
-    df1.write.format("parquet").mode("overwrite").saveAsTable("cat.test_sudeep.json_tbl")
-    df1.write.format("parquet").mode("append").insertInto("cat.test_sudeep.json_tbl")
-    spark.read.table("cat.test_sudeep.json_tbl").show()
-    spark.sql("select * from cat.test_sudeep.json_tbl").show()
-    spark.sql("insert into cat.test_sudeep.json_tbl values (5,8), (4,7), (6,9)")
-    spark.sql("select * from cat.test_sudeep.json_tbl where col1>4").show()
-    spark.sql("create view cat.test_sudeep.v1(cl1, cl2) as select * from cat.test_sudeep.json_tbl where col1>4")
-
-   // spark.sql("select * from cat.test_sudeep.json_tbl limit 2").show()
-    spark.sql("select cl1 from cat.test_sudeep.v1 limit 2").show()
+//    df1.write.format("parquet").mode("overwrite").saveAsTable("cat.test_sudeep.json_tbl")
+//    df1.write.format("parquet").mode("append").insertInto("cat.test_sudeep.json_tbl")
+//    spark.read.table("cat.test_sudeep.json_tbl").show()
+//    spark.sql("select * from cat.test_sudeep.json_tbl").show()
+//    spark.sql("insert into cat.test_sudeep.json_tbl values (5,8), (4,7), (6,9)")
+//    spark.sql("select * from cat.test_sudeep.json_tbl where col1>4").show()
+//    spark.sql("create view cat.test_sudeep.v1(cl1, cl2) as select * from cat.test_sudeep.json_tbl where col1>4")
+//
+//   // spark.sql("select * from cat.test_sudeep.json_tbl limit 2").show()
+//    spark.sql("select cl1 from cat.test_sudeep.v1 limit 2").show()
 //        spark.sql("drop view cat.test_sudeep.v1")
 //
 //        spark.sql("create database cat.customdb")
@@ -243,14 +256,14 @@ object App {
 
 
     /***Codegen for custom functions path ***/
-   // spark.sql("create database if not exists cat.dbx121")
+//    spark.sql("create database if not exists cat.dbx121")
 //    df1.write.format("orc").saveAsTable("cat.dbx121.tbsv")
 //    spark.read.table("cat.dbx121.tbsv").show()
- //   spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
-  //  spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
-   // spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
- //   spark.sql("select c1, c2, fiboinline(c1) as c3 from cat.dbx121.ttp1").show
-  //  spark.sql("select fibo(4) as c4").show
+//    spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
+//    spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
+////    spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
+//    spark.sql("select c1, c2, fibo(c1) as c3 from cat.dbx121.ttp1").show
+//    spark.sql("select fibo(4) as c4").show
     /***Codegen for custom functions path ***/
 
 
