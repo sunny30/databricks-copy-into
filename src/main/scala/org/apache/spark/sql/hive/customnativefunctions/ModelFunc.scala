@@ -11,6 +11,8 @@ import org.apache.spark.unsafe.types.UTF8String
 
 case class ModelFunc(name: String, child: Expression) extends UnaryExpression with ImplicitCastInputTypes {
 
+
+
   override def eval(input: InternalRow): Any = super.eval(input)
 
   override protected def nullSafeEval(input1: Any):Any={
@@ -36,8 +38,8 @@ case class ModelFunc(name: String, child: Expression) extends UnaryExpression wi
   final override  protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode ={
     val clazz = ModelFunc.getClass.getCanonicalName.stripSuffix("$")
     child.dataType match {
-      case StringType => defineCodeGen(ctx, ev, str => s"$clazz.evalString($name,$str)")
-      case s: StructType => defineCodeGen(ctx, ev, str => s"$clazz.evalStruct($name, $str)")
+      case StringType => defineCodeGen(ctx, ev, str => s"""$clazz.evalStringCodegen("$name",$str)""")
+      case s: StructType => defineCodeGen(ctx, ev, str => s"""$clazz.evalStruct("$name", $str)""")
       case _ => throw new IllegalArgumentException("not supported data type")
     }
 
@@ -54,9 +56,16 @@ case class ModelFunc(name: String, child: Expression) extends UnaryExpression wi
 
 object ModelFunc{
 
+  val ru1 = ReflectionUtil
+
   def evalString(modelName: String, input:String):UTF8String={
-    UTF8String.fromString(ReflectionUtil.reflectThis("org.apache.spark.sql.hive.classloader.reflection.SubjectClass1", "inputText",modelName, input))
+    UTF8String.fromString(ru1.reflectThis("org.apache.spark.sql.hive.classloader.reflection.SubjectClass1", "inputText",modelName, input))
    // input
+  }
+
+  def evalStringCodegen(modelName: String, input: UTF8String): UTF8String = {
+    UTF8String.fromString(ru1.reflectThis("org.apache.spark.sql.hive.classloader.reflection.SubjectClass1", "inputText", modelName, input.toString))
+    // input
   }
 
   def evalStruct(modelName: String, input: StructType):UTF8String = {

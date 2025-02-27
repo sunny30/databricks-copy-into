@@ -5,11 +5,11 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
-import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
+import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DeserializeToObject, InsertIntoStatement, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DeserializeToObject, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -23,7 +23,7 @@ import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
-import org.apache.spark.sql.execution.datasources.{DataSource, FileFormat, HadoopFsRelation, InsertIntoHadoopFsRelationCommand, LogicalRelation}
+import org.apache.spark.sql.execution.datasources.{CustomInsertIntoHadoopFsRelationCommand, DataSource, FileFormat, HadoopFsRelation, InsertIntoHadoopFsRelationCommand, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
@@ -158,6 +158,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
 
+//    case c:CustomInsertIntoHadoopFsRelationCommand =>
+//      c.setAnalyzed()
+//      c
+
     case u@UnresolvedRelation(multipartIdentifier:Seq[String], _,_ ) =>
       println("Inside Unresolved "+u.toString())
       val res = if (multipartIdentifier.size == 3) {
@@ -200,7 +204,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           fileFormat = ff,
           options = table.v1Table.storage.properties,
           bucketSpec = None
-        )(SparkSession.active), table = table.v1Table)
+        )(SparkSession.active))
 
        relation.setAnalyzed()
        relation
@@ -321,6 +325,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         } else {
           getFileFormat(provider)
         }
+
+
         val relation = LogicalRelation(relation = HadoopFsRelation(
           location = fileCatalog,
           partitionSchema = table.v1Table.partitionSchema,
@@ -328,7 +334,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           fileFormat = ff,
           options = table.v1Table.storage.properties,
           bucketSpec = None
-        )(SparkSession.active), table = table.v1Table)
+        )(SparkSession.active))
         val newRelation = relation.copy(output = child1.output)
         val newChild = child.copy(identifier = identifier, child = newRelation)
         val op = x.copy(projectList = p, child = newChild)
@@ -449,20 +455,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
           }else {
-            InsertIntoHadoopFsRelationCommand(
-              outputPath = new Path(ct.storage.locationUri.get.toString),
-              staticPartitions = Map.empty,
-              ifPartitionNotExists = false,
-              partitionColumns = ct.partitionColumnNames.map(UnresolvedAttribute.quoted),
-              bucketSpec = None,
-              fileFormat = getFileFormat(ct.provider.getOrElse("csv")),
-              options = Map.empty,
-              query = q,
-              mode = SaveMode.Append,
-              catalogTable = None,
-              fileIndex = None,
-              outputColumnNames = ct.schema.map(f => f.name)
-            )
+
+            val retPlan = new DeltaAnalysis(SparkSession.active).apply(CustomResolveInsertInto(i))
+            retPlan
           }
       }
       }
@@ -477,6 +472,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
     case p: LogicalPlan => p resolveOperatorsUp {
+
+      case prj@Project(projectList, s@SubqueryAlias(_, view: View)) =>
+      //  prj.copy(view.output)
+        prj.setAnalyzed()
+        val ats = getResolvedProjectAttributes(prj, view)
+        prj.copy(ats)
+
       case ds@DataSourceV2ScanRelation(relation: DataSourceV2Relation, scan, output, keyGroupedPartitioning, ordering) =>
         println("this is DataSourceV2Scan")
         println(s"${ds.toString()}")
@@ -496,7 +498,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         apply(u)
 
 
+      case unresolvedInlineTable: UnresolvedInlineTable =>
+        ResolveInlineTables(unresolvedInlineTable)
+
+
       case u: UnresolvedLeafNode =>
+        print(u.toString())
         apply(u)
       //      case pr@Project(plist, p@Project(projectList, child)) =>
       //
@@ -592,6 +599,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               case _ => overwriteByExpression
             }
 
+          case prj@Project(projectList, s@SubqueryAlias(id:Identifier, view:View)) =>
+            prj.copy(view.output)
+
 
           case _ =>
             val pl = ResolveReferences(p)
@@ -638,7 +648,6 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false )
 
         }else{
-
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(ct.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
@@ -653,9 +662,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             fileIndex = None,
             outputColumnNames = ct.schema.map(f => f.name)
           )
+
         }
       case _ => ab
     }
+  }
+
+  def getResolvedProjectAttributes(prj:Project, view:View):Seq[Attribute] = {
+    view.output.filter(at=> prj.projectList.map(pat => pat.name).contains(at.name))
   }
 
 

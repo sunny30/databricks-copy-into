@@ -23,7 +23,8 @@ object ReflectionUtil {
   }
 
   def reflectThis(clazzName: String, methodName: String,modelName:String,input:String): String = {
-
+    var instance:Any = null ;
+    var instancem: InstanceMirror = null
     val m = ru.runtimeMirror(getClass.getClassLoader)
     val classSymbol = m.staticClass(clazzName)
     val ctor = classSymbol.primaryConstructor.asMethod
@@ -33,11 +34,13 @@ object ReflectionUtil {
     val method = classSymbol.toType.decl(ru.TermName(methodName)).asMethod
  //   val thisMethod = classSymbol.toType.decl(ru.TermName("this")).asMethod
     val cm = m.reflectClass(classSymbol)
+    if(instance == null) {
+      instance = cm.reflectConstructor(secCtor.asMethod).apply(modelName, 2, null)
 
-    val instance = cm.reflectConstructor(secCtor.asMethod).apply(modelName, 2, null)
 
-    //  val instance = ctorm(constructorParams: _*)
-    val instancem = m.reflect(instance)
+      //  val instance = ctorm(constructorParams: _*)
+      instancem = m.reflect(instance)
+    }
 
  //   val thism = instancem.reflectMethod(thisMethod)
     val methodm = instancem.reflectMethod(method)
