@@ -79,10 +79,10 @@ object App {
     //    ).toDF("col1")
 
 
-    val df1 = Seq(
-      (1,2),
-      (2,3)
-    ).toDF("col1", "col2")
+//    val df1 = Seq(
+//      (1,2),
+//      (2,3)
+//    ).toDF("col1", "col2")
 
     /*nested aggregate function */
 //    spark.sql("create database cat.dbx122")
@@ -103,12 +103,12 @@ object App {
 //    spark.sql("insert into cat.dbx123.tbl values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
 //    spark.sql("select pc, fare, distance from cat.dbx123.tbl").show()
 
-   // spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
-  //  spark.sql("insert into cat.dbx123.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+//    spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
+//    spark.sql("insert into cat.dbx123.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
   //  val df = spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx123.db/tbl1")
  //   df.show()
 //   spark.sql("select * from cat.dbx123.tbl").show()
-// //   spark.read.table("cat.dbx123.tbl1").show()
+//   spark.read.table("cat.dbx123.tbl1").show()
 //
 //
 //    spark.sql("create database if not exists cat.dbx124")
@@ -123,18 +123,39 @@ object App {
 //    spark.sql("create database if not exists cat.dbx125")
 //    spark.sql("create table cat.dbx125.tbl1(pc date, pc1 timestamp) using delta")
 //    spark.sql("create table cat.dbx125.tbl2(pc date, pc1 timestamp) using parquet")
-//    //spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01', TIMESTAMP'2022-10-01 10:15:30'), (DATE'2022-10-02', TIMESTAMP'2022-10-02 10:15:30), (DATE'2022-10-03', TIMESTAMP'2022-10-03 10:15:30)")
+  //  spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01', TIMESTAMP'2022-10-01 10:15:30'), (DATE'2022-10-02', TIMESTAMP'2022-10-02 10:15:30), (DATE'2022-10-03', TIMESTAMP'2022-10-03 10:15:30)")
 //    spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
 //    spark.sql("insert into cat.dbx125.tbl2 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
 //    spark.sql("select * from cat.dbx125.tbl1").show()
 //    spark.sql("select * from cat.dbx125.tbl2").show()
 //    spark.sql("insert into cat.dbx125.tbl2 from cat.dbx125.tbl1 select pc, pc1")
 //    spark.sql("select * from cat.dbx125.tbl2").show()
-    spark.sql("create database if not exists cat.dbx126")
-    spark.sql("CREATE TABLE cat.dbx126.delta_test_table ( id INT, name STRING, birth_date DATE, created_at TIMESTAMP, is_active BOOLEAN, salary DECIMAL(10,2), profile BINARY, preferences ARRAY<STRING>, metadata MAP<STRING, STRING>, attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>, big_number BIGINT, small_number SMALLINT, tiny_number TINYINT ) USING DELTA")
-    spark.sql("""INSERT INTO cat.dbx126.delta_test_table VALUES ( 1, 'John Doe', '1990-05-15', current_timestamp(), true, 75000.50, X'68656C6C6F',  ARRAY('red', 'blue', 'green'), MAP('key1', 'value1', 'key2', 'value2'), STRUCT(5.9, 180.5, 'brown'), 23,3,1 )""")
-    spark.read.table("cat.dbx126.delta_test_table").show()
+//    spark.sql("create database if not exists cat.dbx126")
+//    spark.sql("CREATE TABLE cat.dbx126.delta_test_table ( id INT, name STRING, birth_date DATE, created_at TIMESTAMP, is_active BOOLEAN, salary DECIMAL(10,2), profile BINARY, preferences ARRAY<STRING>, metadata MAP<STRING, STRING>, attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>, big_number BIGINT, small_number SMALLINT, tiny_number TINYINT ) USING DELTA")
+//    spark.sql("""INSERT INTO cat.dbx126.delta_test_table VALUES ( 1, 'John Doe', '1990-05-15', current_timestamp(), true, 75000.50, X'68656C6C6F',  ARRAY('red', 'blue', 'green'), MAP('key1', 'value1', 'key2', 'value2'), STRUCT(5.9, 180.5, 'brown'), 23,3,1 )""")
+//    spark.read.table("cat.dbx126.delta_test_table").show()
+
+
+//    spark.sql("create database if not exists cat.dbx127")
+//    spark.sql("""create table cat.dbx127.catalog_returns_external
+//                |(
+//                |
+//                |cr_returned_time_sk int,
+//                |cr_net_loss decimal(7,2),
+//                |cr_returned_date_sk int
+//                |)
+//                |USING parquet
+//                |partitioned by (cr_returned_date_sk)""".stripMargin)
+//    spark.sql("INSERT INTO cat.dbx127.catalog_returns_external VALUES (37228, 990.23,2334254),(71132, 81.88,23424),(64324, 680.24,335325)")
+//    spark.sql("select * from cat.dbx127.catalog_returns_external")
+
     /***date and timestamps insertion ends***/
+
+    /***savAsTable for external datasource starts***/
+
+
+
+    /***savAsTable for external datasource ends***/
 
     /***Proxy Catalog start***/
 //    spark.sql("SHOW SCHEMAS IN cat").show(200, false)
@@ -158,18 +179,20 @@ object App {
 //        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
 //        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()
 
-        val df2 = Seq(
-          6,
-          7
-        ).toDF("col1")
+//        val df2 = Seq(
+//          6,
+//          7
+//        ).toDF("col1")
 
     /**gen_ai*/
 
-//    spark.sql("create database cat.gen_ai")
-//    spark.sql("create table cat.gen_ai.tbl(c1 string)")
-//    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
+  //  spark.sql("select query_model('meta', concat('his', 'tory' ))").show()
+    spark.sql("create database cat.gen_ai")
+   spark.sql("create table cat.gen_ai.tbl(c1 string) using delta")
+    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
 //  //  spark.sql("select query_model('a1', 'values') as c2").show
-//    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
+////    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
+    spark.sql("""select query_model('meta',concat(c1, "hello")) as c11 from cat.gen_ai.tbl""").show()
 
 
 

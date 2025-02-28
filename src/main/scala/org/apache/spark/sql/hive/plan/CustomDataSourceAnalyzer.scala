@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
-import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
+import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
@@ -285,9 +285,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       if child1.catalog.isDefined =>
 
       println("Inside Project over DataSourceV2Relation" )
-      x.setAnalyzed()
-      //      child.setAnalyzed()
-      //      child1.setAnalyzed()
+    //  x.setAnalyzed()
+
       val table = child1.table.asInstanceOf[V2Table]
       if (table.v1Table.tableType == CatalogTableType.VIEW) {
         return getViewPlan(table)
@@ -326,7 +325,6 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           getFileFormat(provider)
         }
 
-
         val relation = LogicalRelation(relation = HadoopFsRelation(
           location = fileCatalog,
           partitionSchema = table.v1Table.partitionSchema,
@@ -339,7 +337,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val newChild = child.copy(identifier = identifier, child = newRelation)
         val op = x.copy(projectList = p, child = newChild)
         op.resolved
-        op.setAnalyzed()
+     //   op.setAnalyzed()
         op
       } else {
         val relation = if (provider.equalsIgnoreCase("custom")) {
