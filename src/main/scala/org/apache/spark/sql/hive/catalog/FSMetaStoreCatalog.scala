@@ -180,7 +180,8 @@ class FSMetaStoreCatalog(
         val defaultTableLocation = new Path(new Path(FSMetaStoreCatalog.catalog(db).db.locationUri), table)
         try {
           // val fs = defaultTableLocation.getFileSystem(hadoopConfig)
-          fs.mkdirs(defaultTableLocation)
+          if(!fs.exists(defaultTableLocation))
+            fs.mkdirs(defaultTableLocation)
         } catch {
           case e: IOException =>
             throw QueryExecutionErrors.unableToCreateTableAsFailedToCreateDirectoryError(
@@ -249,7 +250,17 @@ class FSMetaStoreCatalog(
   override def setCurrentDatabase(db: String): Unit = ???
 
   override def dropTable(db: String, table: String, ignoreIfNotExists: Boolean, purge: Boolean): Unit = {
-    println("empty drop impl")
+
+    if(tableExists(db, table)) {
+      val location = getTable(db, table).location
+      val path = new Path(location)
+      fs.delete(path)
+      FSMetaStoreCatalog.catalog(db).tables.remove(table)
+      println("drop completed")
+    }else{
+      println("empty drop")
+    }
+
   }
 
   override def alterTableDataSchema(db: String, table: String, newDataSchema: StructType): Unit = ???

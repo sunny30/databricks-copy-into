@@ -98,22 +98,32 @@ object App {
 
 
 
-//    spark.sql("create database if not exists cat.dbx123")
-//    spark.sql("create table cat.dbx123.tbl(pc int, fare float, distance long) using csv")
-//    spark.sql("insert into cat.dbx123.tbl values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+    spark.sql("create database if not exists cat.dbx123")
+    spark.sql("create table cat.dbx123.tbl(pc int, fare float, distance long) using csv")
+    spark.sql("insert into cat.dbx123.tbl values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
 //    spark.sql("select pc, fare, distance from cat.dbx123.tbl").show()
 
-//    spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
-//    spark.sql("insert into cat.dbx123.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+    spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
+    spark.sql("insert into cat.dbx123.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
   //  val df = spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx123.db/tbl1")
  //   df.show()
-//   spark.sql("select * from cat.dbx123.tbl").show()
+   val df = spark.sql("select * from cat.dbx123.tbl")
+    println("Pre overwrite of line 113")
+    df.show()
+    df.write.mode(SaveMode.Overwrite).saveAsTable("cat.dbx123.tbl")
+    println("post overwrite of line 113")
+    spark.sql("select * from cat.dbx123.tbl9").show()
 //   spark.read.table("cat.dbx123.tbl1").show()
 //
 //
 //    spark.sql("create database if not exists cat.dbx124")
 //    spark.sql("create table cat.dbx124.tbl1(pc int, fare float, distance long) using delta")
 //    spark.sql("insert into cat.dbx124.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+//    println("Pre overwrite of line 122")
+//    spark.sql("select * from cat.dbx124.tbl1").show()
+//    df.write.mode(SaveMode.Overwrite).format("delta").saveAsTable("cat.dbx124.tbl1")
+//    df.write.mode(SaveMode.Append).format("delta").saveAsTable("cat.dbx124.tbl1")
+//    println("post overwrite of line 122")
 //    spark.sql("select * from cat.dbx124.tbl1").show()
 //    //    df.withColumn("new_fare", df.col("fare").cast(DecimalType(3, 1))).show()
 //    /**parquet double and float data types reader ends**/
@@ -123,7 +133,7 @@ object App {
 //    spark.sql("create database if not exists cat.dbx125")
 //    spark.sql("create table cat.dbx125.tbl1(pc date, pc1 timestamp) using delta")
 //    spark.sql("create table cat.dbx125.tbl2(pc date, pc1 timestamp) using parquet")
-  //  spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01', TIMESTAMP'2022-10-01 10:15:30'), (DATE'2022-10-02', TIMESTAMP'2022-10-02 10:15:30), (DATE'2022-10-03', TIMESTAMP'2022-10-03 10:15:30)")
+   // spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01', TIMESTAMP'2022-10-01 10:15:30'), (DATE'2022-10-02', TIMESTAMP'2022-10-02 10:15:30), (DATE'2022-10-03', TIMESTAMP'2022-10-03 10:15:30)")
 //    spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
 //    spark.sql("insert into cat.dbx125.tbl2 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
 //    spark.sql("select * from cat.dbx125.tbl1").show()
@@ -187,16 +197,30 @@ object App {
     /**gen_ai*/
 
   //  spark.sql("select query_model('meta', concat('his', 'tory' ))").show()
-    spark.sql("create database cat.gen_ai")
-   spark.sql("create table cat.gen_ai.tbl(c1 string) using delta")
-    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
-//  //  spark.sql("select query_model('a1', 'values') as c2").show
-////    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
-    spark.sql("""select query_model('meta',concat(c1, "hello")) as c11 from cat.gen_ai.tbl""").show()
+   // spark.sql("create database cat.gen_ai")
+  // spark.sql("create table cat.gen_ai.tbl(c1 string) using delta")
+//    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
+  //  spark.sql("select query_model('a1', 'values') as c2").show
+//    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
+  //  spark.sql("""select query_model('meta',concat(c1, "hello")) as c11 from cat.gen_ai.tbl""").show()
 
 
 
     /**gen_ai end*/
+
+    /**custom datasource write and read patterns patterns starts**/
+
+  //  spark.sql("create database cat.customdb")
+   // spark.sql("create table cat.customdb.tbl(c1 string) using custom options('k'='v', 'k1' = 'v1')")
+   // spark.sql("insert into cat.customdb.tbl values('hello'), ('hi') ")
+    //val df = spark.read.table("cat.customdb.tbl")
+   // df.show()
+   // df.write.insertInto("cat.customdb.tbl")
+  //  df.write.mode(SaveMode.Append).saveAsTable("cat.customdb.tbl")
+  //  df2.write.mode(SaveMode.Overwrite).format("custom").saveAsTable("cat.customdb.tbl")
+   // spark.sql("select * from cat.customdb.tbl").show()
+
+    /**custom datasource write and read patterns patterns ends**/
    // spark.sql("create database cat.test_sudeep");
 
 //    df1.write.format("delta").saveAsTable("cat.dbx122.delta_tbl")

@@ -11,7 +11,8 @@ import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, Logical
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.util.{CharVarcharUtils, removeInternalMetadata}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
-import org.apache.spark.sql.connector.catalog.{CatalogV2Util, Column, Identifier, StagingTableCatalog, Table, TableCatalog, V1Table}
+import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Column, Identifier, StagingTableCatalog, Table, TableCatalog, V1Table}
+import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.command.CreateDataSourceTableAsSelectCommand
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -57,6 +58,31 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
     spark.sharedState.cacheManager.uncacheQuery(spark, v2Relation, cascade = true)
   }
 
+
+  def getActualProvider(catalog:CatalogPlugin, identifier: Identifier, tableSpec: TableSpec):String = {
+    if(catalog.asTableCatalog.tableExists(identifier)){
+     // catalog.name()
+      catalog.asTableCatalog.loadTable(identifier) match {
+        case v2Table: V2Table => v2Table.v1Table.provider.get
+        case deltaTableV2: DeltaTableV2 => deltaTableV2.v1Table.provider.get
+      }
+    }else{
+      val properties = CatalogV2Util.convertTableProperties(tableSpec)
+      properties.getOrElse("provider", "hive")
+    }
+  }
+
+//only applicable to V2Table
+  def getOldTableProps(catalog:CatalogPlugin, identifier: Identifier, tableSpec: TableSpec):Map[String,String]={
+    if (catalog.asTableCatalog.tableExists(identifier)) {
+      // catalog.name()
+      catalog.asTableCatalog.loadTable(identifier).asInstanceOf[V2Table].v1Table.properties
+    } else {
+      val properties = CatalogV2Util.convertTableProperties(tableSpec)
+      properties
+    }
+  }
+
   override def apply(plan: LogicalPlan): LogicalPlan = {
     println(plan.toString())
     plan match {
@@ -64,26 +90,32 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case rtas@ReplaceTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
       _, _, _) =>
         println("Inside RTAS")
-        val properties = CatalogV2Util.convertTableProperties(tableSpec)
+        var properties = CatalogV2Util.convertTableProperties(tableSpec)
         val projectPlan = EliminateSubqueryAliases(query)
         val outputs = query.schema.map(s => s.name)
-
-        if (properties.getOrElse("provider", "hive").equalsIgnoreCase("delta")) {
-          println("Inside delta plan block")
-          plan
-        }else {
-          if(catalog.asTableCatalog.tableExists(ident)){
+        val providerValue = getActualProvider(catalog,ident,tableSpec)
+        /**Delta External we have to see later**/
+        if (providerValue.equalsIgnoreCase("delta")) {
+          if (catalog.asTableCatalog.tableExists(ident)) {
             catalog.asTableCatalog.dropTable(ident)
           }
-          val table = if(spark.conf.get("spark.sql.test.env").equalsIgnoreCase("false"))
-             catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-          else{
-            if(catalog.asTableCatalog.tableExists(ident)) {
-              catalog.asTableCatalog.loadTable(ident)
-            } else{
-              catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-            }
+          println("Inside delta or custom datasource plan block")
+          plan
+        }else if(providerValue.equalsIgnoreCase("custom")){
+          properties = getOldTableProps(catalog,ident,tableSpec)
+          val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
+          rtas.copy(tableSpec = newTableSpec)
+        }else {
+
+          if (catalog.asTableCatalog.tableExists(ident)) {
+            catalog.asTableCatalog.dropTable(ident)
           }
+          val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+
+        //  val table = catalog.asTableCatalog.loadTable(ident)
+
+        //  spark.catalog.refreshTable(ident)
+
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
@@ -107,19 +139,15 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         val properties = CatalogV2Util.convertTableProperties(tableSpec)
         val projectPlan = EliminateSubqueryAliases(query)
 
-        ////        ident,
-        ////        getV2Columns(query.schema,false),
-        ////        parts.toArray,
-        ////        properties.asJava
-        ////      )
+
         val outputs = query.schema.map(s => s.name)
-        // CustomDataSourceAsSelectCommand(catalog.asTableCatalog,table.asInstanceOf[V1Table].v1Table,SaveMode.ErrorIfExists,query,outputs)
-        if (properties.getOrElse("provider", "hive").equalsIgnoreCase("delta")) {
-//          val newQuery = spark.sessionState.analyzer.executeAndCheck(query, new QueryPlanningTracker())
-//          newQuery.setAnalyzed()
-//          println("Inside delta block")
-//          ctas.setAnalyzed()
-//          ctas.copy(query = newQuery)
+        val providerValue = getActualProvider(catalog,ident,tableSpec)
+
+        if (providerValue.equalsIgnoreCase("delta")) {
+          if (catalog.asTableCatalog.tableExists(ident)) {
+            catalog.asTableCatalog.dropTable(ident)
+          }
+       // One has to drop Delta CTAS will create delta table
           plan
         } else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))

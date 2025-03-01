@@ -14,7 +14,7 @@ import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
-import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, TableCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
@@ -28,6 +28,7 @@ import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, Data
 import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
@@ -349,7 +350,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val newChild = child.copy(identifier = identifier, child = newRelation)
         val op = x.copy(projectList = p, child = newChild)
         op.resolved
-        op.setAnalyzed()
+      //  op.setAnalyzed()
         op
       }
 
@@ -425,39 +426,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
-      println("InsertIntoStatement with DataSourceV2Relation")
-      d.table match {
-        case dtb: DeltaTableV2 =>
-          val retPlan = new DeltaAnalysis(SparkSession.active).apply( CustomResolveInsertInto(i))
-          retPlan
-
-        case v:V2Table =>
-
-          val ct = d.table.asInstanceOf[V2Table].v1Table
-          if(ct.provider.getOrElse("custom").equalsIgnoreCase("custom")){
-            val table = ct
-            val dataSource = DataSource(
-              session,
-              // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
-              // inferred at runtime. We should still support it.
-              userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
-              partitionColumns = table.partitionColumnNames,
-              bucketSpec = table.bucketSpec,
-              className = table.provider.get,
-              options = table.storage.properties,
-              catalogTable = Some(table)
-            )
-
-            val relation = LogicalRelation(dataSource.resolveRelation(false), table)
-            InsertIntoStatement(relation, m, a, q, f, ip,c)
-
-
-          }else {
-
-            val retPlan = new DeltaAnalysis(SparkSession.active).apply(CustomResolveInsertInto(i))
-            retPlan
-          }
-      }
+      val retPlan = new DeltaAnalysis(SparkSession.active).apply(CustomResolveInsertInto(i))
+      retPlan
       }
 
 
@@ -661,6 +631,31 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             outputColumnNames = ct.schema.map(f => f.name)
           )
 
+        }
+      case st:BestEffortStagedTable =>
+        if(st.table.isInstanceOf[V2Table]){
+          val catalogTable = st.table.asInstanceOf[V2Table].v1Table
+          if(catalogTable.provider.isDefined && catalogTable.provider.get.equalsIgnoreCase("custom")){
+            val dataSource = DataSource(
+              session,
+              // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+              // inferred at runtime. We should still support it.
+              userSpecifiedSchema = if (catalogTable.schema.isEmpty) None else Some(catalogTable.schema),
+              partitionColumns = catalogTable.partitionColumnNames,
+              bucketSpec = catalogTable.bucketSpec,
+              className = catalogTable.provider.get,
+              options = catalogTable.storage.properties,
+              catalogTable = Some(catalogTable)
+            )
+            val columnNames = catalogTable.schema.fieldNames
+            val relation = LogicalRelation(dataSource.resolveRelation(false), catalogTable)
+            InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, true, false)
+
+          }else{
+            ab
+          }
+        }else{
+          ab
         }
       case _ => ab
     }
