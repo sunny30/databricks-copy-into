@@ -101,6 +101,7 @@ object App {
     spark.sql("create database if not exists cat.dbx123")
     spark.sql("create table cat.dbx123.tbl(pc int, fare float, distance long) using csv")
     spark.sql("insert into cat.dbx123.tbl values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+
 //    spark.sql("select pc, fare, distance from cat.dbx123.tbl").show()
 
     spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
@@ -108,11 +109,19 @@ object App {
   //  val df = spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx123.db/tbl1")
  //   df.show()
    val df = spark.sql("select * from cat.dbx123.tbl")
-    println("Pre overwrite of line 113")
+
+  //  println("Pre overwrite of line 113")
     df.show()
-    df.write.mode(SaveMode.Overwrite).saveAsTable("cat.dbx123.tbl")
-    println("post overwrite of line 113")
-    spark.sql("select * from cat.dbx123.tbl9").show()
+    spark.sql(
+      """
+        |with t as (
+        |select pc, fare from cat.dbx123.tbl1
+        |)
+        |select count(min(pc)) as cnt from t
+        |""".stripMargin).show()
+//    df.write.mode(SaveMode.Overwrite).saveAsTable("cat.dbx123.tbl")
+ //   println("post overwrite of line 113")
+ //   spark.sql("select * from cat.dbx123.tbl9").show()
 //   spark.read.table("cat.dbx123.tbl1").show()
 //
 //
