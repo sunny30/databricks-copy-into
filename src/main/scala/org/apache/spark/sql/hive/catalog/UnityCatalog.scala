@@ -263,7 +263,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
       val tableProperties = properties.asScala
       var location = Option(properties.get(TableCatalog.PROP_LOCATION))
-      var isExternal = false
+      var isExternal = location.isDefined
       val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
         .copy(locationUri = location.map(CatalogUtils.stringToURI))
       isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)

@@ -203,7 +203,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           partitionSchema = table.v1Table.partitionSchema,
           dataSchema = table.v1Table.dataSchema,
           fileFormat = ff,
-          options = table.v1Table.storage.properties,
+          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
           bucketSpec = None
         )(SparkSession.active))
 
@@ -261,7 +261,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           partitionSchema = table.v1Table.partitionSchema,
           dataSchema = table.v1Table.dataSchema,
           fileFormat = ff,
-          options = table.v1Table.storage.properties,
+          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
           bucketSpec = None
         )(SparkSession.active), isStreaming = false)
 
@@ -331,7 +331,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           partitionSchema = table.v1Table.partitionSchema,
           dataSchema = table.v1Table.dataSchema,
           fileFormat = ff,
-          options = table.v1Table.storage.properties,
+          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
           bucketSpec = None
         )(SparkSession.active))
         val newRelation = relation.copy(output = child1.output)
@@ -608,7 +608,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             partitionColumns = table.partitionColumnNames,
             bucketSpec = table.bucketSpec,
             className = table.provider.get,
-            options = table.storage.properties,
+            options = table.properties,
             catalogTable = Some(table)
           )
           val columnNames = v2.v1Table.schema.fieldNames
@@ -616,14 +616,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false )
 
         }else{
+          val ff = getFileFormat(ct.provider.getOrElse("csv"))
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(ct.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
             partitionColumns = ct.partitionColumnNames.map(UnresolvedAttribute.quoted),
             bucketSpec = None,
-            fileFormat = getFileFormat(ct.provider.getOrElse("csv")),
-            options = Map.empty,
+            fileFormat = ff,
+            options = mapHiveCSVPropertiesToSparkOption(ct, ff),
             query = ab.analyzedQuery.get,
             mode = SaveMode.Append,
             catalogTable = None,
@@ -663,6 +664,40 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
   def getResolvedProjectAttributes(prj:Project, view:View):Seq[Attribute] = {
     view.output.filter(at=> prj.projectList.map(pat => pat.name).contains(at.name))
+  }
+
+  def mapHiveCSVPropertiesToSparkOption(ct: CatalogTable, fileFormat: FileFormat):Map[String, String] ={
+    var tblProps = ct.properties
+
+    //tblProps.
+    if(fileFormat.isInstanceOf[CSVFileFormat]) {
+      if (!tblProps.contains("option.delimiter")) {
+        tblProps = tblProps ++ Map("delimiter" -> tblProps.getOrElse("field.delim", ","))
+      }
+
+      if (!tblProps.contains("option.quote")) {
+        tblProps = tblProps ++ Map("quote" -> tblProps.getOrElse("quoteChar", '\"'.toString))
+      }
+
+      if (!tblProps.contains("option.escape")) {
+        tblProps = tblProps ++ Map("escape" -> tblProps.getOrElse("escape.delim", '\\'.toString))
+      }
+
+      if (!tblProps.contains("option.header")) {
+        //tblProps.getOrElse("skip")
+        tblProps = tblProps ++ Map("header" -> tblProps.getOrElse("hasheaders", "false"))
+      }
+
+      if (!tblProps.contains("option.lineSep")) {
+        //tblProps.getOrElse("skip")
+        tblProps = tblProps ++ Map("lineSep" -> tblProps.getOrElse("recorddelimiter", "\n"))
+      }
+
+      tblProps
+    }else{
+      tblProps
+    }
+
   }
 
 
