@@ -55,18 +55,30 @@ object App {
       enableHiveSupport().
       getOrCreate()
 
+    /***query model with structs starts**/
+
+    spark.sql("create database cat.ai")
+  //  spark.sql("create table cat.ai.t2(attributes string)")
+  //  spark.sql("insert into cat.ai.t2 values('hello')")
+    spark.sql("create table cat.ai.t1(attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>)")
+    spark.sql("insert into cat.ai.t1 values(named_struct('height',5.9, 'weight', 180.5, 'eye_color', 'brown'))")
+   // spark.sql("select * from cat.ai.t1").show()
+  //  spark.sql("select query_model('meta', attributes) from cat.ai.t2").show()
+    spark.sql("select query_model('meta', attributes) from cat.ai.t1").show
+
+    /***query model with structs ends **/
 
     /**spark csv table properties starts**/
-    spark.sql("create database if not exists cat.csvdb")
-    spark.sql("create table cat.csvdb.csvtbl(id int, name string)  using csv  location '/tmp/csv/' TBLPROPERTIES('hasheaders' = 'true')")
-   // spark.read.table("cat.csvdb.csvtbl").show
-
-    spark.sql("insert into cat.csvdb.csvtbl values(9,'str'), (10, 'st2')")
-    spark.sql("select * from cat.csvdb.csvtbl").show()
-
-    spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
-    spark.sql("insert into cat.csvdb.csvtbl1 values(9,'str'), (10, 'st2')")
-    spark.sql("select * from cat.csvdb.csvtbl1").show()
+//    spark.sql("create database if not exists cat.csvdb")
+//    spark.sql("create table cat.csvdb.csvtbl(id int, name string)  using csv  location '/tmp/csv/' TBLPROPERTIES('hasheaders' = 'true')")
+//   // spark.read.table("cat.csvdb.csvtbl").show
+//
+//    spark.sql("insert into cat.csvdb.csvtbl values(9,'str'), (10, 'st2')")
+//    spark.sql("select * from cat.csvdb.csvtbl").show()
+//
+//    spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
+//    spark.sql("insert into cat.csvdb.csvtbl1 values(9,'str'), (10, 'st2')")
+//    spark.sql("select * from cat.csvdb.csvtbl1").show()
 
 
     /**spark csv table properties ends **/
