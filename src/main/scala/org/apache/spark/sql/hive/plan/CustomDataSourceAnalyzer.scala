@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
-import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, RelationTimeTravel, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
+import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubqueryAliases, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, RelationTimeTravel, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
@@ -16,7 +16,7 @@ import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, TableCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate}
+import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.DeleteCommand
 import org.apache.spark.sql.delta.util.AnalysisHelper
@@ -517,9 +517,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case unresolvedInlineTable: UnresolvedInlineTable =>
         ResolveInlineTables(unresolvedInlineTable)
 
-      case relationTimeTravel@RelationTimeTravel(u:UnresolvedRelation, _, _) =>
-        val resolvedPlan = apply(u)
-        relationTimeTravel.copy(relation = resolvedPlan)
+//      case relationTimeTravel@RelationTimeTravel(u:UnresolvedRelation, _, _) =>
+//        val resolvedPlan = resolveTimeTravelTable(SparkSession.active,u,"RESTORE")
+//        relationTimeTravel.copy(relation = resolvedPlan)
 
       case u: UnresolvedLeafNode =>
         print(u.toString())
@@ -749,6 +749,27 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       tblProps
     }
 
+  }
+
+  private def resolveTimeTravelTable(
+                                      sparkSession: SparkSession,
+                                      ur: UnresolvedRelation,
+                                      commandName: String): LogicalPlan = {
+    // Since TimeTravel is a leaf node, the table relation within TimeTravel won't be resolved
+    // automatically by the Apache Spark analyzer rule `ResolveRelations`.
+    // Thus, we need to explicitly use the rule `ResolveRelations` to table resolution here.
+    EliminateSubqueryAliases(sparkSession.sessionState.analyzer.ResolveRelations(ur)) match {
+      case _: View =>
+        // If the identifier is a view, throw not supported error
+        throw DeltaErrors.notADeltaTableException(commandName)
+      case tableRelation if tableRelation.resolved =>
+        tableRelation
+      case _ =>
+        // If the identifier doesn't exist as a table, try resolving it as a path table.
+        ResolveDeltaPathTable.resolveAsPathTableRelation(sparkSession, ur).getOrElse {
+          ur.tableNotFound(ur.multipartIdentifier)
+        }
+    }
   }
 
 

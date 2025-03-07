@@ -112,31 +112,32 @@ object App {
       (2,3)
     ).toDF("col1", "col2")
 
-    spark.sql("create database cat.tdb")
-    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
-    spark.read.table("cat.tdb.tbl").show()
-    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
-    spark.read.table("cat.tdb.tbl").show()
+    spark.sql("create database cat.tdb1")
+    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
+//    spark.read.table("cat.tdb.tbl").show()
+//    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
+//    spark.read.table("cat.tdb.tbl").show()
+    spark.sql("select * from cat.tdb1.tbl version as of 1").show()
 
 
-    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
-    spark.read.table("cat.tdb.ptbl").show()
-    df2.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
-    spark.read.table("cat.tdb.ptbl").show()
-
-
-    df1.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
-    spark.read.table("cat.tdb.atbl").show()
-    df2.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
-    spark.read.table("cat.tdb.atbl").show()
-
-
-    df1.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
-    spark.read.table("cat.tdb.otbl").show()
-    df2.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
-    spark.read.table("cat.tdb.otbl").show()
-   // spark.sql("create table cat.tdb.etbl(id int, name string) using delta location '/tmp/dt'")
-  //  spark.sql("create table cat.tdb.etbl1 using delta location '/tmp/dt'")
+//    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
+//    spark.read.table("cat.tdb.ptbl").show()
+//    df2.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
+//    spark.read.table("cat.tdb.ptbl").show()
+//
+//
+//    df1.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
+//    spark.read.table("cat.tdb.atbl").show()
+//    df2.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
+//    spark.read.table("cat.tdb.atbl").show()
+//
+//
+//    df1.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
+//    spark.read.table("cat.tdb.otbl").show()
+//    df2.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
+//    spark.read.table("cat.tdb.otbl").show()
+//   // spark.sql("create table cat.tdb.etbl(id int, name string) using delta location '/tmp/dt'")
+//  //  spark.sql("create table cat.tdb.etbl1 using delta location '/tmp/dt'")
 
     /*nested aggregate function */
 //    spark.sql("create database cat.dbx122")

@@ -335,6 +335,14 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }
   }
 
+  override def loadTable(ident: Identifier, timestamp: Long): Table = {
+    new UnityDeltaCatalog(externalCatalog).loadTable(ident,timestamp)
+  }
+
+  override def loadTable(ident: Identifier, version: String): Table = {
+    new UnityDeltaCatalog(externalCatalog).loadTable(ident,version)
+  }
+
 
   override def loadFunction(ident: Identifier): UnboundFunction = ???
 
