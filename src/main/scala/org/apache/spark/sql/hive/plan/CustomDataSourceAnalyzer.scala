@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
-import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
+import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, RelationTimeTravel, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
@@ -163,8 +163,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //      c.setAnalyzed()
 //      c
 
-    case u@UnresolvedRelation(multipartIdentifier:Seq[String], _,_ ) =>
-      println("Inside Unresolved "+u.toString())
+    case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
+      println("Inside Unresolved " + u.toString())
       val res = if (multipartIdentifier.size == 3) {
         (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
       } else if (multipartIdentifier.size == 2) {
@@ -173,46 +173,94 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         ("spark_catalog", "default", multipartIdentifier(0))
       }
       val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(res._1).asTableCatalog
-      val tc = sessionCatalog.loadTable(Identifier.of(Seq(res._2).toArray, res._3))
-
-
-      val provider = tc.asInstanceOf[V2Table].v1Table.provider.getOrElse("custom")
-      val table = tc.asInstanceOf[V2Table]
-
-      if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
-        || provider.equalsIgnoreCase("parquet")
-        || provider.equalsIgnoreCase("orc")
-        || provider.equalsIgnoreCase("avro")) {
-        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
-        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
-        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
-        val fileCatalog = new CustomCatalogFileIndex(
-          SparkSession.active,
-          table.v1Table,
-          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
-
-        //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
-        //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
-        val ff = if (provider.equalsIgnoreCase("hive")) {
-          getHiveTableFileFormat(table.v1Table)
+      if (res._1.equalsIgnoreCase("spark_catalog")) {
+        if (SparkSession.active.sessionState.catalog.tableExists(TableIdentifier(res._3, Some(res._2)))) {
+          val ct = SparkSession.active.sessionState.catalog.getTableMetadata(TableIdentifier(res._3, Some(res._2)))
+          val v2Table = V2Table(ct)
+          DataSourceV2Relation.create(v2Table, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+        } else if (SparkSession.active.sessionState.catalog.getTempView(res._3).isDefined) {
+          println("Inside temp view block")
+          SparkSession.active.sessionState.catalog.getTempView(res._3).get
+        } else if (SparkSession.active.sessionState.catalog.getGlobalTempView(res._3).isDefined) {
+          println("Inside global temp view block")
+          SparkSession.active.sessionState.catalog.getGlobalTempView(res._3).get
         } else {
-          getFileFormat(provider)
+          u
         }
-        val relation = LogicalRelation(relation = HadoopFsRelation(
-          location = fileCatalog,
-          partitionSchema = table.v1Table.partitionSchema,
-          dataSchema = table.v1Table.dataSchema,
-          fileFormat = ff,
-          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
-          bucketSpec = None
-        )(SparkSession.active))
+      } else {
+        val tc = sessionCatalog.loadTable(Identifier.of(Seq(res._2).toArray, res._3))
 
-       relation.setAnalyzed()
-       relation
-      }else{
-        u
+        tc match {
+          case v2Table: V2Table =>
+            val provider = v2Table.v1Table.provider.getOrElse("custom")
+            // val table = tc.asInstanceOf[V2Table]
+
+            if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
+              || provider.equalsIgnoreCase("parquet")
+              || provider.equalsIgnoreCase("orc")
+              || provider.equalsIgnoreCase("avro")) {
+              val schemaColName = v2Table.v1Table.dataSchema.map(f => f.name)
+              val partSchemaColNames = v2Table.v1Table.partitionSchema.map(f => f.name)
+              val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
+              val fileCatalog = new CustomCatalogFileIndex(
+                SparkSession.active,
+                v2Table.v1Table,
+                v2Table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
+
+              //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
+              //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
+              val ff = if (provider.equalsIgnoreCase("hive")) {
+                getHiveTableFileFormat(v2Table.v1Table)
+              } else {
+                getFileFormat(provider)
+              }
+              val relation = LogicalRelation(relation = HadoopFsRelation(
+                location = fileCatalog,
+                partitionSchema = v2Table.v1Table.partitionSchema,
+                dataSchema = v2Table.v1Table.dataSchema,
+                fileFormat = ff,
+                options = mapHiveCSVPropertiesToSparkOption(v2Table.v1Table, ff),
+                bucketSpec = None
+              )(SparkSession.active))
+
+              //   relation.setAnalyzed()
+              relation
+            } else {
+              val dataSource = DataSource(
+                session,
+                // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+                // inferred at runtime. We should still support it.
+                userSpecifiedSchema = if (v2Table.schema.isEmpty) None else Some(v2Table.schema),
+                partitionColumns = v2Table.v1Table.partitionColumnNames,
+                bucketSpec = v2Table.v1Table.bucketSpec,
+                className = v2Table.v1Table.provider.get,
+                options = v2Table.v1Table.storage.properties,
+                catalogTable = Some(v2Table.v1Table))
+              LogicalRelation(dataSource.resolveRelation(false), v2Table.v1Table)
+            }
+
+          case deltaTableV2: DeltaTableV2 => val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(res._1).asTableCatalog
+            //          import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TransformHelper
+            //          val (partitionColumns, maybeBucketSpec) = deltaTableV2.partitioning().toSeq.convertTransforms
+            //          val dataSource = DataSource(
+            //            session,
+            //            paths = Seq(deltaTableV2.catalogTable.get.location.toString),
+            //            // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+            //            // inferred at runtime. We should still support it.
+            //            userSpecifiedSchema = if (deltaTableV2.schema.isEmpty) None else Some(deltaTableV2.schema),
+            //            partitionColumns = partitionColumns,
+            //            bucketSpec = maybeBucketSpec,
+            //            className = deltaTableV2.catalogTable.get.provider.getOrElse("delta"),
+            //            options = Map.empty,
+            //            catalogTable = Some(deltaTableV2.catalogTable.get))
+            //          LogicalRelation(dataSource.resolveRelation(false), deltaTableV2.catalogTable.get)
+
+            DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+
+          case _ => u
+
+        }
       }
-
 
 
     case DataSourceV2Relation(table: V2Table, output:Seq[AttributeReference], _, _, _) =>
@@ -469,6 +517,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case unresolvedInlineTable: UnresolvedInlineTable =>
         ResolveInlineTables(unresolvedInlineTable)
 
+      case relationTimeTravel@RelationTimeTravel(u:UnresolvedRelation, _, _) =>
+        val resolvedPlan = apply(u)
+        relationTimeTravel.copy(relation = resolvedPlan)
 
       case u: UnresolvedLeafNode =>
         print(u.toString())

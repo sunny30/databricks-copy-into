@@ -57,14 +57,14 @@ object App {
 
     /***query model with structs starts**/
 
-    spark.sql("create database cat.ai")
+   // spark.sql("create database cat.ai")
   //  spark.sql("create table cat.ai.t2(attributes string)")
   //  spark.sql("insert into cat.ai.t2 values('hello')")
-    spark.sql("create table cat.ai.t1(attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>)")
-    spark.sql("insert into cat.ai.t1 values(named_struct('height',5.9, 'weight', 180.5, 'eye_color', 'brown'))")
+ //   spark.sql("create table cat.ai.t1(attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>)")
+  //  spark.sql("insert into cat.ai.t1 values(named_struct('height',5.9, 'weight', 180.5, 'eye_color', 'brown'))")
    // spark.sql("select * from cat.ai.t1").show()
   //  spark.sql("select query_model('meta', attributes) from cat.ai.t2").show()
-    spark.sql("select query_model('meta', attributes) from cat.ai.t1").show
+ //   spark.sql("select query_model('meta', attributes) from cat.ai.t1").show
 
     /***query model with structs ends **/
 
@@ -97,20 +97,46 @@ object App {
 
     // spark.sql("create database lsdb2")
     //spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
-    //    val df1 = Seq(
-    //      "John",
-    //      "Sunny",
-    //      "Xiaoyu",
-    //      "Shashi",
-    //      "Bharath",
-    //      "Vivek"
-    //    ).toDF("col1")
+        val df2 = Seq(
+          "John",
+          "Sunny",
+          "Xiaoyu",
+          "Shashi",
+          "Bharath",
+          "Vivek"
+        ).toDF("col1")
 
 
-//    val df1 = Seq(
-//      (1,2),
-//      (2,3)
-//    ).toDF("col1", "col2")
+    val df1 = Seq(
+      (1,2),
+      (2,3)
+    ).toDF("col1", "col2")
+
+    spark.sql("create database cat.tdb")
+    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
+    spark.read.table("cat.tdb.tbl").show()
+    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
+    spark.read.table("cat.tdb.tbl").show()
+
+
+    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
+    spark.read.table("cat.tdb.ptbl").show()
+    df2.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
+    spark.read.table("cat.tdb.ptbl").show()
+
+
+    df1.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
+    spark.read.table("cat.tdb.atbl").show()
+    df2.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
+    spark.read.table("cat.tdb.atbl").show()
+
+
+    df1.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
+    spark.read.table("cat.tdb.otbl").show()
+    df2.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
+    spark.read.table("cat.tdb.otbl").show()
+   // spark.sql("create table cat.tdb.etbl(id int, name string) using delta location '/tmp/dt'")
+  //  spark.sql("create table cat.tdb.etbl1 using delta location '/tmp/dt'")
 
     /*nested aggregate function */
 //    spark.sql("create database cat.dbx122")

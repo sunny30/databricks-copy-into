@@ -216,6 +216,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 //  }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    println("Inside stageCreateOrReplace")
     dropTable(ident)
     val table = createTable(ident, schema, partitions, properties)
     BestEffortStagedTable(ident, table, this)
@@ -345,7 +346,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
-
+    println("Inside stage replace")
     (new DeltaCatalog).stageReplace(ident = ident, schema = schema, partitions = partitions, properties = properties)
   }
   override def name(): String = catalogName

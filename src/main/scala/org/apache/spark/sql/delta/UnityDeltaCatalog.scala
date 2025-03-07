@@ -131,8 +131,27 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     writer,
     operation,
     tableByPath = isByPath).run(SparkSession.active)
-  plugin.createTable(tableDefinition = tableDesc, true)
-  loadTable(ident)
+
+    if(tableType == CatalogTableType.EXTERNAL){
+      val tableLocation = tableDesc.storage.locationUri.get.toString
+      import io.delta.tables._
+      val deltaTable = DeltaTable.forPath(tableLocation)
+      val persistedTable = if (tableDesc.schema.nonEmpty) {
+        tableDesc
+      } else {
+        println(s"the schema of projected table: ${deltaTable.toDF.schema.prettyJson}")
+        tableDesc.copy(schema = deltaTable.toDF.schema)
+      }
+      plugin.createTable(tableDefinition = persistedTable, true)
+    }else{
+      plugin.createTable(tableDefinition = tableDesc, true)
+      //loadTable(ident)
+    }
+
+    loadTable(ident)
+
+
+
 }
 
   protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
