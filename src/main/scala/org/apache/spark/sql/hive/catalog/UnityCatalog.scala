@@ -130,7 +130,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def dropTable(ident: Identifier): Boolean = {
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    externalCatalog.dropTable(tableName, dbName, true,false)
+    externalCatalog.dropTable(dbName, tableName, true,false)
     true
   }
 
@@ -216,6 +216,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 //  }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    println("Inside stageCreateOrReplace")
     dropTable(ident)
     val table = createTable(ident, schema, partitions, properties)
     BestEffortStagedTable(ident, table, this)
@@ -263,7 +264,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
       val tableProperties = properties.asScala
       var location = Option(properties.get(TableCatalog.PROP_LOCATION))
-      var isExternal = false
+      var isExternal = location.isDefined
       val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
         .copy(locationUri = location.map(CatalogUtils.stringToURI))
       isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
@@ -334,6 +335,14 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }
   }
 
+  override def loadTable(ident: Identifier, timestamp: Long): Table = {
+    new UnityDeltaCatalog(externalCatalog).loadTable(ident,timestamp)
+  }
+
+  override def loadTable(ident: Identifier, version: String): Table = {
+    new UnityDeltaCatalog(externalCatalog).loadTable(ident,version)
+  }
+
 
   override def loadFunction(ident: Identifier): UnboundFunction = ???
 
@@ -345,7 +354,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
-
+    println("Inside stage replace")
     (new DeltaCatalog).stageReplace(ident = ident, schema = schema, partitions = partitions, properties = properties)
   }
   override def name(): String = catalogName
@@ -373,32 +382,35 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
 
-  private case class BestEffortStagedTable(
-                                            ident: Identifier,
-                                            table: Table,
-                                            catalog: TableCatalog) extends StagedTable with SupportsWrite {
-    override def abortStagedChanges(): Unit = catalog.dropTable(ident)
 
-    override def commitStagedChanges(): Unit = {}
 
-    // Pass through
-    override def name(): String = table.name()
 
-    override def schema(): StructType = table.schema()
 
-    override def partitioning(): Array[Transform] = table.partitioning()
 
-    override def capabilities(): util.Set[TableCapability] = table.capabilities()
+}
 
-    override def properties(): util.Map[String, String] = table.properties()
 
-    override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = table match {
-      case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
-      case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
-    }
+case class BestEffortStagedTable(
+                                  ident: Identifier,
+                                  table: Table,
+                                  catalog: TableCatalog) extends StagedTable with SupportsWrite {
+  override def abortStagedChanges(): Unit = catalog.dropTable(ident)
+
+  override def commitStagedChanges(): Unit = {}
+
+  // Pass through
+  override def name(): String = table.name()
+
+  override def schema(): StructType = table.schema()
+
+  override def partitioning(): Array[Transform] = table.partitioning()
+
+  override def capabilities(): util.Set[TableCapability] = table.capabilities()
+
+  override def properties(): util.Map[String, String] = table.properties()
+
+  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = table match {
+    case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
+    case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
   }
-
-
-
-
 }

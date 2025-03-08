@@ -17,7 +17,7 @@ import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.schema.SchemaUtils
 import org.apache.spark.sql.delta.skipping.clustering.ClusteredTableUtils
 import org.apache.spark.sql.delta.skipping.clustering.temp.ClusterBySpec
-import org.apache.spark.sql.delta.sources.{DeltaSQLConf, DeltaSourceUtils}
+import org.apache.spark.sql.delta.sources.{DeltaDataSource, DeltaSQLConf, DeltaSourceUtils}
 import org.apache.spark.sql.delta.stats.StatisticsCollection
 import org.apache.spark.sql.delta.tablefeatures.DropFeature
 import org.apache.spark.sql.delta.util.PartitionUtils
@@ -25,11 +25,11 @@ import org.apache.spark.sql.execution.datasources.{DataSource, PartitioningUtils
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TransformHelper
-import scala.collection.JavaConverters._
 
+import scala.collection.JavaConverters._
 import org.apache.spark.sql.delta.skipping.clustering.temp.{ClusterByTransform => TempClusterByTransform}
 
-
+import java.sql.Timestamp
 import java.util
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable
@@ -131,8 +131,27 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     writer,
     operation,
     tableByPath = isByPath).run(SparkSession.active)
-  plugin.createTable(tableDefinition = tableDesc, true)
-  loadTable(ident)
+
+    if(tableType == CatalogTableType.EXTERNAL){
+      val tableLocation = tableDesc.storage.locationUri.get.toString
+      import io.delta.tables._
+      val deltaTable = DeltaTable.forPath(tableLocation)
+      val persistedTable = if (tableDesc.schema.nonEmpty) {
+        tableDesc
+      } else {
+        println(s"the schema of projected table: ${deltaTable.toDF.schema.prettyJson}")
+        tableDesc.copy(schema = deltaTable.toDF.schema)
+      }
+      plugin.createTable(tableDefinition = persistedTable, true)
+    }else{
+      plugin.createTable(tableDefinition = tableDesc, true)
+      //loadTable(ident)
+    }
+
+    loadTable(ident)
+
+
+
 }
 
   protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
@@ -293,6 +312,40 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
       }
     }
   }
+
+  def loadTable(ident: Identifier, timestamp: Long): Table = {
+    loadTableWithTimeTravel(ident, version = None, Some(timestamp))
+  }
+
+  def loadTable(ident: Identifier, version: String): Table = {
+    loadTableWithTimeTravel(ident, Some(version), timestamp = None)
+  }
+
+  private def loadTableWithTimeTravel(
+                                       ident: Identifier,
+                                       version: Option[String],
+                                       timestamp: Option[Long]): Table = {
+    assert(version.isEmpty ^ timestamp.isEmpty,
+      "Either the version or timestamp should be provided for time travel")
+    val table = loadTable(ident)
+    table match {
+      case deltaTable: DeltaTableV2 =>
+        val ttOpts = Map(DeltaDataSource.TIME_TRAVEL_SOURCE_KEY -> "SQL") ++
+          (if (version.isDefined) {
+            Map(DeltaDataSource.TIME_TRAVEL_VERSION_KEY -> version.get)
+          } else {
+            val timestampMs = timestamp.get / 1000
+            Map(DeltaDataSource.TIME_TRAVEL_TIMESTAMP_KEY -> new Timestamp(timestampMs).toString)
+          })
+
+        deltaTable.withOptions(ttOpts)
+      // punt this problem up to the parent
+      case _ if version.isDefined => loadTable(ident, version.get)
+      case _ if timestamp.isDefined => loadTable(ident, timestamp.get)
+    }
+  }
+
+
 
 
    def alterTable(ident: Identifier, changes: Seq[TableChange]): Table =  {

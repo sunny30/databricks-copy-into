@@ -19,7 +19,7 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
   override def buildScan(): RDD[Row] = {
     val spark = SparkSession.active
     import spark.implicits._
-    val results = Seq(1).toDF("id")
+    val results = Seq("hello").toDF("id")
     results.rdd
 
   }
@@ -27,6 +27,7 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = buildScan()
 
   override def insert(data: DataFrame, overwrite: Boolean): Unit = {
+    println(s"${data.collect().toString} and flag overwrite is ${overwrite.toString}")
     println("Inside insert")
   }
 
