@@ -55,6 +55,20 @@ object App {
       enableHiveSupport().
       getOrCreate()
 
+    /**View fix start**/
+    spark.sql("create database cat.viewdb")
+    spark.sql("create table cat.viewdb.t2(attributes string)")
+    spark.sql("insert into cat.viewdb.t2 values('hello')")
+    spark.sql("create view cat.viewdb.v1(cl1) as select * from cat.viewdb.t2")
+    spark.sql("select  concat(cl1, ' hi') as c6, cl1, 1 as cl1 from cat.viewdb.v1").show()
+    spark.sql("describe formatted cat.viewdb.v1").show()
+    spark.sql("describe formatted cat.viewdb.t2").show()
+    spark.sql("describe table cat.viewdb.v1").show()
+    spark.sql("ALTER TABLE  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
+    spark.sql("ALTER VIEW  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
+
+    /**View fix end**/
+
     /***query model with structs starts**/
 
    // spark.sql("create database cat.ai")
@@ -112,12 +126,15 @@ object App {
       (2,3)
     ).toDF("col1", "col2")
 
-    spark.sql("create database cat.tdb1")
-    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
+   // spark.sql("create database cat.tdb1")
+  //  df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
 //    spark.read.table("cat.tdb.tbl").show()
 //    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
 //    spark.read.table("cat.tdb.tbl").show()
-    spark.sql("select * from cat.tdb1.tbl version as of 1").show()
+   // spark.sql("select * from cat.tdb1.tbl version as of 1").show()
+  //  val dfx = spark.read.format("delta").option("versionAsOf",0).table("cat.tdb1.tbl")
+  //  dfx.explain(true)
+  //  dfx.show()
 
 
 //    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")

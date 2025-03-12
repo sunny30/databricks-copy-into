@@ -8,7 +8,7 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.connector.catalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
-import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange}
+import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.delta.{DeltaErrors, UnityDeltaCatalog}
@@ -109,7 +109,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       catalogTable.storage
     }
-    loadTable(ident) match {
+    val table = if(loadTable(ident) == null){
+      loadTable(ident, null)
+    }else{
+      loadTable(ident)
+    }
+    table match {
       case deltaTableV2: DeltaTableV2 => (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
       case _ => try {
         externalCatalog.alterTable(
@@ -287,7 +292,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
       try {
         externalCatalog.createTable(tableDesc, ignoreIfExists = false)
-        loadTable(ident)
+        if(tableType == CatalogTableType.VIEW){
+          V2Table(tableDesc)
+        }else {
+          loadTable(ident)
+        }
       } catch {
         case e: Exception => throw e
       }
@@ -327,6 +336,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         catalogTable = Some(tt),
         tableIdentifier = Some(ident.toString))
     } else {
+      if(tt != null && tt.tableType == CatalogTableType.VIEW){
+        return null
+      }
       if (tt != null) {
         V2Table(tt)
       } else {
@@ -336,11 +348,33 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier, timestamp: Long): Table = {
-    new UnityDeltaCatalog(externalCatalog).loadTable(ident,timestamp)
+    if(timestamp ==null){
+      val tableName = ident.asTableIdentifier.table
+      val dbName = ident.asTableIdentifier.database.getOrElse("default")
+      val tt = externalCatalog.getTable(table = tableName, db = dbName)
+      if(tt!=null){
+        V2Table(tt)
+      }else{
+        null
+      }
+    }else {
+      new UnityDeltaCatalog(externalCatalog).loadTable(ident, timestamp)
+    }
   }
 
   override def loadTable(ident: Identifier, version: String): Table = {
-    new UnityDeltaCatalog(externalCatalog).loadTable(ident,version)
+    if (version == null) {
+      val tableName = ident.asTableIdentifier.table
+      val dbName = ident.asTableIdentifier.database.getOrElse("default")
+      val tt = externalCatalog.getTable(table = tableName, db = dbName)
+      if (tt != null) {
+        V2Table(tt)
+      } else {
+        null
+      }
+    }else {
+      new UnityDeltaCatalog(externalCatalog).loadTable(ident, version)
+    }
   }
 
 

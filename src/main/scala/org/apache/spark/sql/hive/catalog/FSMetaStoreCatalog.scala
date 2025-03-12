@@ -236,7 +236,7 @@ class FSMetaStoreCatalog(
   }
 
   override def alterTable(tableDefinition: CatalogTable): Unit = {
-    throw QueryExecutionErrors.methodNotImplementedError("rename partition")
+    println("empty impl")
   }
 
   override def listTables(db: String, pattern: String): Seq[String] = {
