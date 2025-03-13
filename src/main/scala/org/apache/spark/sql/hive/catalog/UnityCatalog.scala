@@ -313,6 +313,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }.toMap
   }
 
+  override def tableExists(ident: Identifier): Boolean = {
+    try {
+      loadTable(ident) != null || loadTable(ident, null) !=null
+    } catch {
+      case e: NoSuchTableException =>
+        false
+    }
+  }
+
 
   override def createTable(ident: Identifier, columns: Array[catalog.Column], partitions: Array[Transform], properties: util.Map[String, String]): Table = {
     createTable(ident, CatalogV2Util.v2ColumnsToStructType(columns), partitions, properties)
