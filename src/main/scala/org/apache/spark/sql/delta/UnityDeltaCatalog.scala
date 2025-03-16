@@ -340,8 +340,8 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
 
         deltaTable.withOptions(ttOpts)
       // punt this problem up to the parent
-      case _ if version.isDefined => loadTable(ident, version.get)
-      case _ if timestamp.isDefined => loadTable(ident, timestamp.get)
+      case _ if version.isDefined => throw new IllegalArgumentException("version is only supported for delta tables")
+      case _ if timestamp.isDefined => throw new IllegalArgumentException("timestamp is only supported for delta tables")
     }
   }
 

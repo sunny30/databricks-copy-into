@@ -55,6 +55,33 @@ object App {
       enableHiveSupport().
       getOrCreate()
 
+    /**View fix start**/
+    spark.sql("create database cat.viewdb")
+    spark.sql("create table cat.viewdb.t2(attributes string) using avro")
+    spark.sql("insert into cat.viewdb.t2 values('hello')")
+    spark.sql("create view cat.viewdb.v1(cl1) as select * from cat.viewdb.t2")
+    spark.sql("select  concat(cl1, ' hi') as c6, cl1, 1 as cl1 from cat.viewdb.v1").show()
+    spark.sql("describe formatted cat.viewdb.v1").show()
+    spark.sql("describe formatted cat.viewdb.t2").show()
+    spark.sql("describe table cat.viewdb.v1").show()
+    spark.sql("ALTER TABLE  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
+  //  spark.sql("ALTER VIEW  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
+//    spark.sql("CREATE TABLE cat.viewdb.dealer (id INT, city STRING, car_model STRING, quantity INT)")
+//    spark.sql("""INSERT INTO cat.viewdb.dealer VALUES
+//                |    (100, 'Fremont', 'Honda Civic', 10),
+//                |    (100, 'Fremont', 'Honda Accord', 15),
+//                |    (100, 'Fremont', 'Honda CRV', 7),
+//                |    (200, 'Dublin', 'Honda Civic', 20),
+//                |    (200, 'Dublin', 'Honda Accord', 10),
+//                |    (200, 'Dublin', 'Honda CRV', 3),
+//                |    (300, 'San Jose', 'Honda Civic', 5),
+//                |    (300, 'San Jose', 'Honda Accord', 8)""".stripMargin)
+//    spark.sql("SELECT city, sum(quantity) AS sum FROM cat.viewdb.dealer GROUP BY city HAVING city = 'Fremont'").show()
+//    spark.sql("SELECT case when  sum(quantity)>10 then 'bigger' else 'small' end as status, city, sum(quantity) AS sum FROM cat.viewdb.dealer GROUP BY city HAVING sum(quantity)>5").show()
+    spark.sql("drop table cat.viewdb.v1").show()
+
+    /**View fix end**/
+
     /***query model with structs starts**/
 
    // spark.sql("create database cat.ai")
@@ -114,10 +141,13 @@ object App {
 
     spark.sql("create database cat.tdb1")
     df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
-//    spark.read.table("cat.tdb.tbl").show()
-//    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb.tbl")
-//    spark.read.table("cat.tdb.tbl").show()
+    spark.read.table("cat.tdb1.tbl").show()
+    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
+    spark.read.table("cat.tdb1.tbl").show()
     spark.sql("select * from cat.tdb1.tbl version as of 1").show()
+    val dfx = spark.read.format("delta").option("versionAsOf",0).table("cat.tdb1.tbl")
+    dfx.explain(true)
+    dfx.show()
 
 
 //    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
