@@ -140,8 +140,9 @@ object App {
     ).toDF("col1", "col2")
 
     spark.sql("create database cat.tdb2")
-    spark.sql("create table cat.tdb2.etbl using delta location '/tmp/tbl'")
+    spark.sql("create table cat.tdb2.etbl(l1 int, l2 string, l3 string)  using delta location '/tmp/tbl'")
     spark.read.table("cat.tdb2.etbl").show()
+    spark.sql("select * from cat.tdb2.etbl").show()
 
 //    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
 //    spark.read.table("cat.tdb1.tbl").show()
