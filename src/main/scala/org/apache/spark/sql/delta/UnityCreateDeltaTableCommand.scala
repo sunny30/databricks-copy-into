@@ -306,7 +306,7 @@ case class UnityCreateDeltaTableCommand(table: CatalogTable,
         }
         ClusteredTableUtils.getDomainMetadataOptional(table, txn).toSeq
       } else {
-        verifyTableMetadata(txn, tableWithLocation)
+     //   verifyTableMetadata(txn, tableWithLocation)
         Nil
       }
     }
