@@ -136,13 +136,24 @@ object App {
 
     val df1 = Seq(
       (1,2),
-      (2,3)
-    ).toDF("col1", "col2")
+      (2,3),
+      (3,4)
+    ).toDF("id", "id1")
 
-    spark.sql("create database cat.tdb2")
-    spark.sql("create table cat.tdb2.etbl(l1 int, l2 string, l3 string)  using delta location '/tmp/tbl'")
-    spark.read.table("cat.tdb2.etbl").show()
-    spark.sql("select * from cat.tdb2.etbl").show()
+    spark.sql("create database cat.tdb3")
+    df1.write.saveAsTable("cat.tdb3.tbl")
+    spark.sql("select * from cat.tdb3.tbl").show()
+    spark.read.table("cat.tdb3.tbl").show()
+
+    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
+    spark.sql("select * from cat.tdb3.v1").show()
+
+
+
+//    spark.sql("create database cat.tdb2")
+//    spark.sql("create table cat.tdb2.etbl(id int, l2 string, l3 string)  using delta location '/tmp/tbl'")
+//    spark.read.table("cat.tdb2.etbl").show()
+//    spark.sql("select * from cat.tdb2.etbl").show()
 
 //    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
 //    spark.read.table("cat.tdb1.tbl").show()
