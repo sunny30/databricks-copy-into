@@ -236,7 +236,10 @@ class FSMetaStoreCatalog(
   }
 
   override def alterTable(tableDefinition: CatalogTable): Unit = {
-    println("empty impl")
+    val db = tableDefinition.database
+    val table = tableDefinition.identifier.table
+    FSMetaStoreCatalog.catalog(db).tables.put(table, new TableDesc(tableDefinition))
+    println("proper impl")
   }
 
   override def listTables(db: String, pattern: String): Seq[String] = {

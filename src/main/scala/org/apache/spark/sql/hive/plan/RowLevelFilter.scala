@@ -37,7 +37,8 @@ class RowLevelFilter(session: SparkSession)
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
       val relation = (new CustomDataSourceAnalyzer(session)).apply(u)
-      val condition = session.sessionState.sqlParser.parseExpression("id>2")
+      val condition = session.sessionState.sqlParser.parseExpression("id>2 AND id1=4")
+      //condition.sql
       val filter = Filter(condition, relation)
       val analyzed = session.sessionState.analyzer.execute(filter)
       analyzed
