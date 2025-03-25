@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
-import org.apache.spark.sql.hive.plan.{CopyIntoFromFilesCommand, CopyIntoFromLocationCommand, CopyIntoFromSelectClauseCommand, GenerateDeltaLogCommand}
+import org.apache.spark.sql.hive.plan.{CopyIntoFromFilesCommand, CopyIntoFromLocationCommand, CopyIntoFromSelectClauseCommand, CreateRowSecFunction, GenerateDeltaLogCommand, GrantRowFunc}
 
 class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCustomSqlParser(parserInterface = parserInterface) {
 
@@ -29,7 +29,47 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   def closeParen: Parser[String] = ")"
   def quoteValue:Parser[String] = """\'"""
 
+  def createL: Parser[String] = "create"
+  def createU: Parser[String] = "CREATE"
 
+  def create:Parser[String] = createL | createU
+
+  def functionL:Parser[String] = "function"
+  def functionU:Parser[String] = "FUNCTION"
+
+  def function:Parser[String] = functionL | functionU
+
+  def forL: Parser[String] = "for"
+  def forU: Parser[String] = "FOR"
+
+  def forX:Parser[String] = forL | forU
+
+  def tableL: Parser[String] = "table"
+  def tableU: Parser[String] = "TABLE"
+  def table:Parser[String] = tableL | tableU
+
+  def whereL: Parser[String] = "where"
+  def whereU: Parser[String] = "WHERE"
+  def where:Parser[String] = whereL | whereU
+
+
+  def doubleQuoteValue:Parser[String] = """\""""
+
+
+
+  def row_levelL:Parser[String] = "row_level"
+  def row_levelU:Parser[String] = "ROW_LEVEL"
+
+  def row_level:Parser[String] = row_levelL | row_levelU
+
+  def userL:Parser[String] = "user"
+  def userU:Parser[String] = "USER"
+  def user:Parser[String] = userL | userU
+
+  def grantL = "grant"
+  def grantU = "GRANT"
+
+  def grant: Parser[String] = grantL | grantU
 
 
   def dash: Parser[String] = "-"
@@ -40,13 +80,19 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
 
   override def parse(input: String): LogicalPlan = super.parse(input)
 
-  override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3 | copy_into_location_rule2
-    copy_into_location_rule1
+  override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3 | copy_into_location_rule2 | row_level_rule1 |
+    copy_into_location_rule1 | row_level_rule2
 
 
   def isValidCharacterInsideQuote(c: Char): Boolean = {
     val firstCriterion = true
     val secondCriterion = '''.equals(c)
+    firstCriterion && !secondCriterion
+  }
+
+  def isValidCharacterInsideDoubleQuote(c: Char): Boolean = {
+    val firstCriterion = true
+    val secondCriterion = '"'.equals(c)
     firstCriterion && !secondCriterion
   }
 
@@ -62,15 +108,28 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
         elem("identifier part", isValidCharacterInsideQuote(_: Char))) ^^ (_.mkString)
 
 
+  def doubleQuoteIdent: Parser[String] =
+    "" ~> // handle whitespace
+      rep1(acceptIf(ch => isValidCharacterInsideDoubleQuote(ch))("identifier expected but '" + _ + "' found"),
+        elem("identifier part", isValidCharacterInsideDoubleQuote(_: Char))) ^^ (_.mkString)
+
+
   def projectParenClause:Parser[String] = "{" ~> rep1(acceptIf(ch => isValidCharacterInsideProjectParen(ch))("identifier expected but '" + _ + "' found"),
     elem("identifier part", isValidCharacterInsideProjectParen(_: Char)))<~"}" ^^ (_.mkString)
 
 
   def singleQuote = "'"
+
+  def doubleQuote = """\""""
   def parseLocation: Parser[String] = singleQuote~>quoteIdent<~singleQuote^^{
     case l => l
   }
 
+  def parseSingleQuoteIdent = parseSingleFile
+
+  def parseDoubleQuoteIdent = (doubleQuote~>doubleQuoteIdent<~doubleQuote)
+
+  def parsePredicate:Parser[String] = parseDoubleQuoteIdent |  parseSingleQuoteIdent
 
   def nonJavaident: Parser[String] =
     "" ~> // handle whitespace
@@ -104,6 +163,13 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   def parseTable: Parser[(String, String)] = {
     sqlIdentifier ~ dot ~ (sqlIdentifier) ^^ {
       case d ~ _ ~ t => (d, t)
+    }
+  }
+
+
+  def parseCatalogTable:Parser[(String,String,String)] ={
+    sqlIdentifier ~ dot ~ sqlIdentifier ~ dot ~ (sqlIdentifier) ^^{
+      case c ~_ ~ db ~ _ ~ tbl => (c, db, tbl)
     }
   }
 
@@ -208,6 +274,13 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     )
   }
 
+  def row_level_rule1: Parser[LogicalPlan] = create~function~sqlIdentifier~forX~table~parseCatalogTable~where~parsePredicate^^{
+    case _ ~ _ ~ func_name ~ _ ~ _ ~ tbl_tup~ _~cond => CreateRowSecFunction(tbl_tup,cond,func_name)
+  }
+
+  def row_level_rule2:Parser[LogicalPlan] = grant ~ row_level ~ sqlIdentifier~forX~user~sqlIdentifier^^{
+    case _~_~func_name~_~_~usr => GrantRowFunc(funcName = func_name, user = usr)
+  }
   def copy_into_location_rule2: Parser[LogicalPlan] = COPY ~ INTO ~ parseTable ~ FROM ~ projectParenClause ~ parseFormat~opt(parsePattern)~opt(parseFiles)~opt(parseFormatOptions)~opt(parseCopyOptions) ^^ {
     case _ ~ _ ~ newTable ~ _ ~ prj_loc ~ fm~ pattern ~ files ~ formatOptions ~ copyOptions =>
       val prjClause = prj_loc.split("from")(0)
