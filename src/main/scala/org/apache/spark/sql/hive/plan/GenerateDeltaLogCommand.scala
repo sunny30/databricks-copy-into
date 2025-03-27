@@ -1,15 +1,18 @@
 package org.apache.spark.sql.hive.plan
 
+import org.apache.calcite.schema.Schema.TableType
 import org.apache.derby.catalog.UUID
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql
+import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.{Row, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.delta.commands.DeltaCommand
 import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.hive.datashare.ConverterUtil
+import org.apache.spark.sql.types.StructType
 
 import scala.collection.mutable.ListBuffer
 
@@ -138,3 +141,54 @@ case class CopyIntoFromSelectClauseCommand(databaseName: String,
     }
 
 }
+
+
+case class CreateRowSecFunction(catalogTable:(String,String, String), condition:String, funcName:String) extends LeafRunnableCommand{
+
+  override val output: Seq[Attribute] = Nil
+
+  override def run(sparkSession: SparkSession): Seq[Row] ={
+    val catName= catalogTable._1
+    val dbName = catalogTable._2
+    val tableName = catalogTable._3
+    val storage = CatalogStorageFormat(
+      None,
+      None,
+      None,
+      None,
+      false,
+      Map.empty[String, String]
+    )
+    val ct = CatalogTable(
+      TableIdentifier(funcName),
+      tableType = CatalogTableType.VIEW,
+      properties = Map("cond" -> condition),
+      schema = StructType.fromDDL("id int"),
+      storage = storage
+
+    )
+    sparkSession.sessionState.catalog.createTable(ct,true,false)
+    sparkSession.sql(s"alter table ${catName}.${dbName}.${tableName} set TBLPROPERTIES('row_sec_func' = '${funcName}')")
+    scala.collection.immutable.Seq.empty[Row]
+
+  }
+
+}
+
+
+case class GrantRowFunc(user:String, funcName:String) extends LeafRunnableCommand{
+  override val output: Seq[Attribute] = Nil
+
+  override def run(sparkSession: SparkSession): Seq[Row] ={
+    val ct = sparkSession.sessionState.catalog.getTableMetadata(TableIdentifier(funcName))
+    var props = ct.properties
+    props = props++Map("row-sec-user" -> user)
+    val newCt = ct.copy(properties = props)
+    sparkSession.sessionState.catalog.alterTable(newCt)
+    scala.collection.immutable.Seq.empty[Row]
+  }
+
+
+}
+
+
