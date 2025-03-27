@@ -20,7 +20,8 @@ class CustomSparkSQLParser extends SparkSqlParser{
 
 
   def parserSparkSQLPlan(sqlText: String): LogicalPlan ={
-    parse(sqlText){
+    val newSQLText = MaterializedViewParserPlanUtils(sqlText).getNewSQLText
+    parse(newSQLText){
       parser =>
         val plan = astBuilder.visitSingleStatement(parser.singleStatement())
         if(plan ==null){
@@ -28,6 +29,8 @@ class CustomSparkSQLParser extends SparkSqlParser{
         }else{
           plan
         }
+        val newPlan = MaterializedViewParserPlanUtils(sqlText).getMaterialisedViewSubstitutedPlan(plan)
+        newPlan
     }
   }
 
