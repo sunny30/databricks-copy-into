@@ -166,6 +166,9 @@ object App {
     spark.sql("create materialized view cat.tdb3.mv tblproperties('schedular' = '1 day') as select * from cat.tdb3.tbl1")
     spark.sql("select * from cat.tdb3.mv").show()
     spark.sql("describe formatted cat.tdb3.mv").show(40, false)
+    spark.sql("insert into cat.tdb3.tbl1 values (9,6)")
+    spark.sql("refresh materialized view cat.tdb3.mv")
+    spark.sql("select * from cat.tdb3.mv").show()
 
 //    spark.sql("create database cat.tdb2")
 //    spark.sql("create table cat.tdb2.etbl(id int, l2 string, l3 string)  using delta location '/tmp/tbl'")
