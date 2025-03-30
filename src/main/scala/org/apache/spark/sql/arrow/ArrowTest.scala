@@ -60,6 +60,7 @@ object ArrowTest {
     while(reader.loadNextBatch()){
       try{
         val vectors = reader.getVectorSchemaRoot.getFieldVectors
+       // val tbl: ArrowTa
          vectors
       //  fields = fields++vectors.asScala.toList[FieldVector]
       }catch {
