@@ -7,10 +7,13 @@ import org.apache.arrow.dataset.scanner.ScanOptions
 import org.apache.arrow.dataset.source.DatasetFactory
 import org.apache.arrow.memory.RootAllocator
 import org.apache.arrow.dataset.file._
-import org.apache.arrow.vector.FieldVector
+import org.apache.arrow.vector.{FieldVector, VectorSchemaRoot}
 import org.apache.arrow.vector.ipc.ArrowReader
+import org.apache.spark.paths.SparkPath
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.spark.sql.vectorized.{ArrowColumnVector, ColumnVector}
 
-import scala.collection.JavaConverters.{asScalaBufferConverter, asScalaIteratorConverter}
+import scala.collection.JavaConverters.{asJavaIterableConverter, asScalaBufferConverter, asScalaIteratorConverter}
 
 object ArrowTest {
 
@@ -34,12 +37,17 @@ object ArrowTest {
       val scanner = dataSet.newScan(options)
       val reader = scanner.scanBatches()
       reader
+//      reader.getVectorSchemaRoot.getVector(0).
       //val readers = scanner.scan().iterator().asScala.map(it => it.execute())
 
     }catch {
       case e:Exception =>throw e
     }
   }
+
+
+
+
 
 
   def readParquetIter(dataSetFactory: FileSystemDatasetFactory, options: ScanOptions): Seq[ArrowReader] = {
@@ -71,13 +79,71 @@ object ArrowTest {
 
   }
 
+  def prepColumnVector(reader: ArrowReader):Array[ColumnVector]={
+
+    reader.getVectorSchemaRoot.
+      getFieldVectors.asScala.
+      map(vec => new ArrowColumnVector(vec)).toArray
+  }
+
+  def prepColumnVector(root: VectorSchemaRoot): Array[ColumnVector] = {
+    root.
+      getFieldVectors.asScala.
+      map(vec => new ArrowColumnVector(vec)).toArray
+  }
+
+  def loadArrow(fileString:String):Unit = {
+    val file = SparkPath.fromPathString(fileString)
+    val factory = ArrowUtils.makeArrowDiscovery(
+      file.toString,0, 0,
+      null)
+
+    //      new ArrowOptions(
+    //        new CaseInsensitiveStringMap(
+    //          options.asJava).asScala.toMap)
+
+    //val dataset = factory.finish();
+
+
+    //      val filter = if (enableFilterPushDown) {
+    //        ArrowFilters.translateFilters(filters)
+    //      } else {
+    //        org.apache.arrow.dataset.filter.Filter.EMPTY
+    //      }
+
+    val scanOption = new ScanOptions(32768)
+    //val scanner = dataset.newScan(scanOption)
+
+
+    val readers = readParquetIter(dataSetFactory = factory, scanOption)
+   // val readers = scanner.scan().iterator().asScala.map(it => it.execute()).toSeq
+    val itrList = readers.map(r => r.getVectorSchemaRoot)
+
+    //      Option(TaskContext.get()).foreach(_.addTaskCompletionListener[Unit](_ => {
+    //        itrList.foreach(_.close())
+    //        taskList.foreach(_.close())
+    //        scanner.close()
+    //        dataset.close()
+    //        factory.close()
+    //      }))
+
+    val itr = itrList
+      .toIterator
+      .map(vsr => ArrowUtils.loadVectors(vsr, null, null,
+        null))
+  }
+
 
   def main(args: Array[String]):Unit={
-    val path = "file:///Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/tdb1.db/tbl/part-00000-ae10be1d-0689-4e33-83f9-4e0060f3e4b4-c000.snappy.parquet"
-    val factory = getFactory(path, "parquet")
+    val path = "file:///tmp/parquet/part-00001-59dc62c0-f6db-4b72-84d4-a08a4ac205b9-c000.snappy.parquet"
+    //file:///tmp/parquet/part-00001-59dc62c0-f6db-4b72-84d4-a08a4ac205b9-c000.snappy.parquet
+    val factory = ArrowUtils.makeArrowDiscovery(path, 0, 0 , null)
     val scanOption = new ScanOptions(32768)
     val readers = readParquetIter(factory, scanOption)
     readers.foreach(r=>getParquetContent(r))
+    val columns = readers.map(r => prepColumnVector(r.getVectorSchemaRoot))
+//    columns.foreach(c => c.toList)
+   // loadArrow(path)
 
   }
 

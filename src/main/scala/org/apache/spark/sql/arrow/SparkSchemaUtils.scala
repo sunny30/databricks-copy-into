@@ -6,7 +6,8 @@ import org.apache.spark.sql.util.ArrowUtils
 
 object SparkSchemaUtils {
 
-  def fromArrowSchema(schema: Schema): StructType = {
+  def
+  fromArrowSchema(schema: Schema): StructType = {
     ArrowUtils.fromArrowSchema(schema)
   }
 

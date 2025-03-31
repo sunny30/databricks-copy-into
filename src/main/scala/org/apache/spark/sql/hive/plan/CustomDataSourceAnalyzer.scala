@@ -2,6 +2,7 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.hadoop.fs.Path
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.arrow.ArrowFileFormat
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
@@ -50,6 +51,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case "orc" => new OrcFileFormat
       case "avro" => new AvroFileFormat
       case "json" => new JsonFileFormat
+      case "arrow" => new ArrowFileFormat
       case _ => new CSVFileFormat
     }
   }
@@ -210,7 +212,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
                 || provider.equalsIgnoreCase("parquet")
                 || provider.equalsIgnoreCase("orc")
-                || provider.equalsIgnoreCase("avro")) {
+                || provider.equalsIgnoreCase("avro")
+              || provider.equalsIgnoreCase("arrow"))
+               {
                 val schemaColName = v2Table.v1Table.dataSchema.map(f => f.name)
                 val partSchemaColNames = v2Table.v1Table.partitionSchema.map(f => f.name)
                 val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
@@ -297,7 +301,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
         || provider.equalsIgnoreCase("parquet")
        || provider.equalsIgnoreCase("orc")
-       || provider.equalsIgnoreCase("avro")) {
+       || provider.equalsIgnoreCase("avro")
+  || provider.equalsIgnoreCase("arrow")) {
         val schemaColName = table.v1Table.dataSchema.map(f => f.name)
         val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
         val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
@@ -368,7 +373,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
         || provider.equalsIgnoreCase("parquet")
         || provider.equalsIgnoreCase("orc")
-        || provider.equalsIgnoreCase("avro")) {
+        || provider.equalsIgnoreCase("avro") || provider.equalsIgnoreCase("arrow")) {
         val schemaColName = table.v1Table.dataSchema.map(f => f.name)
         val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
         val dataCols = child1.output.filter(p => schemaColName.contains(p.name))
@@ -663,6 +668,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case "avro" => new AvroFileFormat
       case "json" => new JsonFileFormat
       case "text" => new CSVFileFormat
+      case "arrow" => new ArrowFileFormat
       case "_" => throw new IllegalAccessException("invalid format")
     }
   }

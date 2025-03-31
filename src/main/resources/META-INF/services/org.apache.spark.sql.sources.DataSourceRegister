@@ -1,1 +1,2 @@
 org.apache.spark.sql.hive.datasource.CustomDataSource
+org.apache.spark.sql.arrow.ArrowDataSourceV2

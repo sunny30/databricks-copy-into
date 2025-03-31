@@ -143,11 +143,11 @@ object App {
     spark.sql("create database cat.tdb3")
     df1.write.saveAsTable("cat.tdb3.tbl")
     df1.write.saveAsTable("cat.tdb3.tbl1")
-//    spark.sql("select * from cat.tdb3.tbl").show()
-//    spark.read.table("cat.tdb3.tbl").show()
-//
-//    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
-//    spark.sql("select * from cat.tdb3.v1").show()
+    spark.sql("select * from cat.tdb3.tbl").show()
+    spark.read.table("cat.tdb3.tbl").show()
+
+    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
+    spark.sql("select * from cat.tdb3.v1").show()
 
     spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
     spark.sql("grant row_level row_func for user userX")
@@ -162,13 +162,22 @@ object App {
     spark.sql("select * from cat.tdb3.v1").show()
 
     spark.sql("select * from cat.tdb3.tbl1").show()
+//
+//    spark.sql("create materialized view cat.tdb3.mv tblproperties('schedular' = '1 day') as select * from cat.tdb3.tbl1")
+//    spark.sql("select * from cat.tdb3.mv").show()
+//    spark.sql("describe formatted cat.tdb3.mv").show(40, false)
+//    spark.sql("insert into cat.tdb3.tbl1 values (9,6)")
+//    spark.sql("refresh materialized view cat.tdb3.mv")
+//    spark.sql("select * from cat.tdb3.mv").show()
 
-    spark.sql("create materialized view cat.tdb3.mv tblproperties('schedular' = '1 day') as select * from cat.tdb3.tbl1")
-    spark.sql("select * from cat.tdb3.mv").show()
-    spark.sql("describe formatted cat.tdb3.mv").show(40, false)
-    spark.sql("insert into cat.tdb3.tbl1 values (9,6)")
-    spark.sql("refresh materialized view cat.tdb3.mv")
-    spark.sql("select * from cat.tdb3.mv").show()
+//    spark.sql("create database cat.arrowdb")
+//    spark.sql("create table cat.arrowdb.tp(id int, name string) using parquet location '/tmp/parquet'")
+//  //  spark.sql("insert into cat.arrowdb.tp values(1,'sharad'), (2,'xiaoyu'), (3, 'bharat'), (4, 'shashi'), (5, 'vivek')")
+//    spark.sql("create table cat.arrowdb.ta(id int, name string) using arrow location '/tmp/parquet'")
+//    spark.sql("select * from cat.arrowdb.ta").show()
+
+
+
 
 //    spark.sql("create database cat.tdb2")
 //    spark.sql("create table cat.tdb2.etbl(id int, l2 string, l3 string)  using delta location '/tmp/tbl'")

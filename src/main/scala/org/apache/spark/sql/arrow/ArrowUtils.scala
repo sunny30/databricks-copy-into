@@ -1,16 +1,40 @@
 package org.apache.spark.sql.arrow
 
+import org.apache.arrow.dataset.file.FileSystemDatasetFactory
+import org.apache.arrow.dataset.jni.NativeMemoryPool
+import org.apache.arrow.dataset.source.DatasetFactory
 import org.apache.arrow.memory.RootAllocator
-import scala.collection.JavaConverters._
+import org.apache.arrow.vector.VectorSchemaRoot
 
+import scala.collection.JavaConverters._
 import org.apache.arrow.vector.complex.MapVector
 import org.apache.arrow.vector.types.{DateUnit, FloatingPointPrecision, IntervalUnit, TimeUnit}
 import org.apache.arrow.vector.types.pojo.{ArrowType, Field, FieldType, Schema}
+import org.apache.hadoop.fs.FileStatus
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, BinaryType, BooleanType, ByteType, DataType, DateType, DayTimeIntervalType, DecimalType, DoubleType, FloatType, IntegerType, LongType, MapType, NullType, ShortType, StringType, StructField, StructType, TimestampType, YearMonthIntervalType}
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.spark.sql.vectorized.{ArrowColumnVector, ColumnVector, ColumnarBatch}
+
+import java.net.URI
 
 object ArrowUtils {
+
+  def readSchema(files: Seq[FileStatus], options: CaseInsensitiveStringMap): Option[StructType] =
+    readSchema(files.toList.head, options) // todo merge schema
+
+
+  def isOriginalFormatSplitable(options: ArrowOptions): Boolean = {
+    val format = getFormat(options).getOrElse(throw new IllegalStateException)
+    format match {
+      case org.apache.arrow.dataset.file.FileFormat.PARQUET =>
+        true
+      case _ =>
+        false
+    }
+  }
 
   val rootAllocator = new RootAllocator(Long.MaxValue)
 
@@ -136,5 +160,73 @@ object ArrowUtils {
     val arrowSafeTypeCheck = Seq(SQLConf.PANDAS_ARROW_SAFE_TYPE_CONVERSION.key ->
       conf.arrowSafeTypeConversion.toString)
     Map(timeZoneConf ++ pandasColsByName ++ arrowSafeTypeCheck: _*)
+  }
+
+  def readSchema(file: FileStatus, options: CaseInsensitiveStringMap): Option[StructType] = {
+    val factory =
+      makeArrowDiscovery(file.getPath.toString, -1L, -1L,
+        new ArrowOptions(options.asScala.toMap))
+    val schema = factory.inspect()
+    try {
+      Option(SparkSchemaUtils.fromArrowSchema(schema))
+    } finally {
+      factory.close()
+    }
+  }
+
+  private def getFormat(
+                         options: ArrowOptions): Option[org.apache.arrow.dataset.file.FileFormat] = {
+    Option(options.originalFormat match {
+      case "parquet" => org.apache.arrow.dataset.file.FileFormat.PARQUET
+      case _ => org.apache.arrow.dataset.file.FileFormat.PARQUET
+    })
+  }
+
+  def makeArrowDiscovery(file: String, startOffset: Long, length: Long,
+                         options: ArrowOptions): FileSystemDatasetFactory = {
+
+    val format = if(options == null){
+      org.apache.arrow.dataset.file.FileFormat.PARQUET
+    }else{
+      getFormat(options).getOrElse(org.apache.arrow.dataset.file.FileFormat.PARQUET)
+    }
+
+
+    val allocator = new RootAllocator(32768)
+    //val factory = (new FileSystemDatasetFactory)
+    val factory = new FileSystemDatasetFactory(allocator,
+      NativeMemoryPool.getDefault,
+      format,
+      file,
+    )
+    factory
+  }
+
+  def loadVectors(root: VectorSchemaRoot, partitionValues: InternalRow,
+                  partitionSchema: StructType, dataSchema: StructType): ColumnarBatch = {
+
+    val rowCount: Int = root.getRowCount()
+    val vectors = root.getFieldVectors().asScala.map { vector =>
+      new ArrowColumnVector(vector)
+    }.toArray[ColumnVector]
+    val batch = new ColumnarBatch(vectors, rowCount)
+    batch
+
+  }
+
+
+
+  private def rewriteUri(uriStr: String): String = {
+    val uri = URI.create(uriStr)
+    val sch = uri.getScheme match {
+      case "hdfs" => "hdfs"
+      case "file" => "file"
+    }
+    val ssp = uri.getScheme match {
+      case "hdfs" => uri.getRawSchemeSpecificPart
+      case "file" => "//" + uri.getRawSchemeSpecificPart
+      case _ => uri
+    }
+    uri.toString
   }
 }
