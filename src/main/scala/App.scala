@@ -143,25 +143,39 @@ object App {
     spark.sql("create database cat.tdb3")
     df1.write.saveAsTable("cat.tdb3.tbl")
     df1.write.saveAsTable("cat.tdb3.tbl1")
-    spark.sql("select * from cat.tdb3.tbl").show()
-    spark.read.table("cat.tdb3.tbl").show()
+    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
+
+   // spark.sql("select * from cat.tdb3.tbl").show()
+ //   spark.read.table("cat.tdb3.tbl").show()
+
+    spark.read.table("cat.tdb3.tbl2").show()
 
     spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
     spark.sql("select * from cat.tdb3.v1").show()
 
-    spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
-    spark.sql("grant row_level row_func for user userX")
+   spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
+   spark.sql("grant row_level row_func for user userX")
 
-    spark.sql("select * from cat.tdb3.tbl").show()
+    println("tbl Output after sec")
+   spark.sql("select * from cat.tdb3.tbl").show()
 
-    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl1")
+   spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl1")
 
     spark.sql("""create function row_func1 for table cat.tdb3.v1 where 'id>2' """)
     spark.sql("grant row_level row_func1 for user userX")
 
+    spark.sql("""create function row_func2 for table cat.tdb3.tbl2 where 'id>2' """)
+    spark.sql("grant row_level row_func2 for user userX")
+
+    println("delta table output after sec")
+    spark.read.table("cat.tdb3.tbl2").show()
+    spark.sql("select * from cat.tdb3.tbl2").show()
+
+
+    println("View Output after sec")
     spark.sql("select * from cat.tdb3.v1").show()
 
-    spark.sql("select * from cat.tdb3.tbl1").show()
+   // spark.sql("select * from cat.tdb3.tbl1").show()
 //
 //    spark.sql("create materialized view cat.tdb3.mv tblproperties('schedular' = '1 day') as select * from cat.tdb3.tbl1")
 //    spark.sql("select * from cat.tdb3.mv").show()

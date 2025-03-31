@@ -87,7 +87,9 @@ class ArrowFileFormat extends FileFormat with DataSourceRegister with Serializab
     (file: PartitionedFile) => {
       val factory = ArrowUtils.makeArrowDiscovery(
         file.filePath.toString, file.start, file.length,
-        null)
+        new ArrowOptions(
+          new CaseInsensitiveStringMap(
+            options.asJava).asScala.toMap))
 
 //      new ArrowOptions(
 //        new CaseInsensitiveStringMap(

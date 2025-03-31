@@ -178,6 +178,9 @@ object ArrowUtils {
                          options: ArrowOptions): Option[org.apache.arrow.dataset.file.FileFormat] = {
     Option(options.originalFormat match {
       case "parquet" => org.apache.arrow.dataset.file.FileFormat.PARQUET
+      case "orc" => org.apache.arrow.dataset.file.FileFormat.ORC
+      case "csv" => org.apache.arrow.dataset.file.FileFormat.CSV
+     // case "json" => org.apache.arrow.dataset.file.FileFormat.
       case _ => org.apache.arrow.dataset.file.FileFormat.PARQUET
     })
   }
