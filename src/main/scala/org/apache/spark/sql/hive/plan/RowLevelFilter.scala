@@ -8,9 +8,15 @@ import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, View}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
+import org.apache.spark.sql.connector.catalog.Identifier
+import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.util.AnalysisHelper
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 class RowLevelFilter(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
@@ -43,6 +49,43 @@ class RowLevelFilter(session: SparkSession)
         d
       }
 
+    case l@LogicalRelation(relation, output, catalogTable, isStreaming) => {
+
+      catalogTable match {
+        case Some(cattbl) =>
+          if(cattbl.provider.getOrElse("csv").equalsIgnoreCase("delta")){
+            val cat = cattbl.identifier.catalog.get
+            val db = cattbl.identifier.database.get
+            val tbl = cattbl.identifier.table
+            val sessionCat = SparkSession.active.sessionState.catalogManager.catalog(cat).asTableCatalog
+            val dt = sessionCat.loadTable( Identifier.of(Seq(db).toArray, tbl))
+            val props = dt.properties().asScala
+            if(props.contains("row_sec_func")){
+              val funcName = props.get("row_sec_func").get
+              val ct = session.sessionState.catalog.getTableMetadata(TableIdentifier(funcName))
+              val conditionString = ct.properties.getOrElse("cond", "")
+              val condition = session.sessionState.sqlParser.parseExpression(conditionString)
+              val filter = Filter(condition, l)
+              filter.setTagValue(TreeNodeTag[String]("row-sec"), "ds-row-sec")
+              if (l.getTagValue(TreeNodeTag[String]("row-sec")).isEmpty) {
+                l.setTagValue(TreeNodeTag[String]("row-sec"), "ds-row-sec")
+                val analyzed = session.sessionState.analyzer.execute(Filter(condition, l))
+                analyzed
+              } else {
+                l
+              }
+            }else{
+              l
+            }
+
+          }else{
+            l
+          }
+
+        case None => l
+      }
+    }
+
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
       val relation = (new CustomDataSourceAnalyzer(session)).apply(u)
       if(relation.isInstanceOf[View]) {
@@ -63,7 +106,9 @@ class RowLevelFilter(session: SparkSession)
         u
       }
 
-    case pl: LogicalPlan => pl
+    case pl: LogicalPlan =>
+      println("Row Sec ")
+      pl
 
   }
 
