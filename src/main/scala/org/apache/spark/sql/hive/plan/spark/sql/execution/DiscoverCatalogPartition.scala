@@ -49,7 +49,7 @@ object DiscoverCatalogPartition {
         val listOfDirs = list(d.path, tries, logStore, hadoopConf, recurse, hiddenFileNameFilter, listAsDirectories).toSeq
         if (listOfDirs.nonEmpty) {
           listOfDirs.flatMap(d =>
-          recurseDirectory(listOfDirs.head, tries, logStore, hadoopConf, recurse, hiddenFileNameFilter, listAsDirectories)
+          recurseDirectory(d, tries, logStore, hadoopConf, recurse, hiddenFileNameFilter, listAsDirectories)
           ).iterator
         } else {
           Iterator.single(dir)
