@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
-import org.apache.spark.sql.hive.plan.{CopyIntoFromFilesCommand, CopyIntoFromLocationCommand, CopyIntoFromSelectClauseCommand, CreateRowSecFunction, GenerateDeltaLogCommand, GrantRowFunc}
+import org.apache.spark.sql.hive.plan.{CopyIntoFromFilesCommand, CopyIntoFromLocationCommand, CopyIntoFromSelectClauseCommand, CreateRowSecFunction, GenerateDeltaLogCommand, GrantRowFunc, RefreshCatalogEntity}
 
 class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCustomSqlParser(parserInterface = parserInterface) {
 
@@ -23,6 +23,12 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   val FILEFORMAT = Keyword("fileformat")
   val FILES = Keyword("files")
   val PATTERN = Keyword("pattern")
+
+  val REFRESH = Keyword("REFRESH")
+  val CATALOG = Keyword("CATALOG")
+  val SCHEMA = Keyword("SCHEMA")
+  val EXTERNAL = Keyword("EXTERNAL")
+  val IN = Keyword("IN")
   def FORMATOPTIONS:Parser[String] = "format_options"
   def COPYOPTIONS:Parser[String] = "copy_options"
   def openParen: Parser[String] = "("
@@ -81,7 +87,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   override def parse(input: String): LogicalPlan = super.parse(input)
 
   override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3 | copy_into_location_rule2 | row_level_rule1 |
-    copy_into_location_rule1 | row_level_rule2
+    copy_into_location_rule1 | row_level_rule2 | refresh_catalog_schema | refresh_catalog_table
 
 
   def isValidCharacterInsideQuote(c: Char): Boolean = {
@@ -233,9 +239,27 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     }
   }
 
+  def refreshL: Parser[String] = "refresh"
+
+  def refreshU: Parser[String] = "REFRESH"
+
+  def refresh: Parser[String] = refreshL | refreshU
+
   def parseSingleFile: Parser[(String)] = {
     singleQuote~>quoteIdent<~singleQuote^^{
       case l => l
+    }
+  }
+
+  def qualifiedCatalogSchema: Parser[String] = {
+    sqlIdentifier ~ dot ~ sqlIdentifier ^^ {
+      case c ~ _ ~ s => c + "." + s
+    }
+  }
+
+  def qualifiecCatalogTable: Parser[String] = {
+    sqlIdentifier ~ dot ~ sqlIdentifier ~ dot ~ sqlIdentifier ^^ {
+      case c ~ _ ~ s ~ _ ~ t => c + "." + s + "." + t
     }
   }
 
@@ -249,6 +273,15 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
     FILES~parseEqual~parseFilePaths^^{
       case _~_~files => files
     }
+  }
+
+
+  def refresh_catalog_schema:Parser[LogicalPlan] = refresh ~ SCHEMA ~ IN ~ EXTERNAL ~ CATALOG ~ qualifiedCatalogSchema ^^ {
+    case _ ~ _ ~ _ ~ _ ~ _ ~ qs => RefreshCatalogEntity(qs)
+  }
+
+  def refresh_catalog_table:Parser[LogicalPlan] = refresh ~ TABLE ~ IN ~ EXTERNAL ~ CATALOG ~ qualifiecCatalogTable ^^ {
+    case _ ~ _ ~ _ ~ _ ~ _ ~ qs => RefreshCatalogEntity(qs)
   }
 
 

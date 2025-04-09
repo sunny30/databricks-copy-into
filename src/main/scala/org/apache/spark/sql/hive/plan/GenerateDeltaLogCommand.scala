@@ -7,12 +7,12 @@ import org.apache.spark.sql
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.delta.commands.DeltaCommand
 import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.functions.expr
 import org.apache.spark.sql.hive.datashare.ConverterUtil
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructType}
 
 import scala.collection.mutable.ListBuffer
 
@@ -188,6 +188,18 @@ case class GrantRowFunc(user:String, funcName:String) extends LeafRunnableComman
     scala.collection.immutable.Seq.empty[Row]
   }
 
+
+}
+
+
+case class RefreshCatalogEntity(entityName: String) extends LeafRunnableCommand {
+
+  override val output: Seq[Attribute] = AttributeReference("status", StringType, nullable = true)() :: Nil
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+   // HMSUtil().refreshCatalogEntity(entityName)
+    Seq(Row("REFRESHED"))
+  }
 
 }
 

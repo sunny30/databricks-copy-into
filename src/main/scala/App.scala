@@ -145,10 +145,13 @@ object App {
 //    df1.write.saveAsTable("cat.tdb3.tbl1")
 //    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
 
-    spark.sql("create database cat.tdp4")
-    spark.sql("create table cat.tdp4.t1(id int, country string, city string) location '/tmp/tp'")
-    spark.sql("insert into cat.tdp4.t1 values (1, 'India','Pune'), (2, 'India','Bangalore'), (3, 'India','Mumbai'), (4, 'India','Delhi')")
-    spark.sql("select * from cat.tdp4.t1").show()
+    spark.sql("refresh schema in external catalog cat.ab").show()
+    spark.sql("refresh table in external catalog cat.ab.cd").show()
+
+//    spark.sql("create database cat.tdp4")
+//    spark.sql("create table cat.tdp4.t1(id int, country string, city string) location '/tmp/tp'")
+//    spark.sql("insert into cat.tdp4.t1 values (1, 'India','Pune'), (2, 'India','Bangalore'), (3, 'India','Mumbai'), (4, 'India','Delhi')")
+//    spark.sql("select * from cat.tdp4.t1").show()
    // spark.sql("select * from cat.tdb3.tbl").show()
  //   spark.read.table("cat.tdb3.tbl").show()
 
