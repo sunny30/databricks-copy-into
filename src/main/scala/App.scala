@@ -140,40 +140,47 @@ object App {
       (3,4)
     ).toDF("id", "id1")
 
-    spark.sql("create database cat.tdb3")
-    df1.write.saveAsTable("cat.tdb3.tbl")
-    df1.write.saveAsTable("cat.tdb3.tbl1")
-    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
+//    spark.sql("create database cat.tdb3")
+//    df1.write.saveAsTable("cat.tdb3.tbl")
+//    df1.write.saveAsTable("cat.tdb3.tbl1")
+//    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
 
+    spark.sql("refresh schema in external catalog cat.ab").show()
+    spark.sql("refresh table in external catalog cat.ab.cd").show()
+
+//    spark.sql("create database cat.tdp4")
+//    spark.sql("create table cat.tdp4.t1(id int, country string, city string) location '/tmp/tp'")
+//    spark.sql("insert into cat.tdp4.t1 values (1, 'India','Pune'), (2, 'India','Bangalore'), (3, 'India','Mumbai'), (4, 'India','Delhi')")
+//    spark.sql("select * from cat.tdp4.t1").show()
    // spark.sql("select * from cat.tdb3.tbl").show()
  //   spark.read.table("cat.tdb3.tbl").show()
 
-    spark.read.table("cat.tdb3.tbl2").show()
-
-    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
-    spark.sql("select * from cat.tdb3.v1").show()
-
-   spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
-   spark.sql("grant row_level row_func for user userX")
-
-    println("tbl Output after sec")
-   spark.sql("select * from cat.tdb3.tbl").show()
-
-   spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl1")
-
-    spark.sql("""create function row_func1 for table cat.tdb3.v1 where 'id>2' """)
-    spark.sql("grant row_level row_func1 for user userX")
-
-    spark.sql("""create function row_func2 for table cat.tdb3.tbl2 where 'id>2' """)
-    spark.sql("grant row_level row_func2 for user userX")
-
-    println("delta table output after sec")
-    spark.read.table("cat.tdb3.tbl2").show()
-    spark.sql("select * from cat.tdb3.tbl2").show()
-
-
-    println("View Output after sec")
-    spark.sql("select * from cat.tdb3.v1").show()
+//    spark.read.table("cat.tdb3.tbl2").show()
+//
+//    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
+//    spark.sql("select * from cat.tdb3.v1").show()
+//
+//   spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
+//   spark.sql("grant row_level row_func for user userX")
+//
+//    println("tbl Output after sec")
+//   spark.sql("select * from cat.tdb3.tbl").show()
+//
+//   spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl1")
+//
+//    spark.sql("""create function row_func1 for table cat.tdb3.v1 where 'id>2' """)
+//    spark.sql("grant row_level row_func1 for user userX")
+//
+//    spark.sql("""create function row_func2 for table cat.tdb3.tbl2 where 'id>2' """)
+//    spark.sql("grant row_level row_func2 for user userX")
+//
+//    println("delta table output after sec")
+//    spark.read.table("cat.tdb3.tbl2").show()
+//    spark.sql("select * from cat.tdb3.tbl2").show()
+//
+//
+//    println("View Output after sec")
+//    spark.sql("select * from cat.tdb3.v1").show()
 
    // spark.sql("select * from cat.tdb3.tbl1").show()
 //
