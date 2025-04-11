@@ -1,7 +1,7 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier}
+import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier, UnresolvedNamespace}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.CreateViewContext
@@ -11,6 +11,7 @@ import org.apache.spark.sql.errors.QueryParsingErrors
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ShowCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
 
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -140,6 +141,19 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
       DropView(
         withIdentClause(ctx.identifierReference, UnresolvedIdentifier(_, allowTemp = true)),
         ctx.EXISTS != null)
+    }
+  }
+
+  override def visitShowViews(ctx: SqlBaseParser.ShowViewsContext): LogicalPlan = {
+    val ns = if (ctx.identifierReference() != null) {
+      withIdentClause(ctx.identifierReference, UnresolvedNamespace(_))
+    } else {
+      UnresolvedNamespace(Seq.empty[String])
+    }
+    if(ctx.identifierReference.multipartIdentifier().parts.size()==2){
+      ShowCatalogViews(ns, Option(ctx.pattern).map(x => string(visitStringLit(x))))
+    }else {
+      ShowViews(ns, Option(ctx.pattern).map(x => string(visitStringLit(x))))
     }
   }
 
