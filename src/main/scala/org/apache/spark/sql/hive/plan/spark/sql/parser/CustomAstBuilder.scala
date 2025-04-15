@@ -1,18 +1,18 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier, UnresolvedNamespace}
+import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedTableOrView, UnresolvedView}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser.CreateViewContext
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{AlterViewQueryContext, CreateViewContext, IdentifierReferenceContext, RenameTableContext}
 import org.apache.spark.sql.catalyst.plans.logical.{CreateView, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.TreePattern.PARAMETER
 import org.apache.spark.sql.errors.QueryParsingErrors
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
-import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ShowCatalogViews
-import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, ShowCatalogViews}
+import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogAlterViewQueryCommand, NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
 
 import scala.collection.JavaConverters.asScalaBufferConverter
 
@@ -144,6 +144,30 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     }
   }
 
+  override def visitRenameTable(ctx: RenameTableContext): LogicalPlan = withOrigin(ctx) {
+    val isView = ctx.VIEW != null
+    val relationStr = if (isView) "VIEW" else "TABLE"
+    if(ctx.from.multipartIdentifier().parts.size()==3 && isView){
+      RenameCatalogView(
+        createUnresolvedTableOrView(ctx.from, s"ALTER $relationStr ... RENAME TO"),
+        visitMultipartIdentifier(ctx.to),
+        isView
+      )
+    }else {
+      RenameTable(
+        createUnresolvedTableOrView(ctx.from, s"ALTER $relationStr ... RENAME TO"),
+        visitMultipartIdentifier(ctx.to),
+        isView)
+    }
+  }
+
+  private def createUnresolvedTableOrView(
+                                           ctx: IdentifierReferenceContext,
+                                           commandName: String,
+                                           allowTempView: Boolean = true): LogicalPlan = withOrigin(ctx) {
+    withIdentClause(ctx, UnresolvedTableOrView(_, commandName, allowTempView))
+  }
+
   override def visitShowViews(ctx: SqlBaseParser.ShowViewsContext): LogicalPlan = {
     val ns = if (ctx.identifierReference() != null) {
       withIdentClause(ctx.identifierReference, UnresolvedNamespace(_))
@@ -155,6 +179,40 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     }else {
       ShowViews(ns, Option(ctx.pattern).map(x => string(visitStringLit(x))))
     }
+  }
+
+  override def visitAlterViewQuery(ctx: AlterViewQueryContext): LogicalPlan = withOrigin(ctx) {
+    if(ctx.identifierReference().multipartIdentifier().parts.size() == 3){
+
+      val nameParts = withIdentClause(ctx.identifierReference(),
+        UnresolvedIdentifier(_)).
+        asInstanceOf[UnresolvedIdentifier].nameParts
+      val catalogName = nameParts(0)
+      val dbName = nameParts(1)
+      val tableName = nameParts(2)
+      val orignalText =   source(ctx.query)
+      val query = plan(ctx.query)
+
+      NonDefaultCatalogAlterViewQueryCommand(
+        TableIdentifier(table = nameParts(2), database = Some(nameParts(1)), catalog = Some(nameParts(0))),
+        originalText = Some(orignalText),
+        plan = query
+      )
+
+    }else {
+      AlterViewAs(
+        createUnresolvedView(ctx.identifierReference, "ALTER VIEW ... AS"),
+        originalText = source(ctx.query),
+        query = plan(ctx.query))
+    }
+  }
+
+  private def createUnresolvedView(
+                                    ctx: IdentifierReferenceContext,
+                                    commandName: String,
+                                    allowTemp: Boolean = true,
+                                    relationTypeMismatchHint: Option[String] = None): LogicalPlan = withOrigin(ctx) {
+    withIdentClause(ctx, UnresolvedView(_, commandName, allowTemp, relationTypeMismatchHint))
   }
 
 //  private def checkInvalidParameter(plan: LogicalPlan, statement: String):

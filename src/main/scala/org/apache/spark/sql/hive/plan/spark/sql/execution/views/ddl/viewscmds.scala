@@ -20,3 +20,12 @@ object ShowCatalogViews {
     AttributeReference("isTemporary", BooleanType, nullable = false)())
 }
 
+
+case class RenameCatalogView(
+                        child: LogicalPlan,
+                        newName: Seq[String],
+                        isView: Boolean) extends UnaryCommand {
+  override protected def withNewChildInternal(newChild: LogicalPlan): RenameCatalogView =
+    copy(child = newChild)
+}
+

@@ -60,6 +60,7 @@ object App {
     spark.sql("insert into cat.viewdb1.t2 values('hello')")
     spark.sql("create view cat.viewdb1.v1(cl1) as select * from cat.viewdb1.t2")
     spark.sql("show views in cat.viewdb1").show()
+    spark.sql("drop view cat.viewdb1.v1")
 
     /**View DDL Compile ends r**/
 
