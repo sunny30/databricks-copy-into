@@ -1,10 +1,10 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedTableOrView, UnresolvedView}
+import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedTable, UnresolvedTableOrView, UnresolvedView}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{AlterViewQueryContext, CreateViewContext, IdentifierReferenceContext, RenameTableContext}
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{AlterViewQueryContext, CreateViewContext, IdentifierReferenceContext, RenameTableContext, SetTablePropertiesContext, UnsetTablePropertiesContext}
 import org.apache.spark.sql.catalyst.plans.logical.{CreateView, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.TreePattern.PARAMETER
 import org.apache.spark.sql.errors.QueryParsingErrors
@@ -213,6 +213,85 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
                                     allowTemp: Boolean = true,
                                     relationTypeMismatchHint: Option[String] = None): LogicalPlan = withOrigin(ctx) {
     withIdentClause(ctx, UnresolvedView(_, commandName, allowTemp, relationTypeMismatchHint))
+  }
+
+  override def visitSetTableProperties(
+                                        ctx: SetTablePropertiesContext): LogicalPlan = withOrigin(ctx) {
+    val properties = visitPropertyKeyValues(ctx.propertyList)
+    val cleanedTableProperties = cleanTableProperties(ctx, properties)
+    if(ctx.identifierReference().multipartIdentifier().parts.size()==3 && ctx.VIEW != null){
+      SetTableProperties(
+        createUnresolvedTable(
+          ctx.identifierReference,
+          "ALTER TABLE ... SET TBLPROPERTIES",
+          alterTableTypeMismatchHint),
+        cleanedTableProperties)
+    }else {
+      if (ctx.VIEW != null) {
+        SetViewProperties(
+          createUnresolvedView(
+            ctx.identifierReference,
+            commandName = "ALTER VIEW ... SET TBLPROPERTIES",
+            allowTemp = false,
+            relationTypeMismatchHint = alterViewTypeMismatchHint),
+          cleanedTableProperties)
+      } else {
+        SetTableProperties(
+          createUnresolvedTable(
+            ctx.identifierReference,
+            "ALTER TABLE ... SET TBLPROPERTIES",
+            alterTableTypeMismatchHint),
+          cleanedTableProperties)
+      }
+    }
+  }
+
+
+  override def visitUnsetTableProperties(
+                                          ctx: UnsetTablePropertiesContext): LogicalPlan = withOrigin(ctx) {
+    val properties = visitPropertyKeys(ctx.propertyList)
+    val cleanedProperties = cleanTableProperties(ctx, properties.map(_ -> "").toMap).keys.toSeq
+
+    val ifExists = ctx.EXISTS != null
+
+    if(ctx.identifierReference().multipartIdentifier().parts.size()==3 && ctx.VIEW != null){
+      UnsetTableProperties(
+        createUnresolvedTable(
+          ctx.identifierReference,
+          "ALTER TABLE ... UNSET TBLPROPERTIES",
+          alterTableTypeMismatchHint),
+        cleanedProperties,
+        ifExists)
+    }else {
+      if (ctx.VIEW != null) {
+        UnsetViewProperties(
+          createUnresolvedView(
+            ctx.identifierReference,
+            commandName = "ALTER VIEW ... UNSET TBLPROPERTIES",
+            allowTemp = false,
+            relationTypeMismatchHint = alterViewTypeMismatchHint),
+          cleanedProperties,
+          ifExists)
+      } else {
+        UnsetTableProperties(
+          createUnresolvedTable(
+            ctx.identifierReference,
+            "ALTER TABLE ... UNSET TBLPROPERTIES",
+            alterTableTypeMismatchHint),
+          cleanedProperties,
+          ifExists)
+      }
+    }
+  }
+
+  private def alterViewTypeMismatchHint: Option[String] = Some("Please use ALTER TABLE instead.")
+
+  private def alterTableTypeMismatchHint: Option[String] = Some("Please use ALTER VIEW instead.")
+  private def createUnresolvedTable(
+                                     ctx: IdentifierReferenceContext,
+                                     commandName: String,
+                                     relationTypeMismatchHint: Option[String] = None): LogicalPlan = withOrigin(ctx) {
+    withIdentClause(ctx, UnresolvedTable(_, commandName, relationTypeMismatchHint))
   }
 
 //  private def checkInvalidParameter(plan: LogicalPlan, statement: String):
