@@ -64,10 +64,9 @@ case class RenameCatalogViewExec(catalog: TableCatalog,
   override def output: Seq[Attribute] = Seq.empty
 
   override protected def run(): Seq[InternalRow] = {
+   // newIdent.asTableIdentifier.
 
-    val qualifiedNewIdent = if (newIdent.namespace.isEmpty) {
-      Identifier.of(oldIdent.namespace, newIdent.name)
-    } else newIdent
+    val qualifiedNewIdent = Identifier.of(oldIdent.namespace, newIdent.name)
 
     catalog.renameTable(oldIdent, qualifiedNewIdent)
     Seq.empty

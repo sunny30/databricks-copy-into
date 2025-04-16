@@ -60,7 +60,12 @@ object App {
     spark.sql("insert into cat.viewdb1.t2 values('hello')")
     spark.sql("create view cat.viewdb1.v1(cl1) as select * from cat.viewdb1.t2")
     spark.sql("show views in cat.viewdb1").show()
-    spark.sql("drop view cat.viewdb1.v1")
+   // spark.sql("drop view cat.viewdb1.v1")
+    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
+    spark.sql("alter view cat.viewdb1.v1 as select attributes from cat.viewdb1.t2")
+    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
+    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
+
 
     /**View DDL Compile ends r**/
 

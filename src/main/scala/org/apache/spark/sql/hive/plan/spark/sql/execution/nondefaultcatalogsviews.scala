@@ -158,6 +158,13 @@ case class NonDefaultCatalogAlterViewQueryCommand(
   extends RunnableCommand {
 
 
+  override protected def withNewChildrenInternal(
+                                                  newChildren: IndexedSeq[LogicalPlan]): NonDefaultCatalogAlterViewQueryCommand = {
+  //  assert(!isAnalyzed)
+    copy(plan = newChildren.head)
+  }
+
+
   override def run(sparkSession: SparkSession): Seq[Row] = {
 
     val catName = name.catalog.getOrElse("spark_catalog")
@@ -192,6 +199,21 @@ case class NonDefaultCatalogAlterViewQueryCommand(
 
   }
 
+  private def aliasPlan(session: SparkSession, analyzedPlan: LogicalPlan, oldTable:CatalogTable): LogicalPlan = {
+    val userSpecifiedColumns = oldTable.schema.map(f=> (f.name, f.getComment())).toSeq
+    if (userSpecifiedColumns.isEmpty) {
+      analyzedPlan
+    } else {
+      val projectList = analyzedPlan.output.zip(userSpecifiedColumns).map {
+        case (attr, (colName, None)) => Alias(attr, colName)()
+        case (attr, (colName, Some(colComment))) =>
+          val meta = new MetadataBuilder().putString("comment", colComment).build()
+          Alias(attr, colName)(explicitMetadata = Some(meta))
+      }
+      session.sessionState.executePlan(Project(projectList, analyzedPlan)).analyzed
+    }
+  }
+
 
 
   private def prepareTable(session: SparkSession, analyzedPlan: LogicalPlan, oldTable: CatalogTable): CatalogTable = {
@@ -199,7 +221,7 @@ case class NonDefaultCatalogAlterViewQueryCommand(
       throw QueryCompilationErrors.createPersistedViewFromDatasetAPINotAllowedError()
     }
     val aliasedSchema = CharVarcharUtils.getRawSchema(
-      analyzedPlan.schema, session.sessionState.conf)
+      aliasPlan(session,analyzedPlan,oldTable).schema, session.sessionState.conf)
     val newProperties = oldTable.properties
 
     CatalogTable(

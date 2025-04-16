@@ -72,8 +72,7 @@ class FSMetaStoreCatalog(
 
 
   override def renameTable(db: String, oldName: String, newName: String): Unit = {
-
-
+    println("empty impl")
   }
 
 

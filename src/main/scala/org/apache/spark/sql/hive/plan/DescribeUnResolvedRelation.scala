@@ -65,6 +65,33 @@ class DescribeUnResolvedRelation(session: SparkSession)
           u
         }
 
+      case uv: UnresolvedTableOrView =>
+        println("Inside UnresolvedTable for DescribeUnresolved")
+        if (uv.multipartIdentifier.size == 3) {
+          val catName = uv.multipartIdentifier(0)
+          val dbName = uv.multipartIdentifier(1)
+          val tableName = uv.multipartIdentifier(2)
+          val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(catName).asTableCatalog
+          val tid = Identifier.of(Seq(dbName).toArray, tableName)
+          val tc = sessionCatalog.loadTable(tid)
+          if (tc == null) {
+            val viewCt = sessionCatalog.loadTable(tid, null)
+            if (viewCt != null) {
+              ResolvedTable.create(sessionCatalog, tid, viewCt)
+            } else {
+              uv
+            }
+
+          } else {
+            tc match {
+              case d: DeltaTableV2 => (ResolvedTable.create(sessionCatalog, uv.multipartIdentifier.asIdentifier, d))
+              case _ => uv
+            }
+          }
+        } else {
+          uv
+        }
+
 
 
       case pl:LogicalPlan => pl
