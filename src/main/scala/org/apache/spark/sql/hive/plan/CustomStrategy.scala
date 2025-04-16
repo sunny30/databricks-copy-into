@@ -1,13 +1,30 @@
 package org.apache.spark.sql.hive.plan
 
-import org.apache.spark.sql.Strategy
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.{SparkSession, Strategy}
+import org.apache.spark.sql.catalyst.analysis.{ResolvedNamespace, ResolvedTable}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ShowTables, ShowViews}
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.execution.SparkPlan
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, RenameCatalogViewExec, ShowCatalogViews, ShowViewsExec}
+
+import scala.collection.JavaConverters._
+import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 
 object CustomStrategy extends Strategy with Serializable  {
 
   override def apply(plan: LogicalPlan): Seq[SparkPlan] =
     plan match {
+
+      case ShowCatalogViews(ResolvedNamespace(catalog, ns), pattern, output) =>
+        ShowViewsExec(output, catalog.asTableCatalog, ns, pattern) :: Nil
+
+      case RenameCatalogView(r @ ResolvedTable(catalog, oldIdent, _, _), newIdent, isView) =>
+        RenameCatalogViewExec(
+          catalog,
+          oldIdent,
+          newIdent.asIdentifier,
+          ()=>None,
+          SparkSession.active.sharedState.cacheManager.cacheQuery) :: Nil
       case _ => Nil
     }
 

@@ -146,3 +146,95 @@ case class NonDefaultCatalogDropViewCommand(catalogName: String,
 
 
 }
+
+
+
+case class NonDefaultCatalogAlterViewQueryCommand(
+                                               name: TableIdentifier,
+                                               originalText: Option[String],
+                                               plan: LogicalPlan,
+                                               isAnalyzed: Boolean = false,
+                                               referredTempFunctions: Seq[String] = Seq.empty)
+  extends RunnableCommand {
+
+
+  override protected def withNewChildrenInternal(
+                                                  newChildren: IndexedSeq[LogicalPlan]): NonDefaultCatalogAlterViewQueryCommand = {
+  //  assert(!isAnalyzed)
+    copy(plan = newChildren.head)
+  }
+
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+
+    val catName = name.catalog.getOrElse("spark_catalog")
+    val dbName = name.database.getOrElse("default")
+    val tableName = name.table
+
+    val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(catName).asTableCatalog
+    val exists = sessionCatalog.tableExists(Identifier.of(Seq(dbName).toArray, tableName))
+    val externalCatalog: ExternalCatalog
+    = if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")) {
+      new FSMetaStoreCatalog(
+        catName,
+        sparkConf = SparkSession.active.sharedState.conf,
+        hadoopConfig = SparkSession.active.sharedState.hadoopConf
+      )
+    } else {
+      new HMSCatalog(
+        catName,
+        sparkConf = SparkSession.active.sharedState.conf,
+        hadoopConfig = SparkSession.active.sharedState.hadoopConf
+      )
+    }
+
+    if(exists){
+      val ct = externalCatalog.getTable(dbName,tableName)
+      val preparedTable = prepareTable(sparkSession, plan, ct)
+      externalCatalog.alterTable(preparedTable)
+      Seq.empty[Row]
+    }else{
+      throw new IllegalArgumentException("View does not exists")
+    }
+
+  }
+
+  private def aliasPlan(session: SparkSession, analyzedPlan: LogicalPlan, oldTable:CatalogTable): LogicalPlan = {
+    val userSpecifiedColumns = oldTable.schema.map(f=> (f.name, f.getComment())).toSeq
+    if (userSpecifiedColumns.isEmpty) {
+      analyzedPlan
+    } else {
+      val projectList = analyzedPlan.output.zip(userSpecifiedColumns).map {
+        case (attr, (colName, None)) => Alias(attr, colName)()
+        case (attr, (colName, Some(colComment))) =>
+          val meta = new MetadataBuilder().putString("comment", colComment).build()
+          Alias(attr, colName)(explicitMetadata = Some(meta))
+      }
+      session.sessionState.executePlan(Project(projectList, analyzedPlan)).analyzed
+    }
+  }
+
+
+
+  private def prepareTable(session: SparkSession, analyzedPlan: LogicalPlan, oldTable: CatalogTable): CatalogTable = {
+    if (originalText.isEmpty) {
+      throw QueryCompilationErrors.createPersistedViewFromDatasetAPINotAllowedError()
+    }
+    val aliasedSchema = CharVarcharUtils.getRawSchema(
+      aliasPlan(session,analyzedPlan,oldTable).schema, session.sessionState.conf)
+    val newProperties = oldTable.properties
+
+    CatalogTable(
+
+      identifier = name,
+      tableType = CatalogTableType.VIEW,
+      storage = CatalogStorageFormat.empty,
+      schema = aliasedSchema,
+      properties = newProperties,
+      viewOriginalText = originalText,
+      viewText = originalText,
+      comment = oldTable.comment
+    )
+  }
+
+}

@@ -54,6 +54,21 @@ object App {
       config(getConf).
       enableHiveSupport().
       getOrCreate()
+    /**View DDL Compiler starts**/
+    spark.sql("create database cat.viewdb1")
+    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
+    spark.sql("insert into cat.viewdb1.t2 values('hello')")
+    spark.sql("create view cat.viewdb1.v1(cl1) as select * from cat.viewdb1.t2")
+    spark.sql("show views in cat.viewdb1").show()
+   // spark.sql("drop view cat.viewdb1.v1")
+    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
+    spark.sql("alter view cat.viewdb1.v1 as select attributes from cat.viewdb1.t2")
+    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
+    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
+
+
+    /**View DDL Compile ends r**/
+
 
     /**View fix start**/
 //    spark.sql("create database cat.viewdb")
@@ -145,8 +160,9 @@ object App {
 //    df1.write.saveAsTable("cat.tdb3.tbl1")
 //    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
 
-    spark.sql("refresh schema in external catalog cat.ab").show()
-    spark.sql("refresh table in external catalog cat.ab.cd").show()
+
+//    spark.sql("refresh schema in external catalog cat.ab").show()
+//    spark.sql("refresh table in external catalog cat.ab.cd").show()
 
 //    spark.sql("create database cat.tdp4")
 //    spark.sql("create table cat.tdp4.t1(id int, country string, city string) location '/tmp/tp'")
