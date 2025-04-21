@@ -54,17 +54,34 @@ object App {
       config(getConf).
       enableHiveSupport().
       getOrCreate()
+
+
+    /**Custom data format  write options**/
+
+    import spark.implicits._
+    spark.sql("create database cat.customdb")
+    spark.sql("create table cat.customdb.tbl(c1 string) using custom options('k'='v', 'k1' = 'v1')")
+
+    val df3 = Seq(
+      "John",
+      "Sunny",
+      "Xiaoyu",
+      "Shashi",
+      "Bharath",
+      "Vivek"
+    ).toDF("col1")
+    /**Custom data format  write options ends**/
     /**View DDL Compiler starts**/
-    spark.sql("create database cat.viewdb1")
-    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
-    spark.sql("insert into cat.viewdb1.t2 values('hello')")
-    spark.sql("create view cat.viewdb1.v1(cl1) as select * from cat.viewdb1.t2")
-    spark.sql("show views in cat.viewdb1").show()
-   // spark.sql("drop view cat.viewdb1.v1")
-    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
-    spark.sql("alter view cat.viewdb1.v1 as select attributes from cat.viewdb1.t2")
-    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
-    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
+//    spark.sql("create database cat.viewdb1")
+//    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
+//    spark.sql("insert into cat.viewdb1.t2 values('hello')")
+//    spark.sql("create view cat.viewdb1.v1(cl1) as select * from cat.viewdb1.t2")
+//    spark.sql("show views in cat.viewdb1").show()
+//   // spark.sql("drop view cat.viewdb1.v1")
+//    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
+//    spark.sql("alter view cat.viewdb1.v1 as select attributes from cat.viewdb1.t2")
+//    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
+//    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
 
 
     /**View DDL Compile ends r**/
@@ -125,7 +142,7 @@ object App {
 
     /**spark csv table properties ends **/
 
-    import spark.implicits._
+
    // import spark.sqlContext.implicits._
 
 
@@ -361,7 +378,7 @@ object App {
 //        spark.sql("create database cat.dbx118");
 //        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
 //        df1.write.format("parquet").mode(SaveMode.Append).insertInto("cat.test_sudeep.jsonn_tbl")
-//        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
+////        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
 //        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()
 
 //        val df2 = Seq(
