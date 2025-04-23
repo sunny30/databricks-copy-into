@@ -280,7 +280,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
 
-    case DataSourceV2Relation(table: V2Table, output:Seq[AttributeReference], _, _, _) =>
+    case DataSourceV2Relation(table: V2Table, output:Seq[AttributeReference], _, _, options:CaseInsensitiveStringMap) =>
 
       println("Inside DataSourceV2Relation ")
       if(table.v1Table.tableType == CatalogTableType.VIEW){
@@ -295,7 +295,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         partitionColumns = table.v1Table.partitionColumnNames,
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties,
+        options = table.v1Table.storage.properties++options.asScala.toMap,
         catalogTable = Some(table.v1Table))
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
@@ -367,7 +367,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         partitionColumns = table.v1Table.partitionColumnNames,
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties,
+        options = table.v1Table.storage.properties++child1.options.asScala.toMap,
         catalogTable = Some(table.v1Table))
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
@@ -478,7 +478,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           partitionColumns = table.partitionColumnNames,
           bucketSpec = table.bucketSpec,
           className = table.provider.get,
-          options = table.storage.properties,
+          options = table.storage.properties++u.options.asScala.toMap,
           catalogTable = Some(table)
         )
 
@@ -689,7 +689,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             partitionColumns = table.partitionColumnNames,
             bucketSpec = table.bucketSpec,
             className = table.provider.get,
-            options = table.properties,
+            options = table.properties++ab.writeOptions.toMap,
             catalogTable = Some(table)
           )
           val columnNames = v2.v1Table.schema.fieldNames
@@ -726,7 +726,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               partitionColumns = catalogTable.partitionColumnNames,
               bucketSpec = catalogTable.bucketSpec,
               className = catalogTable.provider.get,
-              options = catalogTable.storage.properties,
+              options = catalogTable.storage.properties++ab.writeOptions,
               catalogTable = Some(catalogTable)
             )
             val columnNames = catalogTable.schema.fieldNames

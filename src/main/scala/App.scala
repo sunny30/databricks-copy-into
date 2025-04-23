@@ -70,6 +70,8 @@ object App {
       "Bharath",
       "Vivek"
     ).toDF("col1")
+    df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
+    spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
     /**Custom data format  write options ends**/
     /**View DDL Compiler starts**/
 //    spark.sql("create database cat.viewdb1")
