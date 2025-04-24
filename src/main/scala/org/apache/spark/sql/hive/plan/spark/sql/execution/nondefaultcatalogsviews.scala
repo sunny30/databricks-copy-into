@@ -155,13 +155,22 @@ case class NonDefaultCatalogAlterViewQueryCommand(
                                                plan: LogicalPlan,
                                                isAnalyzed: Boolean = false,
                                                referredTempFunctions: Seq[String] = Seq.empty)
-  extends RunnableCommand {
+  extends RunnableCommand with AnalysisOnlyCommand{
 
 
   override protected def withNewChildrenInternal(
                                                   newChildren: IndexedSeq[LogicalPlan]): NonDefaultCatalogAlterViewQueryCommand = {
   //  assert(!isAnalyzed)
     copy(plan = newChildren.head)
+  }
+
+  override def childrenToAnalyze: Seq[LogicalPlan] = plan :: Nil
+
+  def markAsAnalyzed(analysisContext: AnalysisContext): LogicalPlan = {
+    copy(
+      isAnalyzed = true,
+      // Collect the referred temporary functions from AnalysisContext
+      referredTempFunctions = analysisContext.referredTempFunctionNames.toSeq)
   }
 
 
@@ -200,7 +209,7 @@ case class NonDefaultCatalogAlterViewQueryCommand(
   }
 
   private def aliasPlan(session: SparkSession, analyzedPlan: LogicalPlan, oldTable:CatalogTable): LogicalPlan = {
-    val userSpecifiedColumns = oldTable.schema.map(f=> (f.name, f.getComment())).toSeq
+    val userSpecifiedColumns = analyzedPlan.schema.map(f=> (f.name, f.getComment())).toSeq
     if (userSpecifiedColumns.isEmpty) {
       analyzedPlan
     } else {
