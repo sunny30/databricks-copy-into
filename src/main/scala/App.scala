@@ -86,7 +86,7 @@ object App {
 //   // spark.sql("drop view cat.viewdb1.v1")
 //    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
     spark.sql("alter view cat.viewdb1.v1 as select * from cat.viewdb1.t2")
-    spark.sql("describe formatted cat.viewdb1.v1").show()
+    spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
 //    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
 //    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
 

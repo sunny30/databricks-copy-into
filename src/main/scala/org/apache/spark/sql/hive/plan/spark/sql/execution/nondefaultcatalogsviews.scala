@@ -209,7 +209,7 @@ case class NonDefaultCatalogAlterViewQueryCommand(
   }
 
   private def aliasPlan(session: SparkSession, analyzedPlan: LogicalPlan, oldTable:CatalogTable): LogicalPlan = {
-    val userSpecifiedColumns = oldTable.schema.map(f=> (f.name, f.getComment())).toSeq
+    val userSpecifiedColumns = analyzedPlan.schema.map(f=> (f.name, f.getComment())).toSeq
     if (userSpecifiedColumns.isEmpty) {
       analyzedPlan
     } else {
