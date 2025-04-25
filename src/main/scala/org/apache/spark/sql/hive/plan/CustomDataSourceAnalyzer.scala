@@ -12,7 +12,7 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeRef
 import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
-import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin}
+import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, TableCatalog}
@@ -345,7 +345,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val resolvedLeafPlan = leafPlan.copy(output = output)
 
         resolvedLeafPlan.resolved
-        resolvedLeafPlan.setAnalyzed()
+     //   resolvedLeafPlan.setAnalyzed()
         resolvedLeafPlan
       }
 
@@ -537,12 +537,24 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           DeltaRelation.fromV2Relation(d.table.asInstanceOf[DeltaTableV2], d, d.options)
 
         } else {
-          apply(d)
+          if (d.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
+            d.setTagValue(TreeNodeTag[String]("centrify-resolver"), "resolved")
+            apply(d)
+          }else{
+            d
+          }
+
         }
 
       case u: UnresolvedRelation =>
         println("this is for view " + u.toString())
-        apply(u)
+        if (u.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
+          u.setTagValue(TreeNodeTag[String]("centrify-resolver"), "resolved")
+          apply(u)
+        }else{
+          u
+        }
+
 
 
       case unresolvedInlineTable: UnresolvedInlineTable =>
@@ -554,7 +566,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
       case u: UnresolvedLeafNode =>
         print(u.toString())
-        apply(u)
+        if (u.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
+          u.setTagValue(TreeNodeTag[String]("centrify-resolver"), "resolved")
+          apply(u)
+        }else{
+          u
+        }
+
       //      case pr@Project(plist, p@Project(projectList, child)) =>
       //
       //        val res =  pr.copy(projectList, p)
