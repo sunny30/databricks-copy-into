@@ -66,14 +66,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
   private def getViewColumns(metadata: CatalogTable): Seq[NamedExpression] = {
     val projectList = if (!isHiveCreatedView(metadata)) {
-      val viewColumnNames = if (metadata.viewQueryColumnNames.isEmpty) {
-        // For view created before Spark 2.2.0, the view text is already fully qualified, the plan
-        // output is the same with the view output.
-        metadata.schema.fieldNames.toSeq
-      } else {
-        assert(metadata.viewQueryColumnNames.length == metadata.schema.length)
-        metadata.viewQueryColumnNames
-      }
+      //      val viewColumnNames = if (metadata.viewQueryColumnNames.isEmpty) {
+      //        // For view created before Spark 2.2.0, the view text is already fully qualified, the plan
+      //        // output is the same with the view output.
+      //        metadata.schema.fieldNames.toSeq
+      //      } else {
+      //        assert(metadata.viewQueryColumnNames.length == metadata.schema.length)
+      //        metadata.viewQueryColumnNames
+      //      }
+      val viewColumnNames =  metadata.schema.fieldNames.toSeq
 
       // For view queries like `SELECT * FROM t`, the schema of the referenced table/view may
       // change after the view has been created. We need to add an extra SELECT to pick the columns
@@ -94,7 +95,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val nameToCurrentOrdinal = scala.collection.mutable.HashMap.empty[String, Int]
       val viewDDL = buildViewDDL(metadata, false)
 
-       viewColumnNames.zip(metadata.schema).map { case (name, field) =>
+      viewColumnNames.zip(metadata.schema).map { case (name, field) =>
         val normalizedName = normalizeColName(name)
         val count = nameToCounts(normalizedName)
         val ordinal = nameToCurrentOrdinal.getOrElse(normalizedName, 0)
@@ -112,11 +113,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         Alias(UpCast(col, field.dataType), field.name)(explicitMetadata = Some(field.metadata))
       }
     }
-//    projectList.map(at => if(at.isInstanceOf[Alias]){
-//      at
-//    }else{
-//      at
-//    })
+    //    projectList.map(at => if(at.isInstanceOf[Alias]){
+    //      at
+    //    }else{
+    //      at
+    //    })
     projectList
   }
 
@@ -136,7 +137,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
-  def getViewPlan(table:V2Table, relation:Option[DataSourceV2Relation]=None):LogicalPlan = {
+  def getViewPlan(table: V2Table, relation: Option[DataSourceV2Relation] = None): LogicalPlan = {
     val viewText = table.v1Table.viewText.getOrElse {
       throw new IllegalStateException("Invalid view without text.")
     }
@@ -157,7 +158,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
     }
     val projectList = getViewColumns(table.v1Table)
-   // val resolvedPlan = apply(Project(projectList, parsedPlan))
+    // val resolvedPlan = apply(Project(projectList, parsedPlan))
     val child = Project(projectList, parsedPlan)
 
     val newChild = session.sessionState.analyzer.executeAndCheck(child, new QueryPlanningTracker())
@@ -165,11 +166,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     View(desc = table.v1Table, isTempView = false, child = newChild)
   }
 
+
+
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsDown {
 
-//    case c:CustomInsertIntoHadoopFsRelationCommand =>
-//      c.setAnalyzed()
-//      c
+    //    case c:CustomInsertIntoHadoopFsRelationCommand =>
+    //      c.setAnalyzed()
+    //      c
 
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
@@ -198,12 +201,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           u
         }
       } else {
-       // if(u.options.containsKey(""))
+        // if(u.options.containsKey(""))
         val tc = sessionCatalog.loadTable(Identifier.of(Seq(res._2).toArray, res._3))
         val viewc = sessionCatalog.loadTable(Identifier.of(Seq(res._2).toArray, res._3), null)
-        if(tc == null && viewc !=null) {
+        if (tc == null && viewc != null) {
           getViewPlan(viewc.asInstanceOf[V2Table])
-        }else {
+        } else {
           tc match {
             case v2Table: V2Table =>
               val provider = v2Table.v1Table.provider.getOrElse("custom")
@@ -213,8 +216,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 || provider.equalsIgnoreCase("parquet")
                 || provider.equalsIgnoreCase("orc")
                 || provider.equalsIgnoreCase("avro")
-              || provider.equalsIgnoreCase("arrow"))
-               {
+                || provider.equalsIgnoreCase("arrow")) {
                 val schemaColName = v2Table.v1Table.dataSchema.map(f => f.name)
                 val partSchemaColNames = v2Table.v1Table.partitionSchema.map(f => f.name)
                 val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
@@ -280,11 +282,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
 
-    case DataSourceV2Relation(table: V2Table, output:Seq[AttributeReference], _, _, options:CaseInsensitiveStringMap) =>
+    case DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], _, _, options: CaseInsensitiveStringMap) =>
 
       println("Inside DataSourceV2Relation ")
-      if(table.v1Table.tableType == CatalogTableType.VIEW){
-       return  getViewPlan(table)
+      if (table.v1Table.tableType == CatalogTableType.VIEW) {
+        return getViewPlan(table)
       }
       val provider = table.v1Table.provider.getOrElse("custom")
       val dataSource = DataSource(
@@ -295,14 +297,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         partitionColumns = table.v1Table.partitionColumnNames,
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties++options.asScala.toMap,
+        options = table.v1Table.storage.properties ++ options.asScala.toMap,
         catalogTable = Some(table.v1Table))
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
         || provider.equalsIgnoreCase("parquet")
-       || provider.equalsIgnoreCase("orc")
-       || provider.equalsIgnoreCase("avro")
-  || provider.equalsIgnoreCase("arrow")) {
+        || provider.equalsIgnoreCase("orc")
+        || provider.equalsIgnoreCase("avro")
+        || provider.equalsIgnoreCase("arrow")) {
         val schemaColName = table.v1Table.dataSchema.map(f => f.name)
         val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
         val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
@@ -311,9 +313,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           table.v1Table,
           table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
 
-//       val tablePath  = new Path(table.v1Table.location.getPath)
-//        val fileCatalog = new MetadataLogFileIndex(SparkSession.active, tablePath,
-//          Map.empty[String, String], Some(table.v1Table.schema))
+        //       val tablePath  = new Path(table.v1Table.location.getPath)
+        //        val fileCatalog = new MetadataLogFileIndex(SparkSession.active, tablePath,
+        //          Map.empty[String, String], Some(table.v1Table.schema))
 
         //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
         //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
@@ -335,7 +337,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         resolvedLeafPlan
 
       } else {
-       val leafPlan =  if (provider.equalsIgnoreCase("custom")) {
+        val leafPlan = if (provider.equalsIgnoreCase("custom")) {
           LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
         } else {
           LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
@@ -351,8 +353,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     case x@Project(p, child@SubqueryAlias(identifier, child1: DataSourceV2Relation))
       if child1.catalog.isDefined =>
 
-      println("Inside Project over DataSourceV2Relation" )
-    //  x.setAnalyzed()
+      println("Inside Project over DataSourceV2Relation")
+      //  x.setAnalyzed()
 
       val table = child1.table.asInstanceOf[V2Table]
       if (table.v1Table.tableType == CatalogTableType.VIEW) {
@@ -367,7 +369,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         partitionColumns = table.v1Table.partitionColumnNames,
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties++child1.options.asScala.toMap,
+        options = table.v1Table.storage.properties ++ child1.options.asScala.toMap,
         catalogTable = Some(table.v1Table))
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
@@ -404,7 +406,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val newChild = child.copy(identifier = identifier, child = newRelation)
         val op = x.copy(projectList = p, child = newChild)
         op.resolved
-     //   op.setAnalyzed()
+        //   op.setAnalyzed()
         op
       } else {
         val relation = if (provider.equalsIgnoreCase("custom")) {
@@ -416,7 +418,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val newChild = child.copy(identifier = identifier, child = newRelation)
         val op = x.copy(projectList = p, child = newChild)
         op.resolved
-      //  op.setAnalyzed()
+        //  op.setAnalyzed()
         op
       }
 
@@ -429,15 +431,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(catName).asTableCatalog
         val tid = Identifier.of(Seq(dbName).toArray, tableName)
         val tc = sessionCatalog.loadTable(tid)
-        if(tc ==null){
+        if (tc == null) {
           val viewCt = sessionCatalog.loadTable(tid, null)
-          if(viewCt != null){
+          if (viewCt != null) {
             ResolvedTable.create(sessionCatalog, tid, viewCt)
-          }else{
+          } else {
             u
           }
 
-        }else {
+        } else {
           tc match {
             case d: DeltaTableV2 => (ResolvedTable.create(sessionCatalog, u.multipartIdentifier.asIdentifier, d))
             case _ => u
@@ -468,7 +470,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val ct = catalogTable.asInstanceOf[V2Table].v1Table
       q.setAnalyzed()
 
-      if(ct.provider.getOrElse("custom").equalsIgnoreCase("custom")){
+      if (ct.provider.getOrElse("custom").equalsIgnoreCase("custom")) {
         val table = ct
         val dataSource = DataSource(
           session,
@@ -478,14 +480,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           partitionColumns = table.partitionColumnNames,
           bucketSpec = table.bucketSpec,
           className = table.provider.get,
-          options = table.storage.properties++u.options.asScala.toMap,
+          options = table.storage.properties ++ u.options.asScala.toMap,
           catalogTable = Some(table)
         )
 
         val relation = LogicalRelation(dataSource.resolveRelation(false), table)
         InsertIntoStatement(relation, m, a, q, f, ip, c)
 
-      }else {
+      } else {
         InsertIntoHadoopFsRelationCommand(
           outputPath = new Path(ct.storage.locationUri.get.toString),
           staticPartitions = Map.empty,
@@ -505,12 +507,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
       val retPlan = new DeltaAnalysis(SparkSession.active).apply(CustomResolveInsertInto(i))
       retPlan
-      }
+    }
 
 
-    case ab@AppendData(table@DataSourceV2Relation(v:DeltaTableV2, _, _, _, _), p:Project, writeOptions, isByName, write, analyzedQuery) =>
+    case ab@AppendData(table@DataSourceV2Relation(v: DeltaTableV2, _, _, _, _), p: Project, writeOptions, isByName, write, analyzedQuery) =>
       print("Insie append data")
-      if(v.v1Table.provider.isDefined && v.v1Table.provider.get.equalsIgnoreCase("delta"))
+      if (v.v1Table.provider.isDefined && v.v1Table.provider.get.equalsIgnoreCase("delta"))
         ab.copy(analyzedQuery = Some(p))
       else
         ab
@@ -518,11 +520,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case p: LogicalPlan => p resolveOperatorsUp {
 
-//      case prj@Project(projectList, s@SubqueryAlias(_, view: View)) =>
-//      //  prj.copy(view.output)
-//        prj.setAnalyzed()
-//        val ats = getResolvedProjectAttributes(prj, view)
-//        prj.copy(ats)
+      //      case prj@Project(projectList, s@SubqueryAlias(_, view: View)) =>
+      //      //  prj.copy(view.output)
+      //        prj.setAnalyzed()
+      //        val ats = getResolvedProjectAttributes(prj, view)
+      //        prj.copy(ats)
 
       case ds@DataSourceV2ScanRelation(relation: DataSourceV2Relation, scan, output, keyGroupedPartitioning, ordering) =>
         println("this is DataSourceV2Scan")
@@ -530,25 +532,25 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         ds
 
       case d: DataSourceV2Relation =>
-        println("this is DataSourceV2"+d.toString())
-        if(d.table.isInstanceOf[DeltaTableV2]){
+        println("this is DataSourceV2" + d.toString())
+        if (d.table.isInstanceOf[DeltaTableV2]) {
           DeltaRelation.fromV2Relation(d.table.asInstanceOf[DeltaTableV2], d, d.options)
 
-        }else {
+        } else {
           apply(d)
         }
 
-      case u:UnresolvedRelation =>
-        println("this is for view "+u.toString())
+      case u: UnresolvedRelation =>
+        println("this is for view " + u.toString())
         apply(u)
 
 
       case unresolvedInlineTable: UnresolvedInlineTable =>
         ResolveInlineTables(unresolvedInlineTable)
 
-//      case relationTimeTravel@RelationTimeTravel(u:UnresolvedRelation, _, _) =>
-//        val resolvedPlan = resolveTimeTravelTable(SparkSession.active,u,"RESTORE")
-//        relationTimeTravel.copy(relation = resolvedPlan)
+      //      case relationTimeTravel@RelationTimeTravel(u:UnresolvedRelation, _, _) =>
+      //        val resolvedPlan = resolveTimeTravelTable(SparkSession.active,u,"RESTORE")
+      //        relationTimeTravel.copy(relation = resolvedPlan)
 
       case u: UnresolvedLeafNode =>
         print(u.toString())
@@ -560,25 +562,25 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       //        res.setAnalyzed()
       //        res
       case p: LogicalPlan =>
-        println("Default plan is "+ p.toString())
-        if(p.toString().contains("AppendData")){
+        println("Default plan is " + p.toString())
+        if (p.toString().contains("AppendData")) {
           println("got you")
         }
         p match {
 
           case d: DeserializeToObject =>
-            if(!d.resolved) {
+            if (!d.resolved) {
               val deserExp = ResolveReferences.resolveExpressionByPlanChildren(d.deserializer, d)
               val resolveAttr = ResolveReferences.resolveExpressionByPlanChildren(d.outputObjAttr, d).asInstanceOf[Attribute]
               d.copy(deserializer = deserExp, outputObjAttr = resolveAttr)
-            }else{
+            } else {
               d
             }
 
           case m: DeltaMergeInto =>
             PreprocessTableMerge(session.sqlContext.conf).apply(m)
 
-          case u:DeltaUpdateTable =>
+          case u: DeltaUpdateTable =>
             PreprocessTableUpdate.apply(session.sqlContext.conf).toCommand(u)
 
           case d: DeltaDelete =>
@@ -588,17 +590,17 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               }
             }
             d.setAnalyzed()
-            println("value of resolved is "+d.resolved.toString)
-           // val pl = ResolveReferences(d)
+            println("value of resolved is " + d.resolved.toString)
+            // val pl = ResolveReferences(d)
             DeleteCommand(d)
 
 
-          case rtas@ReplaceTableAsSelect(name, partitioning, query, tableSpec, writeOptions, orCreate, isAnalyzed) =>{
-            val optionString = writeOptions.map(t=>t._1+"::"+t._2).mkString("||")
-            println("RTAS Option String: "+optionString)
-            if(tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")){
+          case rtas@ReplaceTableAsSelect(name, partitioning, query, tableSpec, writeOptions, orCreate, isAnalyzed) => {
+            val optionString = writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
+            println("RTAS Option String: " + optionString)
+            if (tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")) {
               CreateTableAsSelect(name, partitioning = partitioning, query = query, tableSpec = tableSpec, writeOptions = writeOptions, ignoreIfExists = false, isAnalyzed = isAnalyzed)
-            }else{
+            } else {
               rtas
             }
           }
@@ -621,40 +623,40 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               ab
             }
 
-          case abd@AppendData(table:DataSourceV2Relation, _, _, _, _, _) =>
+          case abd@AppendData(table: DataSourceV2Relation, _, _, _, _, _) =>
             println("Inside append data")
             val abpl = abd.copy(analyzedQuery = Some(abd.query))
             appendIntoV2Table(abpl, table)
 
-          case overwriteByExpression@OverwriteByExpression(table:DataSourceV2Relation,deleteExpr,query,writeOptions,isByName,_,analyzedQuery) =>
-          //  val overwriteByExpressionPl = overwriteByExpression.copy(analyzedQuery = Some(query))
+          case overwriteByExpression@OverwriteByExpression(table: DataSourceV2Relation, deleteExpr, query, writeOptions, isByName, _, analyzedQuery) =>
+            //  val overwriteByExpressionPl = overwriteByExpression.copy(analyzedQuery = Some(query))
             table.table match {
               case v2Table: V2Table =>
                 val catalogName = v2Table.v1Table.identifier.catalog.getOrElse("hive")
                 val catalogPlugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
                 val resId = ResolvedIdentifier(
                   catalogPlugin,
-                  Identifier.of(Array(v2Table.v1Table.identifier.database.getOrElse("default")).toArray,v2Table.v1Table.identifier.table)
+                  Identifier.of(Array(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)
                 )
                 ReplaceTableAsSelect(resId, Seq.empty[Transform], query, TableSpec(
                   provider = v2Table.v1Table.provider,
-                  properties = (Map("provider"->v2Table.v1Table.provider.getOrElse("hive"))),
+                  properties = (Map("provider" -> v2Table.v1Table.provider.getOrElse("hive"))),
                   location = Some(v2Table.v1Table.location.toString),
                   options = writeOptions,
                   comment = None, serde = None, external = v2Table.v1Table.tableType == CatalogTableType.EXTERNAL
-                ),writeOptions,false)
+                ), writeOptions, false)
 
               case _ => overwriteByExpression
             }
 
-          case prj@Project(projectList, s@SubqueryAlias(id:Identifier, view:View)) =>
+          case prj@Project(projectList, s@SubqueryAlias(id: Identifier, view: View)) =>
             prj.copy(view.output)
 
 
           case _ =>
             val pl = ResolveReferences(p)
             pl.resolved
-          //  pl.setAnalyzed()
+            //  pl.setAnalyzed()
             pl
         }
     }
@@ -673,13 +675,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
-  def appendIntoV2Table(ab: AppendData, ds: DataSourceV2Relation): LogicalPlan={
+  def appendIntoV2Table(ab: AppendData, ds: DataSourceV2Relation): LogicalPlan = {
     ds.table match {
       case v2: V2Table =>
         val provider = v2.v1Table.provider.getOrElse("hive")
         val table = v2.v1Table
         val ct = v2.v1Table
-        if(provider.equalsIgnoreCase("custom")){
+        if (provider.equalsIgnoreCase("custom")) {
 
           val dataSource = DataSource(
             session,
@@ -689,14 +691,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             partitionColumns = table.partitionColumnNames,
             bucketSpec = table.bucketSpec,
             className = table.provider.get,
-            options = table.properties++ab.writeOptions.toMap,
+            options = table.properties ++ ab.writeOptions.toMap,
             catalogTable = Some(table)
           )
           val columnNames = v2.v1Table.schema.fieldNames
           val relation = LogicalRelation(dataSource.resolveRelation(false), table)
-          InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false )
+          InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false)
 
-        }else{
+        } else {
           val ff = getFileFormat(ct.provider.getOrElse("csv"))
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(ct.storage.locationUri.get.toString),
@@ -714,10 +716,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           )
 
         }
-      case st:BestEffortStagedTable =>
-        if(st.table.isInstanceOf[V2Table]){
+      case st: BestEffortStagedTable =>
+        if (st.table.isInstanceOf[V2Table]) {
           val catalogTable = st.table.asInstanceOf[V2Table].v1Table
-          if(catalogTable.provider.isDefined && catalogTable.provider.get.equalsIgnoreCase("custom")){
+          if (catalogTable.provider.isDefined && catalogTable.provider.get.equalsIgnoreCase("custom")) {
             val dataSource = DataSource(
               session,
               // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
@@ -726,32 +728,32 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               partitionColumns = catalogTable.partitionColumnNames,
               bucketSpec = catalogTable.bucketSpec,
               className = catalogTable.provider.get,
-              options = catalogTable.storage.properties++ab.writeOptions,
+              options = catalogTable.storage.properties ++ ab.writeOptions,
               catalogTable = Some(catalogTable)
             )
             val columnNames = catalogTable.schema.fieldNames
             val relation = LogicalRelation(dataSource.resolveRelation(false), catalogTable)
             InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, true, false)
 
-          }else{
+          } else {
             ab
           }
-        }else{
+        } else {
           ab
         }
       case _ => ab
     }
   }
 
-  def getResolvedProjectAttributes(prj:Project, view:View):Seq[Attribute] = {
-    view.output.filter(at=> prj.projectList.map(pat => pat.name).contains(at.name))
+  def getResolvedProjectAttributes(prj: Project, view: View): Seq[Attribute] = {
+    view.output.filter(at => prj.projectList.map(pat => pat.name).contains(at.name))
   }
 
-  def mapHiveCSVPropertiesToSparkOption(ct: CatalogTable, fileFormat: FileFormat):Map[String, String] ={
+  def mapHiveCSVPropertiesToSparkOption(ct: CatalogTable, fileFormat: FileFormat): Map[String, String] = {
     var tblProps = ct.properties
 
     //tblProps.
-    if(fileFormat.isInstanceOf[CSVFileFormat]) {
+    if (fileFormat.isInstanceOf[CSVFileFormat]) {
       if (!tblProps.contains("option.delimiter")) {
         tblProps = tblProps ++ Map("delimiter" -> tblProps.getOrElse("field.delim", ","))
       }
@@ -775,7 +777,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
       tblProps
-    }else{
+    } else {
       tblProps
     }
 
