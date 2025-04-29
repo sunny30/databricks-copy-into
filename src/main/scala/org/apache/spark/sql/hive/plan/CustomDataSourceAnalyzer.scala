@@ -416,9 +416,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
         val newRelation = relation.copy(output = child1.output, catalogTable = Some(table.v1Table), relation = relation.relation, isStreaming = false)
         val newChild = child.copy(identifier = identifier, child = newRelation)
-        val op = x.copy(projectList = p, child = newChild)
+        val op = x.copy(child = newChild)
         op.resolved
-        //  op.setAnalyzed()
+        op.setAnalyzed()
         op
       }
 
