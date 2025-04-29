@@ -19,12 +19,18 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
   override def buildScan(): RDD[Row] = {
     val spark = SparkSession.active
     import spark.implicits._
-    val results = Seq("hello").toDF("id")
+    val results = Seq((2, "hello",3.0)).toDF("price","greet", "id")
     results.rdd
 
   }
 
-  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = buildScan()
+  override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    val spark = SparkSession.active
+    import spark.implicits._
+    val results = Seq((2, "hello", 3.0)).toDF("price", "greet", "id")
+    val p = results.select(requiredColumns.head, requiredColumns.tail:_*)
+    p.rdd
+  }
 
   override def insert(data: DataFrame, overwrite: Boolean): Unit = {
     println(s"${data.collect().toString} and flag overwrite is ${overwrite.toString}")
