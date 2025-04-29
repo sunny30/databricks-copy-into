@@ -11,6 +11,7 @@ import org.apache.spark.sql.connector.catalog.Identifier
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.CatalogDescribeViewCmd
 
 
 class DescribeUnResolvedRelation(session: SparkSession)

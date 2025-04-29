@@ -8,7 +8,7 @@ import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFun
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
-import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, RowLevelFilter}
+import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, RowLevelFilter}
 
 class CustomExtensionSuite extends DeltaSparkSessionExtension{
 
@@ -22,6 +22,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     }
     extensions.injectResolutionRule(session => new ResolveCatalogViews(session))
     extensions.injectResolutionRule(session => new DescribeUnResolvedRelation(session))
+    extensions.injectResolutionRule(session => new DescribeViewRelationRule(session))
    // extensions.injectResolutionRule(session => new RowLevelFilter(session))
     extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
 
