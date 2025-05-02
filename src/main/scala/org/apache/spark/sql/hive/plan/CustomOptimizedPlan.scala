@@ -92,6 +92,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         println("Inside RTAS")
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
         val projectPlan = EliminateSubqueryAliases(query)
+        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
         val outputs = query.schema.map(s => s.name)
         val providerValue = getActualProvider(catalog,ident,tableSpec)
         /**Delta External we have to see later**/
@@ -100,11 +101,11 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             catalog.asTableCatalog.dropTable(ident)
           }
           println("Inside delta or custom datasource plan block")
-          plan
+          rtas.copy(query = writePlan)
         }else if(providerValue.equalsIgnoreCase("custom")){
           properties = getOldTableProps(catalog,ident,tableSpec)
           val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
-          rtas.copy(tableSpec = newTableSpec)
+          rtas.copy(tableSpec = newTableSpec,query = writePlan)
         }else {
 
           if (catalog.asTableCatalog.tableExists(ident)) {
@@ -124,7 +125,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             bucketSpec = None,
             fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
             Map.empty,
-            query = projectPlan,
+            query = writePlan,
             SaveMode.Overwrite,
             None,
             None,
@@ -138,6 +139,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         println("Inside CTAS")
         val properties = CatalogV2Util.convertTableProperties(tableSpec)
         val projectPlan = EliminateSubqueryAliases(query)
+        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
 
 
         val outputs = query.schema.map(s => s.name)
@@ -148,7 +150,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             catalog.asTableCatalog.dropTable(ident)
           }
        // One has to drop Delta CTAS will create delta table
-          plan
+          ctas.copy(query = writePlan)
         } else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
           InsertIntoHadoopFsRelationCommand(
@@ -159,7 +161,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             bucketSpec = None,
             fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
             Map.empty,
-            query = projectPlan,
+            query = writePlan,
             SaveMode.Append,
             None,
             None,
