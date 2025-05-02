@@ -77,16 +77,26 @@ object App {
 //   // spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
   //  df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl")
 //    spark.read.options(Map("k6"->"v6")).table("cat.customdb.tbl").show()
+
+    /**distinct operation**/
+    spark.sql("create database cat.dml")
+    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
+    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
+    val df = spark.sql("select distinct id, new_val from cat.dml.t2")
+  //  df.show()
+    df.write.format("delta").saveAsTable("cat.dml.t3")
+    /**disctinct operation ends**/
+
     /**Custom data format  write options ends**/
 
 
     /**View DDL Compiler starts**/
-    spark.sql("create database cat.viewdb1")
-    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
-    spark.sql("create table cat.viewdb1.t3(id int, name string) using delta")
-    spark.sql("insert into cat.viewdb1.t2 values('hello')")
-    spark.sql("insert into cat.viewdb1.t3 values(1,'hello')")
-    spark.sql("create view cat.viewdb1.v1(cl1) as select attributes from cat.viewdb1.t2")
+//    spark.sql("create database cat.viewdb1")
+//    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
+//    spark.sql("create table cat.viewdb1.t3(id int, name string) using delta")
+//    spark.sql("insert into cat.viewdb1.t2 values('hello')")
+//    spark.sql("insert into cat.viewdb1.t3 values(1,'hello')")
+//    spark.sql("create view cat.viewdb1.v1(cl1) as select attributes from cat.viewdb1.t2")
 //    spark.sql("show views in cat.viewdb1").show()
 //   // spark.sql("drop view cat.viewdb1.v1")
 //    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
@@ -95,7 +105,7 @@ object App {
   //  spark.sql("select * from cat.viewdb1.v1").show()
 //    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
 //    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
-    spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
+//    spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
 //    spark.sql("select * from cat.viewdb1.v2")
 
 
