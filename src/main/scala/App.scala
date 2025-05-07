@@ -59,32 +59,32 @@ object App {
     /**Custom data format  write options**/
 
     import spark.implicits._
-//    spark.sql("create database cat.customdb")
-//    spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
-//    spark.sql("select * from cat.customdb.tbl").show()
-//    spark.sql("select greet from cat.customdb.tbl").show()
+    spark.sql("create database cat.customdb")
+    spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
+    spark.sql("select * from cat.customdb.tbl").show()
+    spark.sql("select greet from cat.customdb.tbl").show()
 
-//
-//    val df3 = Seq(
-//      "John",
-//      "Sunny",
-//      "Xiaoyu",
-//      "Shashi",
-//      "Bharath",
-//      "Vivek"
-//    ).toDF("col1")
-//   // df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
-//   // spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-  //  df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl")
-//    spark.read.options(Map("k6"->"v6")).table("cat.customdb.tbl").show()
+
+    val df3 = Seq(
+      (7,"John",2.0),
+      (8,"Sunny",3.0),
+      (9,"Xiaoyu",4.0),
+      (10,"Shashi",5.0),
+      (11,"Bharath",6.0),
+      (12,"Vivek",7.0)
+    ).toDF("col1","col2", "col3")
+    df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
+    spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
+    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl")
+    spark.read.options(Map("k6"->"v6")).table("cat.customdb.tbl").show()
 
     /**distinct operation**/
-    spark.sql("create database cat.dml")
-    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
-    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
-    val df = spark.sql("select distinct id, new_val from cat.dml.t2")
+//    spark.sql("create database cat.dml")
+//    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
+//    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
+//    val df = spark.sql("select distinct id, new_val from cat.dml.t2")
   //  df.show()
-    df.write.format("delta").saveAsTable("cat.dml.t3")
+  //  df.write.format("delta").saveAsTable("cat.dml.t3")
     /**disctinct operation ends**/
 
     /**Custom data format  write options ends**/

@@ -252,7 +252,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                   partitionColumns = v2Table.v1Table.partitionColumnNames,
                   bucketSpec = v2Table.v1Table.bucketSpec,
                   className = v2Table.v1Table.provider.get,
-                  options = v2Table.v1Table.storage.properties,
+                  options = v2Table.v1Table.storage.properties++getReadOptionsForExternalSource,
                   catalogTable = Some(v2Table.v1Table))
                 LogicalRelation(dataSource.resolveRelation(false), v2Table.v1Table)
               }
@@ -297,7 +297,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         partitionColumns = table.v1Table.partitionColumnNames,
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties ++ options.asScala.toMap,
+        options = table.v1Table.storage.properties ++ options.asScala.toMap ++ getReadOptionsForExternalSource,
         catalogTable = Some(table.v1Table))
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
@@ -369,7 +369,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         partitionColumns = table.v1Table.partitionColumnNames,
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties ++ child1.options.asScala.toMap,
+        options = table.v1Table.storage.properties ++ child1.options.asScala.toMap ++ getReadOptionsForExternalSource ,
         catalogTable = Some(table.v1Table))
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
@@ -480,7 +480,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           partitionColumns = table.partitionColumnNames,
           bucketSpec = table.bucketSpec,
           className = table.provider.get,
-          options = table.storage.properties ++ u.options.asScala.toMap,
+          options = table.storage.properties ++ u.options.asScala.toMap ++ getReadOptionsForExternalSource,
           catalogTable = Some(table)
         )
 
@@ -709,7 +709,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             partitionColumns = table.partitionColumnNames,
             bucketSpec = table.bucketSpec,
             className = table.provider.get,
-            options = table.properties ++ ab.writeOptions.toMap,
+            options = table.properties ++ ab.writeOptions.toMap ++ getReadOptionsForExternalSource,
             catalogTable = Some(table)
           )
           val columnNames = v2.v1Table.schema.fieldNames
@@ -746,7 +746,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               partitionColumns = catalogTable.partitionColumnNames,
               bucketSpec = catalogTable.bucketSpec,
               className = catalogTable.provider.get,
-              options = catalogTable.storage.properties ++ ab.writeOptions,
+              options = catalogTable.storage.properties ++ ab.writeOptions ++ getOverWriteOptionsForExternalSource,
               catalogTable = Some(catalogTable)
             )
             val columnNames = catalogTable.schema.fieldNames
@@ -821,6 +821,25 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
     }
   }
+
+
+
+  def getOverWriteOptionsForExternalSource: Map[String, String] ={
+    Map(
+      "source.external.catalog" -> "true",
+      "write.mode" -> "CREATE"
+    )
+  }
+
+
+  def getReadOptionsForExternalSource:Map[String,String] ={
+    Map(
+      "source.external.catalog" -> "true"
+    )
+  }
+
+
+
 
 
 }
