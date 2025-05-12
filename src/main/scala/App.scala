@@ -44,7 +44,7 @@ object App {
       .set("spark.sql.extensions", "org.apache.spark.sql.hive.CustomExtensionSuite")
       .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       .set("hive.exec.dynamic.partition.mode", "nonstrict")
-      .set("parquet.compression", "SNAPPY")
+      .set("parquet.compression", "SNAPPY").set("spark.sql.sources.default", "delta")
    //   .set("spark.sql.parquet.enableVectorizedReader","false")
    //   .set("parquet.strict.typing","false")
   }
@@ -60,10 +60,10 @@ object App {
 
     import spark.implicits._
     spark.sql("create database cat.customdb")
-    spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
-    spark.sql("select * from cat.customdb.tbl").show()
-    spark.sql("select greet from cat.customdb.tbl").show()
-
+  //  spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
+   // spark.sql("select * from cat.customdb.tbl").show()
+   // spark.sql("select greet from cat.customdb.tbl").show()
+  //  spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
 
     val df3 = Seq(
       (7,"John",2.0),
@@ -73,11 +73,16 @@ object App {
       (11,"Bharath",6.0),
       (12,"Vivek",7.0)
     ).toDF("col1","col2", "col3")
-    df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
-    spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl")
-    spark.read.options(Map("k6"->"v6")).table("cat.customdb.tbl").show()
-
+  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
+  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
+   // df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl")
+  //  spark.read.options(Map("k6"->"v6")).table("cat.customdb.tbl").show()
+    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl1")
+    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl1")
+    spark.read.options(Map("k6"->"v6")).table("cat.customdb.tbl1").show()
+    df3.write.mode(SaveMode.Overwrite).saveAsTable("cat.customdb.tbl2")
+    df3.write.saveAsTable("cat.customdb.tbl2")
+    spark.sql("describe formatted cat.customdb.tbl2").show()
     /**distinct operation**/
 //    spark.sql("create database cat.dml")
 //    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")

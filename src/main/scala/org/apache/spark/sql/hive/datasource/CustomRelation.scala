@@ -28,8 +28,8 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
     val spark = SparkSession.active
     import spark.implicits._
     val results = Seq((2, "hello", 3.0)).toDF("price", "greet", "id")
-    val p = results.select(requiredColumns.head, requiredColumns.tail:_*)
-    p.rdd
+//    val p = results.select(requiredColumns.head, requiredColumns.tail:_*)
+    results.rdd
   }
 
   override def insert(data: DataFrame, overwrite: Boolean): Unit = {

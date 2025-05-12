@@ -10,12 +10,13 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubquer
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SubqueryAlias, TableSpec, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
-import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, TableCatalog}
+import org.apache.spark.sql.connector.catalog.CatalogV2Util.{convertTableProperties, withDefaultOwnership}
+import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, TableCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
@@ -613,21 +614,29 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             DeleteCommand(d)
 
 
-          case rtas@ReplaceTableAsSelect(name, partitioning, query, tableSpec, writeOptions, orCreate, isAnalyzed) => {
+          case rtas@ReplaceTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning, query, tableSpec, writeOptions, orCreate, isAnalyzed) => {
             val optionString = writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
             println("RTAS Option String: " + optionString)
-            if (tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")) {
-              CreateTableAsSelect(name, partitioning = partitioning, query = query, tableSpec = tableSpec, writeOptions = writeOptions, ignoreIfExists = false, isAnalyzed = isAnalyzed)
+            if (tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")
+              ||
+              tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("custom")) {
+              CreateTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning = partitioning, query = query, tableSpec = tableSpec, writeOptions = writeOptions, ignoreIfExists = false, isAnalyzed = isAnalyzed)
             } else {
               rtas
             }
           }
 
 
-          case ctas: CreateTableAsSelect =>
+          case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning, query, tableSpec,writeOptions, ignoreIfExists, isAnalyzed) =>
             val optionString = ctas.writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
             println("CTAS Option String: " + optionString)
-            ctas
+            val providerValue = getActualProvider(catalog,ident,tableSpec)
+            if(providerValue.equalsIgnoreCase("custom")){
+              val properties = getOldTableProps(catalog, ident, tableSpec)
+              OverWriteToExternalSource.createAndOverWritePlan(query, catalog, ident, properties, providerValue, ctas.writeOptions, partitioning)
+            }else {
+              ctas
+            }
 
           case in: InsertIntoStatement =>
             in //return as it is
@@ -836,6 +845,75 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     Map(
       "source.external.catalog" -> "true"
     )
+  }
+
+  def getActualProvider(catalog: CatalogPlugin, identifier: Identifier, tableSpec: TableSpecBase): String = {
+    if (catalog.asTableCatalog.tableExists(identifier)) {
+      // catalog.name()
+      catalog.asTableCatalog.loadTable(identifier) match {
+        case v2Table: V2Table => v2Table.v1Table.provider.get
+        case deltaTableV2: DeltaTableV2 => deltaTableV2.v1Table.provider.get
+      }
+    } else {
+      val properties = convertTableProperties(tableSpec)
+      properties.getOrElse("provider", "hive")
+    }
+  }
+
+  def convertTableProperties(t: TableSpecBase): Map[String, String] = {
+    val props = convertTableProperties(
+      t.properties, t.serde, t.location, t.comment,
+      t.provider, t.external)
+    withDefaultOwnership(props)
+  }
+
+
+  private def convertTableProperties(
+                                      properties: Map[String, String],
+                                      serdeInfo: Option[SerdeInfo],
+                                      location: Option[String],
+                                      comment: Option[String],
+                                      provider: Option[String],
+                                      external: Boolean = false): Map[String, String] = {
+    properties ++
+      convertToProperties(serdeInfo) ++
+      (if (external) Some(TableCatalog.PROP_EXTERNAL -> "true") else None) ++
+      provider.map(TableCatalog.PROP_PROVIDER -> _) ++
+      comment.map(TableCatalog.PROP_COMMENT -> _) ++
+      location.map(TableCatalog.PROP_LOCATION -> _)
+  }
+
+  /**
+   * Converts Hive Serde info to table properties. The mapped property keys are:
+   *  - INPUTFORMAT/OUTPUTFORMAT: hive.input/output-format
+   *  - STORED AS: hive.stored-as
+   *  - ROW FORMAT SERDE: hive.serde
+   *  - SERDEPROPERTIES: add "option." prefix
+   */
+  private def convertToProperties(serdeInfo: Option[SerdeInfo]): Map[String, String] = {
+    serdeInfo match {
+      case Some(s) =>
+        s.formatClasses.map { f =>
+          Map("hive.input-format" -> f.input, "hive.output-format" -> f.output)
+        }.getOrElse(Map.empty) ++
+          s.storedAs.map("hive.stored-as" -> _) ++
+          s.serde.map("hive.serde" -> _) ++
+          s.serdeProperties.map {
+            case (key, value) => TableCatalog.OPTION_PREFIX + key -> value
+          }
+      case None =>
+        Map.empty
+    }
+  }
+
+  def getOldTableProps(catalog: CatalogPlugin, identifier: Identifier, tableSpec: TableSpecBase): Map[String, String] = {
+    if (catalog.asTableCatalog.tableExists(identifier)) {
+      // catalog.name()
+      catalog.asTableCatalog.loadTable(identifier).asInstanceOf[V2Table].v1Table.properties
+    } else {
+      val properties = convertTableProperties(tableSpec)
+      properties
+    }
   }
 
 

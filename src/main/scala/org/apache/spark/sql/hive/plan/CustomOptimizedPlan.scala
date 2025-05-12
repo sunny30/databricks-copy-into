@@ -137,11 +137,12 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
       _, _, _) =>
         println("Inside CTAS")
-        val properties = CatalogV2Util.convertTableProperties(tableSpec)
+        var properties = CatalogV2Util.convertTableProperties(tableSpec)
         val projectPlan = EliminateSubqueryAliases(query)
         val writePlan = spark.sessionState.optimizer.execute(projectPlan)
 
 
+       // query.schema.toDDL
         val outputs = query.schema.map(s => s.name)
         val providerValue = getActualProvider(catalog,ident,tableSpec)
 
@@ -151,7 +152,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           }
        // One has to drop Delta CTAS will create delta table
           ctas.copy(query = writePlan)
-        } else {
+        }else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
