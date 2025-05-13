@@ -617,9 +617,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           case rtas@ReplaceTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning, query, tableSpec, writeOptions, orCreate, isAnalyzed) => {
             val optionString = writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
             println("RTAS Option String: " + optionString)
-            if (tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")
-              ||
-             catalog.name().equalsIgnoreCase("ecat")) {
+//            if (tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")
+//              ||
+            if ( catalog.name().equalsIgnoreCase("ecat")) {
               CreateTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning = partitioning, query = query, tableSpec = tableSpec, writeOptions = writeOptions, ignoreIfExists = false, isAnalyzed = isAnalyzed)
             } else {
               rtas
