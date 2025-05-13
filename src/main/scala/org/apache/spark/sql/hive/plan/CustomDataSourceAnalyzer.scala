@@ -619,7 +619,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             println("RTAS Option String: " + optionString)
             if (tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("delta")
               ||
-              tableSpec.provider.isDefined && tableSpec.provider.get.equalsIgnoreCase("custom")) {
+             catalog.name().equalsIgnoreCase("ecat")) {
               CreateTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning = partitioning, query = query, tableSpec = tableSpec, writeOptions = writeOptions, ignoreIfExists = false, isAnalyzed = isAnalyzed)
             } else {
               rtas
@@ -631,9 +631,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             val optionString = ctas.writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
             println("CTAS Option String: " + optionString)
             val providerValue = getActualProvider(catalog,ident,tableSpec)
-            if(providerValue.equalsIgnoreCase("custom")){
+            if(catalog.name().equalsIgnoreCase("ecat")){
               val properties = getOldTableProps(catalog, ident, tableSpec)
-              OverWriteToExternalSource.createAndOverWritePlan(query, catalog, ident, properties, providerValue, ctas.writeOptions, partitioning)
+              OverWriteToExternalSource.createAndOverWritePlan(query, catalog, ident, properties, "custom", ctas.writeOptions, partitioning)
             }else {
               ctas
             }

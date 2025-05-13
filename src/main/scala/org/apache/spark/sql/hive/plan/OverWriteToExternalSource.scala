@@ -66,7 +66,9 @@ object OverWriteToExternalSource {
       "schema" -> s"${schemaName}",
       "table" -> s"$tableName",
       "option.schema" -> s"${schemaName}",
-      "option.table" -> s"$tableName"
+      "option.table" -> s"$tableName",
+      "provider" -> "custom",
+      "option.provider" -> "custom"
     )
 
   }
