@@ -27,6 +27,7 @@ class DescribeViewRelationRule(session: SparkSession)
           } else {
             d
           }
+          case _ => d
         }
       case pl:LogicalPlan => pl
     }
