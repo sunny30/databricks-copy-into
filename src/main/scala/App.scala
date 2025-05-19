@@ -88,19 +88,20 @@ object App {
 
     /*Delta overwrite table*/
     spark.sql("create database cat.db5")
-//    df3.write.format("delta").saveAsTable("cat.db5.tbl")
-//    val df = spark.read.table("cat.db5.tbl")
-//    df.show()
-//    df4.write.format("delta").saveAsTable("cat.db5.tbl")
-//    val df6 = spark.read.table("cat.db5.tbl")
-//    df6.show()
-    spark.sql("create table cat.db5.tbl(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
-    df3.write.insertInto("cat.db5.tbl")
+    df3.write.format("delta").saveAsTable("cat.db5.tbl")
     val df = spark.read.table("cat.db5.tbl")
     df.show()
-    df4.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl")
-    val df6 = spark.read.table("cat.db5.tbl")
+    df.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl1")
+    df.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl1")
+    val df6 = spark.read.table("cat.db5.tbl1")
     df6.show()
+//    spark.sql("create table cat.db5.tbl(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
+//    df3.write.insertInto("cat.db5.tbl")
+//    val df = spark.read.table("cat.db5.tbl")
+//    df.show()
+//    df3.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl")
+//    val df6 = spark.read.table("cat.db5.tbl")
+//    df6.show()
 
     //spark.sql
     /*Delta overwrite table*/
