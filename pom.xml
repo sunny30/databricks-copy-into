@@ -107,6 +107,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.iceberg</groupId>
+            <artifactId>iceberg-spark-runtime-3.5_2.12</artifactId>
+            <version>1.9.0</version>
+        </dependency>
+
+        <dependency>
 
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-catalyst_2.12</artifactId>

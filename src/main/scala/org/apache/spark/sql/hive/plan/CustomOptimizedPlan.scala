@@ -22,6 +22,7 @@ import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.internal.StaticSQLConf.WAREHOUSE_PATH
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.asJavaIterableConverter
@@ -68,7 +69,8 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       }
     }else{
       val properties = CatalogV2Util.convertTableProperties(tableSpec)
-      properties.getOrElse("provider", "hive")
+      val defaultDatasource = conf.defaultDataSourceName
+      properties.getOrElse("provider", defaultDatasource)
     }
   }
 
