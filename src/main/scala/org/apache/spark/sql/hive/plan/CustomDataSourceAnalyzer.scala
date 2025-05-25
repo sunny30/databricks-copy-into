@@ -419,7 +419,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val newChild = child.copy(identifier = identifier, child = newRelation)
         val op = x.copy(child = newChild)
         op.resolved
-        op.setAnalyzed()
+       // op.setAnalyzed()
         op
       }
 
@@ -469,7 +469,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asTableCatalog
       val catalogTable = sessionCatalog.loadTable(Identifier.of(Seq(dbName).toArray, tableName))
       val ct = catalogTable.asInstanceOf[V2Table].v1Table
-      q.setAnalyzed()
+     // q.setAnalyzed()
 
       if (ct.provider.getOrElse("custom").equalsIgnoreCase("custom")) {
         val table = ct
@@ -608,7 +608,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 throw DeltaErrors.subqueryNotSupportedException("DELETE", cond)
               }
             }
-            d.setAnalyzed()
+          //  d.setAnalyzed()
             println("value of resolved is " + d.resolved.toString)
             // val pl = ResolveReferences(d)
             DeleteCommand(d)

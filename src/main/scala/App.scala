@@ -87,11 +87,24 @@ object App {
 
 
     /*Delta overwrite table*/
-    spark.sql("create database cat.db6")
-    spark.sql("create table cat.db6.t(id int, name string)")
-    spark.sql("insert into cat.db6.t values (1, 'ss'), (2, 'xy')")
-    spark.sql("create table cat.db6.ctas as select * from cat.db6.t")
-    spark.sql("create table cat.db6.pt using parquet as select * from cat.db6.t")
+//    spark.sql("create database cat.db6")
+//    spark.sql("create table cat.db6.t(id int, name string)")
+//    spark.sql("insert into cat.db6.t values (1, 'ss'), (2, 'xy')")
+//    spark.sql("create table cat.db6.ctas as select * from cat.db6.t")
+//    spark.sql("create table cat.db6.pt using parquet as select * from cat.db6.t")
+
+    spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "true")
+    spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
+   // spark.sql.exchange.reuse
+    spark.conf.set("spark.sql.exchange.reuse", "false")
+    spark.sql("create database cat.db7")
+    spark.sql("create table cat.db7.t1(id int, name string, city string) using csv partitioned by(city)")
+    spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
+    spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+    spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+    spark.sql("select  cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'").show()
+    spark.sql("create table cat.db7.t3 as select cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+
 
 //    df3.write.format("delta").saveAsTable("cat.db5.tbl")
 //    val df = spark.read.table("cat.db5.tbl")
