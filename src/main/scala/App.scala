@@ -102,9 +102,22 @@ object App {
     spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
     spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
     spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-    spark.sql("select  cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'").show()
+    val df = spark.sql("select  cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+    df.explain(true)
+    println("-----Plan serialize------")
+    df.show()
     spark.sql("create table cat.db7.t3 as select cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
 
+
+    /** distinct operation* */
+    spark.sql("create database cat.dml")
+    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
+    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
+    val df9 = spark.sql("select distinct id, new_val from cat.dml.t2")
+    df9.show()
+    df9.write.format("delta").saveAsTable("cat.dml.t3")
+
+    /** disctinct operation ends* */
 
 //    df3.write.format("delta").saveAsTable("cat.db5.tbl")
 //    val df = spark.read.table("cat.db5.tbl")
@@ -135,14 +148,7 @@ object App {
 //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl2")
 //    df3.write.saveAsTable("ecat.customdb.tbl2")
 //    spark.sql("describe formatted ecat.customdb.tbl2").show()
-    /**distinct operation**/
-//    spark.sql("create database cat.dml")
-//    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
-//    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
-//    val df = spark.sql("select distinct id, new_val from cat.dml.t2")
-  //  df.show()
-  //  df.write.format("delta").saveAsTable("cat.dml.t3")
-    /**disctinct operation ends**/
+
 
     /**Custom data format  write options ends**/
 

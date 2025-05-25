@@ -141,11 +141,15 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         println("Inside CTAS")
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
         val projectPlan = EliminateSubqueryAliases(query)
-        spark.sessionState.
-        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
-        val analyzedWritePlan = spark.sessionState.analyzer.execute(writePlan)
-        spark.sessionState.analyzer.executeAndCheck(analyzedWritePlan, new QueryPlanningTracker())
-        analyzedWritePlan.setAnalyzed()
+       // spark.sessionState.
+        val qe = spark.sessionState.executePlan(query)
+        val writePlan = qe.commandExecuted
+        spark.sessionState.analyzer.executeAndCheck(writePlan,  new QueryPlanningTracker())
+
+//        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
+//        val analyzedWritePlan = spark.sessionState.analyzer.execute(writePlan)
+//        spark.sessionState.analyzer.executeAndCheck(analyzedWritePlan, new QueryPlanningTracker())
+//        analyzedWritePlan.setAnalyzed()
 
        // query.schema.toDDL
         val outputs = query.schema.map(s => s.name)
@@ -156,7 +160,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             catalog.asTableCatalog.dropTable(ident)
           }
        // One has to drop Delta CTAS will create delta table
-          ctas.copy(query = analyzedWritePlan)
+          ctas.copy(query = writePlan)
         }else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
           InsertIntoHadoopFsRelationCommand(
