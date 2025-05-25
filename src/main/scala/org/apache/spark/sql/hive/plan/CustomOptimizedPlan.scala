@@ -13,6 +13,7 @@ import org.apache.spark.sql.catalyst.util.{CharVarcharUtils, removeInternalMetad
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Column, Identifier, StagingTableCatalog, Table, TableCatalog, V1Table}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
+import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.command.CreateDataSourceTableAsSelectCommand
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
@@ -93,8 +94,14 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       _, _, _) =>
         println("Inside RTAS")
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
-        val projectPlan = EliminateSubqueryAliases(query)
-        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
+        val qe = spark.sessionState.executePlan(query)
+        val writePlan = qe.commandExecuted
+        try {
+          spark.sessionState.analyzer.executeAndCheck(writePlan, new QueryPlanningTracker())
+        } catch {
+          case e: Exception => print(e.getMessage)
+            throw e
+        }
         val outputs = query.schema.map(s => s.name)
         val providerValue = getActualProvider(catalog,ident,tableSpec)
         /**Delta External we have to see later**/
@@ -104,6 +111,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           }
           println("Inside delta or custom datasource plan block")
           rtas.copy(query = writePlan)
+
         }else if(providerValue.equalsIgnoreCase("custom")){
           properties = getOldTableProps(catalog,ident,tableSpec)
           val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
@@ -131,7 +139,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             SaveMode.Overwrite,
             None,
             None,
-            query.output.map(_.name)
+            outputs
           )
         }
 
@@ -144,7 +152,12 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
        // spark.sessionState.
         val qe = spark.sessionState.executePlan(query)
         val writePlan = qe.commandExecuted
-        spark.sessionState.analyzer.executeAndCheck(writePlan,  new QueryPlanningTracker())
+        try {
+          spark.sessionState.analyzer.executeAndCheck(writePlan, new QueryPlanningTracker())
+        }catch {
+          case e:Exception => print(e.getMessage)
+           throw e
+        }
 
 //        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
 //        val analyzedWritePlan = spark.sessionState.analyzer.execute(writePlan)
