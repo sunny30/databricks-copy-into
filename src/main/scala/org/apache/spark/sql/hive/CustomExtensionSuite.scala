@@ -2,6 +2,7 @@ package org.apache.spark.sql.hive
 
 import io.delta.sql.DeltaSparkSessionExtension
 import io.delta.sql.parser.DeltaSqlParser
+import org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
 import org.apache.spark.sql.SparkSessionExtensions
 import org.apache.spark.sql.catalyst.plans.logical.DescribeRelation
 import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFuncIn, FiboIter, ModelFunc}

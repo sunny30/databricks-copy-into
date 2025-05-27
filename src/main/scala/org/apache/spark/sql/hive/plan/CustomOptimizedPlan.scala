@@ -9,19 +9,24 @@ import org.apache.spark.sql.catalyst.catalog.CatalogUtils
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, LogicalPlan, ReplaceTableAsSelect, SubqueryAlias, TableSpec}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.trees.TreePattern.DYNAMIC_PRUNING_SUBQUERY
 import org.apache.spark.sql.catalyst.util.{CharVarcharUtils, removeInternalMetadata}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Column, Identifier, StagingTableCatalog, Table, TableCatalog, V1Table}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
+import org.apache.spark.sql.errors.QueryCompilationErrors
+import org.apache.spark.sql.execution.CommandExecutionMode
 import org.apache.spark.sql.execution.command.CreateDataSourceTableAsSelectCommand
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.v2.{AtomicReplaceTableAsSelectExec, DataSourceV2Relation, ReplaceTableAsSelectExec}
 import org.apache.spark.sql.execution.datasources.{FileFormat, InsertIntoHadoopFsRelationCommand, LogicalRelation}
+import org.apache.spark.sql.execution.dynamicpruning.CleanupDynamicPruningFilters
 import org.apache.spark.sql.hive.orc.OrcFileFormat
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.internal.StaticSQLConf.WAREHOUSE_PATH
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConversions.mapAsJavaMap
 import scala.collection.JavaConverters.asJavaIterableConverter
@@ -68,7 +73,8 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       }
     }else{
       val properties = CatalogV2Util.convertTableProperties(tableSpec)
-      properties.getOrElse("provider", "hive")
+      val defaultDatasource = conf.defaultDataSourceName
+      properties.getOrElse("provider", defaultDatasource)
     }
   }
 
@@ -91,8 +97,16 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       _, _, _) =>
         println("Inside RTAS")
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
-        val projectPlan = EliminateSubqueryAliases(query)
-        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
+        val qe = spark.sessionState.executePlan(query, CommandExecutionMode.NON_ROOT)
+        val dynamicPartitonPruningExists = qe.optimizedPlan.exists(pl => pl.expressions.exists(e => e.containsAnyPattern(DYNAMIC_PRUNING_SUBQUERY)))
+
+
+      //  spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "false")
+        val writePlan = if (dynamicPartitonPruningExists) {
+          qe.commandExecuted
+        } else {
+          qe.optimizedPlan
+        }
         val outputs = query.schema.map(s => s.name)
         val providerValue = getActualProvider(catalog,ident,tableSpec)
         /**Delta External we have to see later**/
@@ -102,6 +116,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           }
           println("Inside delta or custom datasource plan block")
           rtas.copy(query = writePlan)
+
         }else if(providerValue.equalsIgnoreCase("custom")){
           properties = getOldTableProps(catalog,ident,tableSpec)
           val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
@@ -129,7 +144,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             SaveMode.Overwrite,
             None,
             None,
-            query.output.map(_.name)
+            outputs
           )
         }
 
@@ -138,9 +153,25 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       _, _, _) =>
         println("Inside CTAS")
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
-        val projectPlan = EliminateSubqueryAliases(query)
-        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
+       // val projectPlan = EliminateSubqueryAliases(query)
+       // spark.sessionState.
+        val qe = spark.sessionState.executePlan(query,CommandExecutionMode.NON_ROOT)
+        val dynamicPartitonPruningExists = qe.optimizedPlan.exists(pl => pl.expressions.exists(e=>e.containsAnyPattern(DYNAMIC_PRUNING_SUBQUERY)))
 
+
+
+
+      //  println("Plan is optimized: "+ qe.optimizedPlan.ass)
+        val writePlan = if(dynamicPartitonPruningExists){
+          qe.commandExecuted
+        }else{
+          qe.optimizedPlan
+        }
+
+//        val writePlan = spark.sessionState.optimizer.execute(projectPlan)
+//        val analyzedWritePlan = spark.sessionState.analyzer.execute(writePlan)
+//        spark.sessionState.analyzer.executeAndCheck(analyzedWritePlan, new QueryPlanningTracker())
+//        analyzedWritePlan.setAnalyzed()
 
        // query.schema.toDDL
         val outputs = query.schema.map(s => s.name)
