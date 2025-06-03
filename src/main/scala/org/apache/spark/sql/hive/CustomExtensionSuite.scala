@@ -9,9 +9,9 @@ import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFun
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
-import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, RowLevelFilter}
+import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, RowLevelFilter}
 
-class CustomExtensionSuite extends DeltaSparkSessionExtension{
+class CustomExtensionSuite extends DeltaSparkSessionExtension {
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
 
@@ -28,6 +28,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension{
     extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
 
     extensions.injectOptimizerRule(CustomOptimizedPlan)
+    extensions.injectOptimizerRule(ExternalCatalogWrite)
     extensions.injectPlannerStrategy(_ => CustomStrategy)
     extensions.injectFunction(CustomAdd.fd)
     extensions.injectFunction(Fibo.fd)
