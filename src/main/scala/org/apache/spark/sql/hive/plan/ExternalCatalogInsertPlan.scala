@@ -21,6 +21,7 @@ case class ExternalCatalogInsertPlan(in: InsertIntoDataSourceCommand)
 
     try {
 
+      println("running Spark Custom External catalog insert plan")
       in.run(sparkSession)
     } catch {
       case e: Exception => throw e
