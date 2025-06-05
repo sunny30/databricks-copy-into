@@ -93,58 +93,60 @@ object App {
 //    spark.sql("create table cat.db6.ctas as select * from cat.db6.t")
 //    spark.sql("create table cat.db6.pt using parquet as select * from cat.db6.t")
 
-   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "true")
-   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
-   // spark.sql.exchange.reuse
-    spark.conf.set("spark.sql.exchange.reuse", "false")
-    spark.sql("create database cat.db7")
-    spark.sql("create table cat.db7.t1(id int, name string, city string) using csv partitioned by(city)")
-    spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
-    spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-    spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-    val df = spark.sql("select  distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
-    df.explain(true)
-//    println("-----Plan serialize------")
-//    df.show()
-    df.write.saveAsTable("cat.db7.t4")
-    spark.sql("create table cat.db7.t3 as select distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+//   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "true")
+//   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
+//   // spark.sql.exchange.reuse
+//    spark.conf.set("spark.sql.exchange.reuse", "false")
+//    spark.sql("create database cat.db7")
+//    spark.sql("create table cat.db7.t1(id int, name string, city string) using csv partitioned by(city)")
+//    spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
+//    spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+//    spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+//    val df = spark.sql("select  distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+//    df.explain(true)
+////    println("-----Plan serialize------")
+////    df.show()
+//    df.write.saveAsTable("cat.db7.t4")
+//    spark.sql("create table cat.db7.t3 as select distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+////
+////
+////    /** distinct operation* */
+//    spark.sql("create database cat.dml")
+//    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
+//    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
+//    val df9 = spark.sql("select distinct id, new_val from cat.dml.t2")
+//    spark.sql("create table cat.dml.td as select distinct id, new_val from cat.dml.t2")
+//    //df9.show()
+//    df9.write.format("delta").saveAsTable("cat.dml.t3")
+////
+////
+//    val df6 = spark.sql("SELECT DISTINCT c.tenant, c.personid FROM (SELECT tenant, personid FROM values (1, 1), (2, 2), (0, 1) as tab(tenant, personid)) c, (SELECT personid FROM values (1) as tab(personid)) b WHERE b.personid = c.personid group by c.tenant, c.personid")
+//    //val logical = df.queryExecution.optimizedPlan
+//    //print(s"###plan is ${logical.isInstanceOf[Aggregate]}")
+//    val tableName = "cat.dml.test_table_distinct1"
+//    df6.write.format("delta").mode("append").saveAsTable(tableName)
 //
-//
-//    /** distinct operation* */
-    spark.sql("create database cat.dml")
-    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
-    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
-    val df9 = spark.sql("select distinct id, new_val from cat.dml.t2")
-    spark.sql("create table cat.dml.td as select distinct id, new_val from cat.dml.t2")
-    //df9.show()
-    df9.write.format("delta").saveAsTable("cat.dml.t3")
-//
-//
-    val df6 = spark.sql("SELECT DISTINCT c.tenant, c.personid FROM (SELECT tenant, personid FROM values (1, 1), (2, 2), (0, 1) as tab(tenant, personid)) c, (SELECT personid FROM values (1) as tab(personid)) b WHERE b.personid = c.personid group by c.tenant, c.personid")
-    //val logical = df.queryExecution.optimizedPlan
-    //print(s"###plan is ${logical.isInstanceOf[Aggregate]}")
-    val tableName = "cat.dml.test_table_distinct1"
-    df6.write.format("delta").mode("append").saveAsTable(tableName)
-
-    val df10 = spark.sql("SELECT DISTINCT col1 FROM values (1), (2), (1) as tab(col1)")
-   // val logical = df.queryExecution.optimizedPlan
-   // assert(logical.isInstanceOf[Aggregate])
-    val tableName1 = "cat.dml.test_table_distinct2"
-    df10.write.format("parquet").mode("overwrite").saveAsTable(tableName1)
+//    val df10 = spark.sql("SELECT DISTINCT col1 FROM values (1), (2), (1) as tab(col1)")
+//   // val logical = df.queryExecution.optimizedPlan
+//   // assert(logical.isInstanceOf[Aggregate])
+//    val tableName1 = "cat.dml.test_table_distinct2"
+//    df10.write.format("parquet").mode("overwrite").saveAsTable(tableName1)
 
     /** disctinct operation ends* */
+    spark.sql("create database cat.db9")
 
-    df3.write.format("delta").saveAsTable("cat.dml.tbl")
-//    val df = spark.read.table("cat.db5.tbl")
-//    df.show()
-//    df.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl1")
-//    df.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl1")
-//    val df6 = spark.read.table("cat.db5.tbl1")
-//    df6.show()
-//    spark.sql("create table cat.db5.tbl(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
-//    df3.write.insertInto("cat.db5.tbl")
-//    val df = spark.read.table("cat.db5.tbl")
-//    df.show()
+    df3.write.mode("overwrite").saveAsTable("cat.db9.tbl")
+    val df_1 = spark.read.table("cat.db9.tbl")
+    df_1.show()
+    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
+    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
+    df_1.write.insertInto("cat.db9.tbl1")
+    val df_6 = spark.read.table("cat.db9.tbl1")
+    df_6.show()
+    spark.sql("create table cat.db9.tble(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
+    df3.write.insertInto("cat.db9.tble")
+    val df_7 = spark.read.table("cat.db9.tble")
+    df_7.show()
 //    df3.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl")
 //    val df6 = spark.read.table("cat.db5.tbl")
 //    df6.show()
@@ -154,10 +156,14 @@ object App {
 //
 //  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
 //  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-//    spark.sql("create database ecat.customdb")
-//  df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
-//  spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
-//    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
+    spark.sql("create database ecat.customdb")
+    spark.sql("create table ecat.customdb.nt(col1 int, col2 string, col3 double) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
+//    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
+//    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
+//    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
+    df3.write.mode("overwrite").insertInto("ecat.customdb.nt")
+
 //    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
 //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl1").show()
 //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl2")

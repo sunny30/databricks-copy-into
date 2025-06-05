@@ -909,7 +909,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   def getOldTableProps(catalog: CatalogPlugin, identifier: Identifier, tableSpec: TableSpecBase): Map[String, String] = {
     if (catalog.asTableCatalog.tableExists(identifier)) {
       // catalog.name()
-      catalog.asTableCatalog.loadTable(identifier).asInstanceOf[V2Table].v1Table.properties
+      catalog.asTableCatalog.loadTable(identifier) match {
+        case v2: V2Table => v2.v1Table.properties
+        case dt: DeltaTableV2 => dt.v1Table.properties
+      }
     } else {
       val properties = convertTableProperties(tableSpec)
       properties
