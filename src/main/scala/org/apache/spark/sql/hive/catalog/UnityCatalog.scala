@@ -53,7 +53,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     // TODO
     log.info("Inside Catalog Plugin Initialize")
     // Initialize the catalog with the corresponding name
-    this.catalogName = name
+    if(name.equalsIgnoreCase("hive")){
+      this.catalogName = "cat"
+    }else {
+      this.catalogName = name
+    }
+
     proxyCatalog = new ProxyCatalog(catalogName = catalogName, proxyDBName = None)
     // Initialize the catalog in any other provider that we can integrate with
   }

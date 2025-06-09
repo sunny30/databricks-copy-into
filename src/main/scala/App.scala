@@ -132,21 +132,29 @@ object App {
 //    val tableName1 = "cat.dml.test_table_distinct2"
 //    df10.write.format("parquet").mode("overwrite").saveAsTable(tableName1)
 
-    /** disctinct operation ends* */
-    spark.sql("create database cat.db9")
-
-    df3.write.mode("overwrite").saveAsTable("cat.db9.tbl")
-    val df_1 = spark.read.table("cat.db9.tbl")
+    /* catalog rename*/
+    spark.sql("create database hive.db19")
+    df3.write.mode("overwrite").saveAsTable("hive.db19.tbl")
+    val df_1 = spark.read.table("hive.db19.tbl")
     df_1.show()
-    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
-    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
-    df_1.write.insertInto("cat.db9.tbl1")
-    val df_6 = spark.read.table("cat.db9.tbl1")
-    df_6.show()
-    spark.sql("create table cat.db9.tble(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
-    df3.write.insertInto("cat.db9.tble")
-    val df_7 = spark.read.table("cat.db9.tble")
-    df_7.show()
+    spark.sql("describe formatted cat.db19.tbl").show()
+    spark.sql("describe formatted hive.db19.tbl").show()
+    /*catalog rename ends*/
+    /** disctinct operation ends* */
+//    spark.sql("create database cat.db9")
+//
+//    df3.write.mode("overwrite").saveAsTable("cat.db9.tbl")
+//    val df_1 = spark.read.table("cat.db9.tbl")
+//    df_1.show()
+//    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
+//    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
+//    df_1.write.insertInto("cat.db9.tbl1")
+//    val df_6 = spark.read.table("cat.db9.tbl1")
+//    df_6.show()
+//    spark.sql("create table cat.db9.tble(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
+//    df3.write.insertInto("cat.db9.tble")
+//    val df_7 = spark.read.table("cat.db9.tble")
+//    df_7.show()
 //    df3.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl")
 //    val df6 = spark.read.table("cat.db5.tbl")
 //    df6.show()

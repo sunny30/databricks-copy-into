@@ -45,6 +45,7 @@ object CustomSparkSQLParser extends SparkSqlParser{
 
     SparkSession.active.conf.set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     SparkSession.active.conf.set("spark.sql.catalog.ecat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
+    SparkSession.active.conf.set("spark.sql.catalog.hive", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     val delegate = new CustomSparkSQLParser()
     new CustomSqlParser(delegate).parse(sqlText) match {
       case plan: LogicalPlan => plan
@@ -55,6 +56,8 @@ object CustomSparkSQLParser extends SparkSqlParser{
   override def parseMultipartIdentifier(sqlText: String): Seq[String] = {
     SparkSession.active.conf.set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     SparkSession.active.conf.set("spark.sql.catalog.ecat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
+
+    SparkSession.active.conf.set("spark.sql.catalog.hive", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     super.parseMultipartIdentifier(sqlText)
   }
 
