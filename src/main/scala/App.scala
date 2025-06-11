@@ -44,9 +44,11 @@ object App {
       .set("spark.sql.extensions", "org.apache.spark.sql.hive.CustomExtensionSuite")
       .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       .set("hive.exec.dynamic.partition.mode", "nonstrict")
-      .set("parquet.compression", "SNAPPY").set("spark.sql.sources.default", "delta")
-   //   .set("spark.sql.parquet.enableVectorizedReader","false")
-   //   .set("parquet.strict.typing","false")
+      .set("parquet.compression", "SNAPPY")
+      .set("spark.sql.sources.default", "delta").set("spark.sql.catalog.cat.type", "hadoop")
+      .set("spark.sql.catalog.cat.warehouse", "/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat")
+    //   .set("spark.sql.parquet.enableVectorizedReader","false")
+    //   .set("parquet.strict.typing","false")
   }
 
   def main(args: Array[String]): Unit = {
@@ -56,24 +58,24 @@ object App {
       getOrCreate()
 
 
-    /**Custom data format  write options**/
+    /** Custom data format  write options* */
 
     import spark.implicits._
     //spark.sql("create database cat.hivedb")
- //   spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
-  //  spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
-   // spark.sql("select * from cat.customdb.tbl").show()
-   // spark.sql("select greet from cat.customdb.tbl").show()
-  //  spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
+    //   spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
+    //  spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
+    // spark.sql("select * from cat.customdb.tbl").show()
+    // spark.sql("select greet from cat.customdb.tbl").show()
+    //  spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
 
     val df3 = Seq(
-      (7,"John",2.0),
-      (8,"Sunny",3.0),
-      (9,"Xiaoyu",4.0),
-      (10,"Shashi",5.0),
-      (11,"Bharath",6.0),
-      (12,"Vivek",7.0)
-    ).toDF("col1","col2", "col3")
+      (7, "John", 2.0),
+      (8, "Sunny", 3.0),
+      (9, "Xiaoyu", 4.0),
+      (10, "Shashi", 5.0),
+      (11, "Bharath", 6.0),
+      (12, "Vivek", 7.0)
+    ).toDF("col1", "col2", "col3")
 
 
     val df4 = Seq(
@@ -85,486 +87,484 @@ object App {
       (12, "papa", 7.0)
     ).toDF("col1", "col2", "col3")
 
+    /*create iceberg table*/
+    spark.sql("create database cat.dbice")
+    spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
+    /*create iceberg table ends*/
 
     /*Delta overwrite table*/
-//    spark.sql("create database cat.db6")
-//    spark.sql("create table cat.db6.t(id int, name string)")
-//    spark.sql("insert into cat.db6.t values (1, 'ss'), (2, 'xy')")
-//    spark.sql("create table cat.db6.ctas as select * from cat.db6.t")
-//    spark.sql("create table cat.db6.pt using parquet as select * from cat.db6.t")
+    //    spark.sql("create database cat.db6")
+    //    spark.sql("create table cat.db6.t(id int, name string)")
+    //    spark.sql("insert into cat.db6.t values (1, 'ss'), (2, 'xy')")
+    //    spark.sql("create table cat.db6.ctas as select * from cat.db6.t")
+    //    spark.sql("create table cat.db6.pt using parquet as select * from cat.db6.t")
 
-//   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "true")
-//   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
-//   // spark.sql.exchange.reuse
-//    spark.conf.set("spark.sql.exchange.reuse", "false")
-//    spark.sql("create database cat.db7")
-//    spark.sql("create table cat.db7.t1(id int, name string, city string) using csv partitioned by(city)")
-//    spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
-//    spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-//    spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-//    val df = spark.sql("select  distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
-//    df.explain(true)
-////    println("-----Plan serialize------")
-////    df.show()
-//    df.write.saveAsTable("cat.db7.t4")
-//    spark.sql("create table cat.db7.t3 as select distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
-////
-////
-////    /** distinct operation* */
-//    spark.sql("create database cat.dml")
-//    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
-//    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
-//    val df9 = spark.sql("select distinct id, new_val from cat.dml.t2")
-//    spark.sql("create table cat.dml.td as select distinct id, new_val from cat.dml.t2")
-//    //df9.show()
-//    df9.write.format("delta").saveAsTable("cat.dml.t3")
-////
-////
-//    val df6 = spark.sql("SELECT DISTINCT c.tenant, c.personid FROM (SELECT tenant, personid FROM values (1, 1), (2, 2), (0, 1) as tab(tenant, personid)) c, (SELECT personid FROM values (1) as tab(personid)) b WHERE b.personid = c.personid group by c.tenant, c.personid")
-//    //val logical = df.queryExecution.optimizedPlan
-//    //print(s"###plan is ${logical.isInstanceOf[Aggregate]}")
-//    val tableName = "cat.dml.test_table_distinct1"
-//    df6.write.format("delta").mode("append").saveAsTable(tableName)
-//
-//    val df10 = spark.sql("SELECT DISTINCT col1 FROM values (1), (2), (1) as tab(col1)")
-//   // val logical = df.queryExecution.optimizedPlan
-//   // assert(logical.isInstanceOf[Aggregate])
-//    val tableName1 = "cat.dml.test_table_distinct2"
-//    df10.write.format("parquet").mode("overwrite").saveAsTable(tableName1)
+    //   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "true")
+    //   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
+    //   // spark.sql.exchange.reuse
+    //    spark.conf.set("spark.sql.exchange.reuse", "false")
+    //    spark.sql("create database cat.db7")
+    //    spark.sql("create table cat.db7.t1(id int, name string, city string) using csv partitioned by(city)")
+    //    spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
+    //    spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+    //    spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+    //    val df = spark.sql("select  distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+    //    df.explain(true)
+    ////    println("-----Plan serialize------")
+    ////    df.show()
+    //    df.write.saveAsTable("cat.db7.t4")
+    //    spark.sql("create table cat.db7.t3 as select distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+    ////
+    ////
+    ////    /** distinct operation* */
+    //    spark.sql("create database cat.dml")
+    //    spark.sql("create table cat.dml.t2(id string, new_val int) using parquet")
+    //    spark.sql("insert into cat.dml.t2 values('hello', 1), ('hi', 2)")
+    //    val df9 = spark.sql("select distinct id, new_val from cat.dml.t2")
+    //    spark.sql("create table cat.dml.td as select distinct id, new_val from cat.dml.t2")
+    //    //df9.show()
+    //    df9.write.format("delta").saveAsTable("cat.dml.t3")
+    ////
+    ////
+    //    val df6 = spark.sql("SELECT DISTINCT c.tenant, c.personid FROM (SELECT tenant, personid FROM values (1, 1), (2, 2), (0, 1) as tab(tenant, personid)) c, (SELECT personid FROM values (1) as tab(personid)) b WHERE b.personid = c.personid group by c.tenant, c.personid")
+    //    //val logical = df.queryExecution.optimizedPlan
+    //    //print(s"###plan is ${logical.isInstanceOf[Aggregate]}")
+    //    val tableName = "cat.dml.test_table_distinct1"
+    //    df6.write.format("delta").mode("append").saveAsTable(tableName)
+    //
+    //    val df10 = spark.sql("SELECT DISTINCT col1 FROM values (1), (2), (1) as tab(col1)")
+    //   // val logical = df.queryExecution.optimizedPlan
+    //   // assert(logical.isInstanceOf[Aggregate])
+    //    val tableName1 = "cat.dml.test_table_distinct2"
+    //    df10.write.format("parquet").mode("overwrite").saveAsTable(tableName1)
 
     /* catalog rename*/
-    spark.sql("create database hive.db19")
-    df3.write.mode("overwrite").saveAsTable("hive.db19.tbl")
-    val df_1 = spark.read.table("hive.db19.tbl")
-    df_1.show()
-    spark.sql("describe formatted cat.db19.tbl").show()
-    spark.sql("describe formatted hive.db19.tbl").show()
+//    spark.sql("create database hive.db19")
+//    df3.write.mode("overwrite").saveAsTable("hive.db19.tbl")
+//    val df_1 = spark.read.table("hive.db19.tbl")
+//    df_1.show()
+//    spark.sql("describe formatted cat.db19.tbl").show()
+//    spark.sql("describe formatted hive.db19.tbl").show()
     /*catalog rename ends*/
     /** disctinct operation ends* */
-//    spark.sql("create database cat.db9")
-//
-//    df3.write.mode("overwrite").saveAsTable("cat.db9.tbl")
-//    val df_1 = spark.read.table("cat.db9.tbl")
-//    df_1.show()
-//    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
-//    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
-//    df_1.write.insertInto("cat.db9.tbl1")
-//    val df_6 = spark.read.table("cat.db9.tbl1")
-//    df_6.show()
-//    spark.sql("create table cat.db9.tble(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
-//    df3.write.insertInto("cat.db9.tble")
-//    val df_7 = spark.read.table("cat.db9.tble")
-//    df_7.show()
-//    df3.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl")
-//    val df6 = spark.read.table("cat.db5.tbl")
-//    df6.show()
+    //    spark.sql("create database cat.db9")
+    //
+    //    df3.write.mode("overwrite").saveAsTable("cat.db9.tbl")
+    //    val df_1 = spark.read.table("cat.db9.tbl")
+    //    df_1.show()
+    //    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
+    //    df_1.write.mode("overwrite").format("delta").saveAsTable("cat.db9.tbl1")
+    //    df_1.write.insertInto("cat.db9.tbl1")
+    //    val df_6 = spark.read.table("cat.db9.tbl1")
+    //    df_6.show()
+    //    spark.sql("create table cat.db9.tble(col1 int, col2 string, col3 double) using delta location '/tmp/dx'")
+    //    df3.write.insertInto("cat.db9.tble")
+    //    val df_7 = spark.read.table("cat.db9.tble")
+    //    df_7.show()
+    //    df3.write.mode("overwrite").format("delta").saveAsTable("cat.db5.tbl")
+    //    val df6 = spark.read.table("cat.db5.tbl")
+    //    df6.show()
 
     //spark.sql
     /*Delta overwrite table*/
-//
-//  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
-//  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-    spark.sql("create database ecat.customdb")
-    spark.sql("create table ecat.customdb.nt(col1 int, col2 string, col3 double) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-//    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
-//    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
-//    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
-//    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
-    df3.write.mode("overwrite").insertInto("ecat.customdb.nt")
+    //
+    //  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
+    //  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
+   // spark.sql("create database ecat.customdb")
+   // spark.sql("create table ecat.customdb.nt(col1 int, col2 string, col3 double) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+    //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
+    //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
+    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
+    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
+  //  df3.write.mode("overwrite").insertInto("ecat.customdb.nt")
 
-//    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
-//    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl1").show()
-//    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl2")
-//    df3.write.saveAsTable("ecat.customdb.tbl2")
-//    spark.sql("describe formatted ecat.customdb.tbl2").show()
-
-
-    /**Custom data format  write options ends**/
+    //    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
+    //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl1").show()
+    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl2")
+    //    df3.write.saveAsTable("ecat.customdb.tbl2")
+    //    spark.sql("describe formatted ecat.customdb.tbl2").show()
 
 
-    /**View DDL Compiler starts**/
-//    spark.sql("create database cat.viewdb1")
-//    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
-//    spark.sql("create table cat.viewdb1.t3(id int, name string) using delta")
-//    spark.sql("insert into cat.viewdb1.t2 values('hello')")
-//    spark.sql("insert into cat.viewdb1.t3 values(1,'hello')")
-//    spark.sql("create view cat.viewdb1.v1(cl1) as select attributes from cat.viewdb1.t2")
-//    spark.sql("show views in cat.viewdb1").show()
-//   // spark.sql("drop view cat.viewdb1.v1")
-//    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
-//    spark.sql("alter view cat.viewdb1.v1 as select * from cat.viewdb1.t3")
-   // spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
-  //  spark.sql("select * from cat.viewdb1.v1").show()
-//    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
-//    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
-//    spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
-//    spark.sql("select * from cat.viewdb1.v2")
+    /** Custom data format  write options ends* */
 
 
-    /**View DDL Compile ends r**/
+    /** View DDL Compiler starts* */
+    //    spark.sql("create database cat.viewdb1")
+    //    spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
+    //    spark.sql("create table cat.viewdb1.t3(id int, name string) using delta")
+    //    spark.sql("insert into cat.viewdb1.t2 values('hello')")
+    //    spark.sql("insert into cat.viewdb1.t3 values(1,'hello')")
+    //    spark.sql("create view cat.viewdb1.v1(cl1) as select attributes from cat.viewdb1.t2")
+    //    spark.sql("show views in cat.viewdb1").show()
+    //   // spark.sql("drop view cat.viewdb1.v1")
+    //    spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
+    //    spark.sql("alter view cat.viewdb1.v1 as select * from cat.viewdb1.t3")
+    // spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
+    //  spark.sql("select * from cat.viewdb1.v1").show()
+    //    spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
+    //    spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
+    //    spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
+    //    spark.sql("select * from cat.viewdb1.v2")
 
 
-    /**View fix start**/
-//    spark.sql("create database cat.viewdb")
-//    spark.sql("create table cat.viewdb.t2(attributes string) using avro")
-//    spark.sql("insert into cat.viewdb.t2 values('hello')")
-//    spark.sql("create view cat.viewdb.v1(cl1) as select * from cat.viewdb.t2")
-//    spark.sql("select  concat(cl1, ' hi') as c6, cl1, 1 as cl1 from cat.viewdb.v1").show()
-//    spark.sql("describe formatted cat.viewdb.v1").show()
-//    spark.sql("describe formatted cat.viewdb.t2").show()
-//    spark.sql("describe table cat.viewdb.v1").show()
-//    spark.sql("ALTER TABLE  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
-  //  spark.sql("ALTER VIEW  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
-//    spark.sql("CREATE TABLE cat.viewdb.dealer (id INT, city STRING, car_model STRING, quantity INT)")
-//    spark.sql("""INSERT INTO cat.viewdb.dealer VALUES
-//                |    (100, 'Fremont', 'Honda Civic', 10),
-//                |    (100, 'Fremont', 'Honda Accord', 15),
-//                |    (100, 'Fremont', 'Honda CRV', 7),
-//                |    (200, 'Dublin', 'Honda Civic', 20),
-//                |    (200, 'Dublin', 'Honda Accord', 10),
-//                |    (200, 'Dublin', 'Honda CRV', 3),
-//                |    (300, 'San Jose', 'Honda Civic', 5),
-//                |    (300, 'San Jose', 'Honda Accord', 8)""".stripMargin)
-//    spark.sql("SELECT city, sum(quantity) AS sum FROM cat.viewdb.dealer GROUP BY city HAVING city = 'Fremont'").show()
-//    spark.sql("SELECT case when  sum(quantity)>10 then 'bigger' else 'small' end as status, city, sum(quantity) AS sum FROM cat.viewdb.dealer GROUP BY city HAVING sum(quantity)>5").show()
-//    spark.sql("drop table cat.viewdb.v1").show()
-
-    /**View fix end**/
-
-    /***query model with structs starts**/
-
-   // spark.sql("create database cat.ai")
-  //  spark.sql("create table cat.ai.t2(attributes string)")
-  //  spark.sql("insert into cat.ai.t2 values('hello')")
- //   spark.sql("create table cat.ai.t1(attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>)")
-  //  spark.sql("insert into cat.ai.t1 values(named_struct('height',5.9, 'weight', 180.5, 'eye_color', 'brown'))")
-   // spark.sql("select * from cat.ai.t1").show()
-  //  spark.sql("select query_model('meta', attributes) from cat.ai.t2").show()
- //   spark.sql("select query_model('meta', attributes) from cat.ai.t1").show
-
-    /***query model with structs ends **/
-
-    /**spark csv table properties starts**/
-//    spark.sql("create database if not exists cat.csvdb")
-//    spark.sql("create table cat.csvdb.csvtbl(id int, name string)  using csv  location '/tmp/csv/' TBLPROPERTIES('hasheaders' = 'true')")
-//   // spark.read.table("cat.csvdb.csvtbl").show
-//
-//    spark.sql("insert into cat.csvdb.csvtbl values(9,'str'), (10, 'st2')")
-//    spark.sql("select * from cat.csvdb.csvtbl").show()
-//
-//    spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
-//    spark.sql("insert into cat.csvdb.csvtbl1 values(9,'str'), (10, 'st2')")
-//    spark.sql("select * from cat.csvdb.csvtbl1").show()
+    /** View DDL Compile ends r* */
 
 
-    /**spark csv table properties ends **/
+    /** View fix start* */
+    //    spark.sql("create database cat.viewdb")
+    //    spark.sql("create table cat.viewdb.t2(attributes string) using avro")
+    //    spark.sql("insert into cat.viewdb.t2 values('hello')")
+    //    spark.sql("create view cat.viewdb.v1(cl1) as select * from cat.viewdb.t2")
+    //    spark.sql("select  concat(cl1, ' hi') as c6, cl1, 1 as cl1 from cat.viewdb.v1").show()
+    //    spark.sql("describe formatted cat.viewdb.v1").show()
+    //    spark.sql("describe formatted cat.viewdb.t2").show()
+    //    spark.sql("describe table cat.viewdb.v1").show()
+    //    spark.sql("ALTER TABLE  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
+    //  spark.sql("ALTER VIEW  cat.viewdb.v1 SET TBLPROPERTIES('k' = 'v')")
+    //    spark.sql("CREATE TABLE cat.viewdb.dealer (id INT, city STRING, car_model STRING, quantity INT)")
+    //    spark.sql("""INSERT INTO cat.viewdb.dealer VALUES
+    //                |    (100, 'Fremont', 'Honda Civic', 10),
+    //                |    (100, 'Fremont', 'Honda Accord', 15),
+    //                |    (100, 'Fremont', 'Honda CRV', 7),
+    //                |    (200, 'Dublin', 'Honda Civic', 20),
+    //                |    (200, 'Dublin', 'Honda Accord', 10),
+    //                |    (200, 'Dublin', 'Honda CRV', 3),
+    //                |    (300, 'San Jose', 'Honda Civic', 5),
+    //                |    (300, 'San Jose', 'Honda Accord', 8)""".stripMargin)
+    //    spark.sql("SELECT city, sum(quantity) AS sum FROM cat.viewdb.dealer GROUP BY city HAVING city = 'Fremont'").show()
+    //    spark.sql("SELECT case when  sum(quantity)>10 then 'bigger' else 'small' end as status, city, sum(quantity) AS sum FROM cat.viewdb.dealer GROUP BY city HAVING sum(quantity)>5").show()
+    //    spark.sql("drop table cat.viewdb.v1").show()
+
+    /** View fix end* */
+
+    /** *query model with structs starts* */
+
+    // spark.sql("create database cat.ai")
+    //  spark.sql("create table cat.ai.t2(attributes string)")
+    //  spark.sql("insert into cat.ai.t2 values('hello')")
+    //   spark.sql("create table cat.ai.t1(attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>)")
+    //  spark.sql("insert into cat.ai.t1 values(named_struct('height',5.9, 'weight', 180.5, 'eye_color', 'brown'))")
+    // spark.sql("select * from cat.ai.t1").show()
+    //  spark.sql("select query_model('meta', attributes) from cat.ai.t2").show()
+    //   spark.sql("select query_model('meta', attributes) from cat.ai.t1").show
+
+    /** *query model with structs ends * */
+
+    /** spark csv table properties starts* */
+    //    spark.sql("create database if not exists cat.csvdb")
+    //    spark.sql("create table cat.csvdb.csvtbl(id int, name string)  using csv  location '/tmp/csv/' TBLPROPERTIES('hasheaders' = 'true')")
+    //   // spark.read.table("cat.csvdb.csvtbl").show
+    //
+    //    spark.sql("insert into cat.csvdb.csvtbl values(9,'str'), (10, 'st2')")
+    //    spark.sql("select * from cat.csvdb.csvtbl").show()
+    //
+    //    spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
+    //    spark.sql("insert into cat.csvdb.csvtbl1 values(9,'str'), (10, 'st2')")
+    //    spark.sql("select * from cat.csvdb.csvtbl1").show()
 
 
-   // import spark.sqlContext.implicits._
+    /** spark csv table properties ends * */
 
 
-   // val hpl = CustomSparkSQLParser.parsePlan("describe history cat.db.tb")
+    // import spark.sqlContext.implicits._
 
 
-  //  val cbpl = CustomSparkSQLParser.parsePlan("create table cat.db.tb(id int, name string) using delta cluster by(id)")
+    // val hpl = CustomSparkSQLParser.parsePlan("describe history cat.db.tb")
 
-  //  cbpl
+
+    //  val cbpl = CustomSparkSQLParser.parsePlan("create table cat.db.tb(id int, name string) using delta cluster by(id)")
+
+    //  cbpl
 
 
     // spark.sql("create database lsdb2")
     //spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
-        val df2 = Seq(
-          "John",
-          "Sunny",
-          "Xiaoyu",
-          "Shashi",
-          "Bharath",
-          "Vivek"
-        ).toDF("col1")
+    val df2 = Seq(
+      "John",
+      "Sunny",
+      "Xiaoyu",
+      "Shashi",
+      "Bharath",
+      "Vivek"
+    ).toDF("col1")
 
 
     val df1 = Seq(
-      (1,2),
-      (2,3),
-      (3,4)
+      (1, 2),
+      (2, 3),
+      (3, 4)
     ).toDF("id", "id1")
 
-//    spark.sql("create database cat.tdb3")
-//    df1.write.saveAsTable("cat.tdb3.tbl")
-//    df1.write.saveAsTable("cat.tdb3.tbl1")
-//    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
+    //    spark.sql("create database cat.tdb3")
+    //    df1.write.saveAsTable("cat.tdb3.tbl")
+    //    df1.write.saveAsTable("cat.tdb3.tbl1")
+    //    df1.write.format("delta").saveAsTable("cat.tdb3.tbl2")
 
 
-//    spark.sql("refresh schema in external catalog cat.ab").show()
-//    spark.sql("refresh table in external catalog cat.ab.cd").show()
+    //    spark.sql("refresh schema in external catalog cat.ab").show()
+    //    spark.sql("refresh table in external catalog cat.ab.cd").show()
 
-//    spark.sql("create database cat.tdp4")
-//    spark.sql("create table cat.tdp4.t1(id int, country string, city string) location '/tmp/tp'")
-//    spark.sql("insert into cat.tdp4.t1 values (1, 'India','Pune'), (2, 'India','Bangalore'), (3, 'India','Mumbai'), (4, 'India','Delhi')")
-//    spark.sql("select * from cat.tdp4.t1").show()
-   // spark.sql("select * from cat.tdb3.tbl").show()
- //   spark.read.table("cat.tdb3.tbl").show()
+    //    spark.sql("create database cat.tdp4")
+    //    spark.sql("create table cat.tdp4.t1(id int, country string, city string) location '/tmp/tp'")
+    //    spark.sql("insert into cat.tdp4.t1 values (1, 'India','Pune'), (2, 'India','Bangalore'), (3, 'India','Mumbai'), (4, 'India','Delhi')")
+    //    spark.sql("select * from cat.tdp4.t1").show()
+    // spark.sql("select * from cat.tdb3.tbl").show()
+    //   spark.read.table("cat.tdb3.tbl").show()
 
-//    spark.read.table("cat.tdb3.tbl2").show()
-//
-//    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
-//    spark.sql("select * from cat.tdb3.v1").show()
-//
-//   spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
-//   spark.sql("grant row_level row_func for user userX")
-//
-//    println("tbl Output after sec")
-//   spark.sql("select * from cat.tdb3.tbl").show()
-//
-//   spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl1")
-//
-//    spark.sql("""create function row_func1 for table cat.tdb3.v1 where 'id>2' """)
-//    spark.sql("grant row_level row_func1 for user userX")
-//
-//    spark.sql("""create function row_func2 for table cat.tdb3.tbl2 where 'id>2' """)
-//    spark.sql("grant row_level row_func2 for user userX")
-//
-//    println("delta table output after sec")
-//    spark.read.table("cat.tdb3.tbl2").show()
-//    spark.sql("select * from cat.tdb3.tbl2").show()
-//
-//
-//    println("View Output after sec")
-//    spark.sql("select * from cat.tdb3.v1").show()
+    //    spark.read.table("cat.tdb3.tbl2").show()
+    //
+    //    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
+    //    spark.sql("select * from cat.tdb3.v1").show()
+    //
+    //   spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
+    //   spark.sql("grant row_level row_func for user userX")
+    //
+    //    println("tbl Output after sec")
+    //   spark.sql("select * from cat.tdb3.tbl").show()
+    //
+    //   spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl1")
+    //
+    //    spark.sql("""create function row_func1 for table cat.tdb3.v1 where 'id>2' """)
+    //    spark.sql("grant row_level row_func1 for user userX")
+    //
+    //    spark.sql("""create function row_func2 for table cat.tdb3.tbl2 where 'id>2' """)
+    //    spark.sql("grant row_level row_func2 for user userX")
+    //
+    //    println("delta table output after sec")
+    //    spark.read.table("cat.tdb3.tbl2").show()
+    //    spark.sql("select * from cat.tdb3.tbl2").show()
+    //
+    //
+    //    println("View Output after sec")
+    //    spark.sql("select * from cat.tdb3.v1").show()
 
-   // spark.sql("select * from cat.tdb3.tbl1").show()
-//
-//    spark.sql("create materialized view cat.tdb3.mv tblproperties('schedular' = '1 day') as select * from cat.tdb3.tbl1")
-//    spark.sql("select * from cat.tdb3.mv").show()
-//    spark.sql("describe formatted cat.tdb3.mv").show(40, false)
-//    spark.sql("insert into cat.tdb3.tbl1 values (9,6)")
-//    spark.sql("refresh materialized view cat.tdb3.mv")
-//    spark.sql("select * from cat.tdb3.mv").show()
+    // spark.sql("select * from cat.tdb3.tbl1").show()
+    //
+    //    spark.sql("create materialized view cat.tdb3.mv tblproperties('schedular' = '1 day') as select * from cat.tdb3.tbl1")
+    //    spark.sql("select * from cat.tdb3.mv").show()
+    //    spark.sql("describe formatted cat.tdb3.mv").show(40, false)
+    //    spark.sql("insert into cat.tdb3.tbl1 values (9,6)")
+    //    spark.sql("refresh materialized view cat.tdb3.mv")
+    //    spark.sql("select * from cat.tdb3.mv").show()
 
-//    spark.sql("create database cat.arrowdb")
-//    spark.sql("create table cat.arrowdb.tp(id int, name string) using parquet location '/tmp/parquet'")
-//  //  spark.sql("insert into cat.arrowdb.tp values(1,'sharad'), (2,'xiaoyu'), (3, 'bharat'), (4, 'shashi'), (5, 'vivek')")
-//    spark.sql("create table cat.arrowdb.ta(id int, name string) using arrow location '/tmp/parquet'")
-//    spark.sql("select * from cat.arrowdb.ta").show()
-
-
+    //    spark.sql("create database cat.arrowdb")
+    //    spark.sql("create table cat.arrowdb.tp(id int, name string) using parquet location '/tmp/parquet'")
+    //  //  spark.sql("insert into cat.arrowdb.tp values(1,'sharad'), (2,'xiaoyu'), (3, 'bharat'), (4, 'shashi'), (5, 'vivek')")
+    //    spark.sql("create table cat.arrowdb.ta(id int, name string) using arrow location '/tmp/parquet'")
+    //    spark.sql("select * from cat.arrowdb.ta").show()
 
 
-//    spark.sql("create database cat.tdb2")
-//    spark.sql("create table cat.tdb2.etbl(id int, l2 string, l3 string)  using delta location '/tmp/tbl'")
-//    spark.read.table("cat.tdb2.etbl").show()
-//    spark.sql("select * from cat.tdb2.etbl").show()
+    //    spark.sql("create database cat.tdb2")
+    //    spark.sql("create table cat.tdb2.etbl(id int, l2 string, l3 string)  using delta location '/tmp/tbl'")
+    //    spark.read.table("cat.tdb2.etbl").show()
+    //    spark.sql("select * from cat.tdb2.etbl").show()
 
-//    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
-//    spark.read.table("cat.tdb1.tbl").show()
-//    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
-//    spark.read.table("cat.tdb1.tbl").show()
-//    spark.sql("select * from cat.tdb1.tbl version as of 1").show()
-//    val dfx = spark.read.format("delta").option("versionAsOf",0).table("cat.tdb1.tbl")
-//    dfx.explain(true)
-//    dfx.show()
+    //    df1.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
+    //    spark.read.table("cat.tdb1.tbl").show()
+    //    df2.write.mode("Overwrite").format("delta").saveAsTable("cat.tdb1.tbl")
+    //    spark.read.table("cat.tdb1.tbl").show()
+    //    spark.sql("select * from cat.tdb1.tbl version as of 1").show()
+    //    val dfx = spark.read.format("delta").option("versionAsOf",0).table("cat.tdb1.tbl")
+    //    dfx.explain(true)
+    //    dfx.show()
 
 
-//    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
-//    spark.read.table("cat.tdb.ptbl").show()
-//    df2.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
-//    spark.read.table("cat.tdb.ptbl").show()
-//
-//
-//    df1.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
-//    spark.read.table("cat.tdb.atbl").show()
-//    df2.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
-//    spark.read.table("cat.tdb.atbl").show()
-//
-//
-//    df1.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
-//    spark.read.table("cat.tdb.otbl").show()
-//    df2.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
-//    spark.read.table("cat.tdb.otbl").show()
-//   // spark.sql("create table cat.tdb.etbl(id int, name string) using delta location '/tmp/dt'")
-//  //  spark.sql("create table cat.tdb.etbl1 using delta location '/tmp/dt'")
+    //    df1.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
+    //    spark.read.table("cat.tdb.ptbl").show()
+    //    df2.write.mode("Overwrite").format("parquet").saveAsTable("cat.tdb.ptbl")
+    //    spark.read.table("cat.tdb.ptbl").show()
+    //
+    //
+    //    df1.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
+    //    spark.read.table("cat.tdb.atbl").show()
+    //    df2.write.mode("Overwrite").format("avro").saveAsTable("cat.tdb.atbl")
+    //    spark.read.table("cat.tdb.atbl").show()
+    //
+    //
+    //    df1.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
+    //    spark.read.table("cat.tdb.otbl").show()
+    //    df2.write.mode("Overwrite").format("orc").saveAsTable("cat.tdb.otbl")
+    //    spark.read.table("cat.tdb.otbl").show()
+    //   // spark.sql("create table cat.tdb.etbl(id int, name string) using delta location '/tmp/dt'")
+    //  //  spark.sql("create table cat.tdb.etbl1 using delta location '/tmp/dt'")
 
     /*nested aggregate function */
-//    spark.sql("create database cat.dbx122")
-//    spark.sql("create table cat.dbx122.tbl(pc int, fare double, distance long) using csv")
-//    spark.sql("insert into cat.dbx122.tbl values(1,12.5,200), (2,26.0,201), (3,29.8,300)")
-//    spark.sql("select * from cat.dbx122.tbl").show()
-//    spark.sql("select pc, round(sum(fare),0) as tf from cat.dbx122.tbl group by pc").show()
+    //    spark.sql("create database cat.dbx122")
+    //    spark.sql("create table cat.dbx122.tbl(pc int, fare double, distance long) using csv")
+    //    spark.sql("insert into cat.dbx122.tbl values(1,12.5,200), (2,26.0,201), (3,29.8,300)")
+    //    spark.sql("select * from cat.dbx122.tbl").show()
+    //    spark.sql("select pc, round(sum(fare),0) as tf from cat.dbx122.tbl group by pc").show()
 
 
     /*nested aggregated function ends*/
 
-    /**parquet double and float data types reader **/
+    /** parquet double and float data types reader * */
 
 
+    //    spark.sql("create database if not exists cat.dbx123")
+    //    spark.sql("create table cat.dbx123.tbl(pc int, fare float, distance long) using csv")
+    //    spark.sql("insert into cat.dbx123.tbl values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+    //
+    ////    spark.sql("select pc, fare, distance from cat.dbx123.tbl").show()
+    //
+    //    spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
+    //    spark.sql("insert into cat.dbx123.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+    //  //  val df = spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx123.db/tbl1")
+    // //   df.show()
+    //   val df = spark.sql("select * from cat.dbx123.tbl")
 
-//    spark.sql("create database if not exists cat.dbx123")
-//    spark.sql("create table cat.dbx123.tbl(pc int, fare float, distance long) using csv")
-//    spark.sql("insert into cat.dbx123.tbl values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
-//
-////    spark.sql("select pc, fare, distance from cat.dbx123.tbl").show()
-//
-//    spark.sql("create table cat.dbx123.tbl1(pc int, fare float, distance long) using parquet")
-//    spark.sql("insert into cat.dbx123.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
-//  //  val df = spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx123.db/tbl1")
-// //   df.show()
-//   val df = spark.sql("select * from cat.dbx123.tbl")
-
-  //  println("Pre overwrite of line 113")
-//    df.show()
-//    spark.sql(
-//      """
-//        |with t as (
-//        |select pc, fare from cat.dbx123.tbl1
-//        |)
-//        |select count(min(pc)) as cnt from t
-//        |""".stripMargin).show()
-//    df.write.mode(SaveMode.Overwrite).saveAsTable("cat.dbx123.tbl")
- //   println("post overwrite of line 113")
- //   spark.sql("select * from cat.dbx123.tbl9").show()
-//   spark.read.table("cat.dbx123.tbl1").show()
-//
-//
-//    spark.sql("create database if not exists cat.dbx124")
-//    spark.sql("create table cat.dbx124.tbl1(pc int, fare float, distance long) using delta")
-//    spark.sql("insert into cat.dbx124.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
-//    println("Pre overwrite of line 122")
-//    spark.sql("select * from cat.dbx124.tbl1").show()
-//    df.write.mode(SaveMode.Overwrite).format("delta").saveAsTable("cat.dbx124.tbl1")
-//    df.write.mode(SaveMode.Append).format("delta").saveAsTable("cat.dbx124.tbl1")
-//    println("post overwrite of line 122")
-//    spark.sql("select * from cat.dbx124.tbl1").show()
-//    //    df.withColumn("new_fare", df.col("fare").cast(DecimalType(3, 1))).show()
-//    /**parquet double and float data types reader ends**/
-//
-//    /***date and timestamps insertion starts***/
-//
-//    spark.sql("create database if not exists cat.dbx125")
-//    spark.sql("create table cat.dbx125.tbl1(pc date, pc1 timestamp) using delta")
-//    spark.sql("create table cat.dbx125.tbl2(pc date, pc1 timestamp) using parquet")
-   // spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01', TIMESTAMP'2022-10-01 10:15:30'), (DATE'2022-10-02', TIMESTAMP'2022-10-02 10:15:30), (DATE'2022-10-03', TIMESTAMP'2022-10-03 10:15:30)")
-//    spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
-//    spark.sql("insert into cat.dbx125.tbl2 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
-//    spark.sql("select * from cat.dbx125.tbl1").show()
-//    spark.sql("select * from cat.dbx125.tbl2").show()
-//    spark.sql("insert into cat.dbx125.tbl2 from cat.dbx125.tbl1 select pc, pc1")
-//    spark.sql("select * from cat.dbx125.tbl2").show()
-//    spark.sql("create database if not exists cat.dbx126")
-//    spark.sql("CREATE TABLE cat.dbx126.delta_test_table ( id INT, name STRING, birth_date DATE, created_at TIMESTAMP, is_active BOOLEAN, salary DECIMAL(10,2), profile BINARY, preferences ARRAY<STRING>, metadata MAP<STRING, STRING>, attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>, big_number BIGINT, small_number SMALLINT, tiny_number TINYINT ) USING DELTA")
-//    spark.sql("""INSERT INTO cat.dbx126.delta_test_table VALUES ( 1, 'John Doe', '1990-05-15', current_timestamp(), true, 75000.50, X'68656C6C6F',  ARRAY('red', 'blue', 'green'), MAP('key1', 'value1', 'key2', 'value2'), STRUCT(5.9, 180.5, 'brown'), 23,3,1 )""")
-//    spark.read.table("cat.dbx126.delta_test_table").show()
-
-
-//    spark.sql("create database if not exists cat.dbx127")
-//    spark.sql("""create table cat.dbx127.catalog_returns_external
-//                |(
-//                |
-//                |cr_returned_time_sk int,
-//                |cr_net_loss decimal(7,2),
-//                |cr_returned_date_sk int
-//                |)
-//                |USING parquet
-//                |partitioned by (cr_returned_date_sk)""".stripMargin)
-//    spark.sql("INSERT INTO cat.dbx127.catalog_returns_external VALUES (37228, 990.23,2334254),(71132, 81.88,23424),(64324, 680.24,335325)")
-//    spark.sql("select * from cat.dbx127.catalog_returns_external")
-
-    /***date and timestamps insertion ends***/
-
-    /***savAsTable for external datasource starts***/
+    //  println("Pre overwrite of line 113")
+    //    df.show()
+    //    spark.sql(
+    //      """
+    //        |with t as (
+    //        |select pc, fare from cat.dbx123.tbl1
+    //        |)
+    //        |select count(min(pc)) as cnt from t
+    //        |""".stripMargin).show()
+    //    df.write.mode(SaveMode.Overwrite).saveAsTable("cat.dbx123.tbl")
+    //   println("post overwrite of line 113")
+    //   spark.sql("select * from cat.dbx123.tbl9").show()
+    //   spark.read.table("cat.dbx123.tbl1").show()
+    //
+    //
+    //    spark.sql("create database if not exists cat.dbx124")
+    //    spark.sql("create table cat.dbx124.tbl1(pc int, fare float, distance long) using delta")
+    //    spark.sql("insert into cat.dbx124.tbl1 values(1,12.4,200), (2,26.5,201), (3,29.8,300)")
+    //    println("Pre overwrite of line 122")
+    //    spark.sql("select * from cat.dbx124.tbl1").show()
+    //    df.write.mode(SaveMode.Overwrite).format("delta").saveAsTable("cat.dbx124.tbl1")
+    //    df.write.mode(SaveMode.Append).format("delta").saveAsTable("cat.dbx124.tbl1")
+    //    println("post overwrite of line 122")
+    //    spark.sql("select * from cat.dbx124.tbl1").show()
+    //    //    df.withColumn("new_fare", df.col("fare").cast(DecimalType(3, 1))).show()
+    //    /**parquet double and float data types reader ends**/
+    //
+    //    /***date and timestamps insertion starts***/
+    //
+    //    spark.sql("create database if not exists cat.dbx125")
+    //    spark.sql("create table cat.dbx125.tbl1(pc date, pc1 timestamp) using delta")
+    //    spark.sql("create table cat.dbx125.tbl2(pc date, pc1 timestamp) using parquet")
+    // spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01', TIMESTAMP'2022-10-01 10:15:30'), (DATE'2022-10-02', TIMESTAMP'2022-10-02 10:15:30), (DATE'2022-10-03', TIMESTAMP'2022-10-03 10:15:30)")
+    //    spark.sql("insert into cat.dbx125.tbl1 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
+    //    spark.sql("insert into cat.dbx125.tbl2 values(DATE'2022-10-01',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-02',cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp)), (DATE'2022-10-03', cast(date_format('2019-06-13 13:22:30.521000000', 'yyyy-MM-dd HH:mm:ss.SSS') as timestamp))")
+    //    spark.sql("select * from cat.dbx125.tbl1").show()
+    //    spark.sql("select * from cat.dbx125.tbl2").show()
+    //    spark.sql("insert into cat.dbx125.tbl2 from cat.dbx125.tbl1 select pc, pc1")
+    //    spark.sql("select * from cat.dbx125.tbl2").show()
+    //    spark.sql("create database if not exists cat.dbx126")
+    //    spark.sql("CREATE TABLE cat.dbx126.delta_test_table ( id INT, name STRING, birth_date DATE, created_at TIMESTAMP, is_active BOOLEAN, salary DECIMAL(10,2), profile BINARY, preferences ARRAY<STRING>, metadata MAP<STRING, STRING>, attributes STRUCT<height: DOUBLE, weight: FLOAT, eye_color: STRING>, big_number BIGINT, small_number SMALLINT, tiny_number TINYINT ) USING DELTA")
+    //    spark.sql("""INSERT INTO cat.dbx126.delta_test_table VALUES ( 1, 'John Doe', '1990-05-15', current_timestamp(), true, 75000.50, X'68656C6C6F',  ARRAY('red', 'blue', 'green'), MAP('key1', 'value1', 'key2', 'value2'), STRUCT(5.9, 180.5, 'brown'), 23,3,1 )""")
+    //    spark.read.table("cat.dbx126.delta_test_table").show()
 
 
+    //    spark.sql("create database if not exists cat.dbx127")
+    //    spark.sql("""create table cat.dbx127.catalog_returns_external
+    //                |(
+    //                |
+    //                |cr_returned_time_sk int,
+    //                |cr_net_loss decimal(7,2),
+    //                |cr_returned_date_sk int
+    //                |)
+    //                |USING parquet
+    //                |partitioned by (cr_returned_date_sk)""".stripMargin)
+    //    spark.sql("INSERT INTO cat.dbx127.catalog_returns_external VALUES (37228, 990.23,2334254),(71132, 81.88,23424),(64324, 680.24,335325)")
+    //    spark.sql("select * from cat.dbx127.catalog_returns_external")
 
-    /***savAsTable for external datasource ends***/
+    /** *date and timestamps insertion ends** */
 
-    /***Proxy Catalog start***/
-//    spark.sql("SHOW SCHEMAS IN cat").show(200, false)
-//    spark.sql("describe database cat.reservedb").show
-//    spark.sql("show tables in cat.reservedb").show
-//    spark.sql("describe extended cat.reservedb.resevetbl").show()
-    /****Proxy catalog end***/
-  //  df1.withColumn("col3", expr("fadd('',col1, col2)")).show()
-  //  df1.selectExpr("fadd('',col1, col2)").show
-
- // spark.sql("select fadd('a',  named_struct('a', 1, 'b', 2, 'c', 3),  named_struct('a', 2, 'b', 6, 'c', 3))").show(40,false)
-
-//    val codegenContext = new CodegenContext
-//    val exprCode = expr("fadd('',1, 2)").expr.genCode(codegenContext)
-//    println(exprCode.code.toString())
-  //  spark.sql("select fadd('', 1, 2) from values (1, 2, 3)").show()
-
-//        spark.sql("create database cat.dbx118");
-//        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
-//        df1.write.format("parquet").mode(SaveMode.Append).insertInto("cat.test_sudeep.jsonn_tbl")
-////        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
-//        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()
-
-//        val df2 = Seq(
-//          6,
-//          7
-//        ).toDF("col1")
-
-    /**gen_ai*/
-
-  //  spark.sql("select query_model('meta', concat('his', 'tory' ))").show()
-   // spark.sql("create database cat.gen_ai")
-  // spark.sql("create table cat.gen_ai.tbl(c1 string) using delta")
-//    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
-  //  spark.sql("select query_model('a1', 'values') as c2").show
-//    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
-  //  spark.sql("""select query_model('meta',concat(c1, "hello")) as c11 from cat.gen_ai.tbl""").show()
+    /** *savAsTable for external datasource starts** */
 
 
+    /** *savAsTable for external datasource ends** */
 
-    /**gen_ai end*/
+    /** *Proxy Catalog start** */
+    //    spark.sql("SHOW SCHEMAS IN cat").show(200, false)
+    //    spark.sql("describe database cat.reservedb").show
+    //    spark.sql("show tables in cat.reservedb").show
+    //    spark.sql("describe extended cat.reservedb.resevetbl").show()
+    /** **Proxy catalog end** */
+    //  df1.withColumn("col3", expr("fadd('',col1, col2)")).show()
+    //  df1.selectExpr("fadd('',col1, col2)").show
 
-    /**custom datasource write and read patterns patterns starts**/
+    // spark.sql("select fadd('a',  named_struct('a', 1, 'b', 2, 'c', 3),  named_struct('a', 2, 'b', 6, 'c', 3))").show(40,false)
 
-  //  spark.sql("create database cat.customdb")
-   // spark.sql("create table cat.customdb.tbl(c1 string) using custom options('k'='v', 'k1' = 'v1')")
-   // spark.sql("insert into cat.customdb.tbl values('hello'), ('hi') ")
+    //    val codegenContext = new CodegenContext
+    //    val exprCode = expr("fadd('',1, 2)").expr.genCode(codegenContext)
+    //    println(exprCode.code.toString())
+    //  spark.sql("select fadd('', 1, 2) from values (1, 2, 3)").show()
+
+    //        spark.sql("create database cat.dbx118");
+    //        df1.write.format("parquet").mode("overwrite").saveAsTable("cat.dbx118.json_tbl")
+    //        df1.write.format("parquet").mode(SaveMode.Append).insertInto("cat.test_sudeep.jsonn_tbl")
+    ////        spark.read.table("cat.test_sudeep.jsonn_tbl").show()
+    //        spark.sql("select * from cat.test_sudeep.jsonn_tbl").show()
+
+    //        val df2 = Seq(
+    //          6,
+    //          7
+    //        ).toDF("col1")
+
+    /** gen_ai */
+
+    //  spark.sql("select query_model('meta', concat('his', 'tory' ))").show()
+    // spark.sql("create database cat.gen_ai")
+    // spark.sql("create table cat.gen_ai.tbl(c1 string) using delta")
+    //    spark.sql("insert into cat.gen_ai.tbl values ('sharad'), ('sunny')")
+    //  spark.sql("select query_model('a1', 'values') as c2").show
+    //    spark.sql("select query_model('meta',c1) as cai from cat.gen_ai.tbl").show()
+    //  spark.sql("""select query_model('meta',concat(c1, "hello")) as c11 from cat.gen_ai.tbl""").show()
+
+
+    /** gen_ai end */
+
+    /** custom datasource write and read patterns patterns starts* */
+
+    //  spark.sql("create database cat.customdb")
+    // spark.sql("create table cat.customdb.tbl(c1 string) using custom options('k'='v', 'k1' = 'v1')")
+    // spark.sql("insert into cat.customdb.tbl values('hello'), ('hi') ")
     //val df = spark.read.table("cat.customdb.tbl")
-   // df.show()
-   // df.write.insertInto("cat.customdb.tbl")
-  //  df.write.mode(SaveMode.Append).saveAsTable("cat.customdb.tbl")
-  //  df2.write.mode(SaveMode.Overwrite).format("custom").saveAsTable("cat.customdb.tbl")
-   // spark.sql("select * from cat.customdb.tbl").show()
+    // df.show()
+    // df.write.insertInto("cat.customdb.tbl")
+    //  df.write.mode(SaveMode.Append).saveAsTable("cat.customdb.tbl")
+    //  df2.write.mode(SaveMode.Overwrite).format("custom").saveAsTable("cat.customdb.tbl")
+    // spark.sql("select * from cat.customdb.tbl").show()
 
-    /**custom datasource write and read patterns patterns ends**/
-   // spark.sql("create database cat.test_sudeep");
+    /** custom datasource write and read patterns patterns ends* */
+    // spark.sql("create database cat.test_sudeep");
 
-//    df1.write.format("delta").saveAsTable("cat.dbx122.delta_tbl")
-//    spark.sql("describe formatted cat.dbx122.delta_tbl").show()
-//    spark.sql("describe formatted cat.dbx122.json_tbl").show()
-//    df1.write.format("parquet").mode("overwrite").saveAsTable("cat.test_sudeep.json_tbl")
-//    df1.write.format("parquet").mode("append").insertInto("cat.test_sudeep.json_tbl")
-//    spark.read.table("cat.test_sudeep.json_tbl").show()
-//    spark.sql("select * from cat.test_sudeep.json_tbl").show()
-//    spark.sql("insert into cat.test_sudeep.json_tbl values (5,8), (4,7), (6,9)")
-//    spark.sql("select * from cat.test_sudeep.json_tbl where col1>4").show()
-//    spark.sql("create view cat.test_sudeep.v1(cl1, cl2) as select * from cat.test_sudeep.json_tbl where col1>4")
-//
-//   // spark.sql("select * from cat.test_sudeep.json_tbl limit 2").show()
-//    spark.sql("select cl1 from cat.test_sudeep.v1 limit 2").show()
-//        spark.sql("drop view cat.test_sudeep.v1")
-//
-//        spark.sql("create database cat.customdb")
-//        spark.sql("create table cat.customdb.tcustom(id int) using custom")
+    //    df1.write.format("delta").saveAsTable("cat.dbx122.delta_tbl")
+    //    spark.sql("describe formatted cat.dbx122.delta_tbl").show()
+    //    spark.sql("describe formatted cat.dbx122.json_tbl").show()
+    //    df1.write.format("parquet").mode("overwrite").saveAsTable("cat.test_sudeep.json_tbl")
+    //    df1.write.format("parquet").mode("append").insertInto("cat.test_sudeep.json_tbl")
+    //    spark.read.table("cat.test_sudeep.json_tbl").show()
+    //    spark.sql("select * from cat.test_sudeep.json_tbl").show()
+    //    spark.sql("insert into cat.test_sudeep.json_tbl values (5,8), (4,7), (6,9)")
+    //    spark.sql("select * from cat.test_sudeep.json_tbl where col1>4").show()
+    //    spark.sql("create view cat.test_sudeep.v1(cl1, cl2) as select * from cat.test_sudeep.json_tbl where col1>4")
+    //
+    //   // spark.sql("select * from cat.test_sudeep.json_tbl limit 2").show()
+    //    spark.sql("select cl1 from cat.test_sudeep.v1 limit 2").show()
+    //        spark.sql("drop view cat.test_sudeep.v1")
+    //
+    //        spark.sql("create database cat.customdb")
+    //        spark.sql("create table cat.customdb.tcustom(id int) using custom")
     //    df1.write.insertInto("cat.customdb.tcustom")
-//        df2.write.mode(SaveMode.Append).insertInto("cat.customdb.tcustom")
-//        spark.sql("insert into cat.customdb.tcustom values (9)")
-//        spark.read.table("cat.customdb.tcustom").show()
+    //        df2.write.mode(SaveMode.Append).insertInto("cat.customdb.tcustom")
+    //        spark.sql("insert into cat.customdb.tcustom values (9)")
+    //        spark.read.table("cat.customdb.tcustom").show()
 
 
-//        spark.sql("create database cat.dbx115")
-//        spark.sql("create table cat.dbx115.tpart3(id int, name string, age int) using csv PARTITIONED BY (age) location '/tmp/tp'")
-//        spark.read.table("cat.dbx115.tpart3").show()
+    //        spark.sql("create database cat.dbx115")
+    //        spark.sql("create table cat.dbx115.tpart3(id int, name string, age int) using csv PARTITIONED BY (age) location '/tmp/tp'")
+    //        spark.read.table("cat.dbx115.tpart3").show()
 
-//    val partitionDirs = DiscoverCatalogPartition.listPartitionDirRecurse("/tmp/tp").toSeq
-//    partitionDirs
-//
-//    val columnSpec = partitionDirs.map(pd => DiscoverCatalogPartition.detectPartitionFromSinglePath(pd.getHadoopPath, Set(new Path("file:///tmp/tp"))))
-//    columnSpec
-
+    //    val partitionDirs = DiscoverCatalogPartition.listPartitionDirRecurse("/tmp/tp").toSeq
+    //    partitionDirs
+    //
+    //    val columnSpec = partitionDirs.map(pd => DiscoverCatalogPartition.detectPartitionFromSinglePath(pd.getHadoopPath, Set(new Path("file:///tmp/tp"))))
+    //    columnSpec
 
 
     // df1.write.format("avro").mode("overwrite").saveAsTable("cat.test_sudeep.avr_tbl")
@@ -603,95 +603,94 @@ object App {
     //    df2.write.format("parquet").saveAsTable("cat.dbx113.ttp")
     //   df2.write.format("delta").saveAsTable("cat.dbx116.ttd")
 
-    /****-----delta merge update and delete table issue ------****/
-//    spark.sql("create database cat.dbx116")
-////
-//    spark.sql("CREATE TABLE cat.dbx116.ttd (col1 String) USING delta")
-//    spark.sql(""" INSERT INTO cat.dbx116.ttd VALUES ('99'), ('6'), ('7')""".stripMargin)
-//    df2.write.insertInto("cat.dbx116.ttd")
-//    spark.sql("select * from cat.dbx116.ttd").show()
-//    spark.read.table("cat.dbx116.ttd").show()
-//    spark.sql("update cat.dbx116.ttd set col1 = 'six' where col1 = '6' ").show()
-//    spark.sql("select col1 from cat.dbx116.ttd").show()
-////    spark.sql("select * from cat.dbx116.ttd").show()
-//    spark.sql("delete from cat.dbx116.ttd where col1 = '99'")
-//    spark.read.table("cat.dbx116.ttd").show()
-//    spark.sql("describe history cat.dbx116.ttd").show
-//    spark.sql("describe detail cat.dbx116.ttd").show
-//
-//     //   spark.read.table("cat.dbx116.ttd").show()
-// //   spark.sql("select * from cat.dbx116.ttd").show()
-//
-//    //
-//    //    df2.write.insertInto("cat.dbx113.ttp")
-//    //    spark.read.table("cat.dbx113.ttp").show()
-//    //
-//    /**---normal data source table operation ----**/
-//
-//
-//    spark.sql("create database cat.dbx119")
-//    spark.sql("create table cat.dbx119.ttp(c1 int, c2 int) using parquet")
-//    spark.sql("""insert into cat.dbx119.ttp values (1,11), (2,22), (3,33)""")
-//    spark.sql("select * from cat.dbx119.ttp where c1>1").show
-//
-//    spark.sql("create view cat.dbx119.v(id, id11) as select * from  cat.dbx119.ttp")
-//    spark.sql("select * from cat.dbx119.v").show()
-//    spark.sql("select c1, c2, fadd('', c1, c2) as c3 from cat.dbx119.ttp").show
-//    spark.sql("""create table cat.dbx119.ttd(c1 int, c2 int) using delta cluster by(c1)""")
+    /** **-----delta merge update and delete table issue ------*** */
+    //    spark.sql("create database cat.dbx116")
+    ////
+    //    spark.sql("CREATE TABLE cat.dbx116.ttd (col1 String) USING delta")
+    //    spark.sql(""" INSERT INTO cat.dbx116.ttd VALUES ('99'), ('6'), ('7')""".stripMargin)
+    //    df2.write.insertInto("cat.dbx116.ttd")
+    //    spark.sql("select * from cat.dbx116.ttd").show()
+    //    spark.read.table("cat.dbx116.ttd").show()
+    //    spark.sql("update cat.dbx116.ttd set col1 = 'six' where col1 = '6' ").show()
+    //    spark.sql("select col1 from cat.dbx116.ttd").show()
+    ////    spark.sql("select * from cat.dbx116.ttd").show()
+    //    spark.sql("delete from cat.dbx116.ttd where col1 = '99'")
+    //    spark.read.table("cat.dbx116.ttd").show()
+    //    spark.sql("describe history cat.dbx116.ttd").show
+    //    spark.sql("describe detail cat.dbx116.ttd").show
+    //
+    //     //   spark.read.table("cat.dbx116.ttd").show()
+    // //   spark.sql("select * from cat.dbx116.ttd").show()
+    //
+    //    //
+    //    //    df2.write.insertInto("cat.dbx113.ttp")
+    //    //    spark.read.table("cat.dbx113.ttp").show()
+    //    //
+    //    /**---normal data source table operation ----**/
+    //
+    //
+    //    spark.sql("create database cat.dbx119")
+    //    spark.sql("create table cat.dbx119.ttp(c1 int, c2 int) using parquet")
+    //    spark.sql("""insert into cat.dbx119.ttp values (1,11), (2,22), (3,33)""")
+    //    spark.sql("select * from cat.dbx119.ttp where c1>1").show
+    //
+    //    spark.sql("create view cat.dbx119.v(id, id11) as select * from  cat.dbx119.ttp")
+    //    spark.sql("select * from cat.dbx119.v").show()
+    //    spark.sql("select c1, c2, fadd('', c1, c2) as c3 from cat.dbx119.ttp").show
+    //    spark.sql("""create table cat.dbx119.ttd(c1 int, c2 int) using delta cluster by(c1)""")
 
 
-    /**---end of normal data source table operation ----**/
+    /** ---end of normal data source table operation ----* */
 
     /*delta merge*/
-//    spark.sql("create database cat.dbx120")
-//    spark.sql("create table cat.dbx120.ttp(c1 int, c2 int) using parquet")
-//    spark.sql("""insert into cat.dbx120.ttp values (1,11), (2,22), (3,33)""")
-//    spark.sql("create table cat.dbx120.ttd(c1 int, c2 int) using delta")
-//    spark.sql("""insert into cat.dbx120.ttd values (1,111), (4,44), (33,33)""")
-//    spark.sql(
-//      """merge into cat.dbx120.ttd using cat.dbx120.ttp on cat.dbx120.ttd.c1 = cat.dbx120.ttp.c1
-//        |WHEN MATCHED THEN UPDATE SET
-//        |c1 = cat.dbx120.ttp.c1,
-//        |c2 = cat.dbx120.ttp.c2
-//        |WHEN NOT MATCHED
-//        |  THEN INSERT (
-//        |  c1,
-//        |  c2)
-//        |  values(
-//        |  cat.dbx120.ttp.c1,
-//        |  cat.dbx120.ttp.c2)""".stripMargin)
-//    spark.read.table("cat.dbx120.ttd").show()
-//    spark.sql("describe history cat.dbx120.ttd").show()
+    //    spark.sql("create database cat.dbx120")
+    //    spark.sql("create table cat.dbx120.ttp(c1 int, c2 int) using parquet")
+    //    spark.sql("""insert into cat.dbx120.ttp values (1,11), (2,22), (3,33)""")
+    //    spark.sql("create table cat.dbx120.ttd(c1 int, c2 int) using delta")
+    //    spark.sql("""insert into cat.dbx120.ttd values (1,111), (4,44), (33,33)""")
+    //    spark.sql(
+    //      """merge into cat.dbx120.ttd using cat.dbx120.ttp on cat.dbx120.ttd.c1 = cat.dbx120.ttp.c1
+    //        |WHEN MATCHED THEN UPDATE SET
+    //        |c1 = cat.dbx120.ttp.c1,
+    //        |c2 = cat.dbx120.ttp.c2
+    //        |WHEN NOT MATCHED
+    //        |  THEN INSERT (
+    //        |  c1,
+    //        |  c2)
+    //        |  values(
+    //        |  cat.dbx120.ttp.c1,
+    //        |  cat.dbx120.ttp.c2)""".stripMargin)
+    //    spark.read.table("cat.dbx120.ttd").show()
+    //    spark.sql("describe history cat.dbx120.ttd").show()
 
 
-    /***Codegen for custom functions path ***/
-//    spark.sql("create database if not exists cat.dbx121")
-//    df1.write.format("orc").saveAsTable("cat.dbx121.tbsv")
-//    spark.read.table("cat.dbx121.tbsv").show()
-//    spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
-//    spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
-////    spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
-//    spark.sql("select c1, c2, fibo(c1) as c3 from cat.dbx121.ttp1").show
-//    spark.sql("select fibo(4) as c4").show
-    /***Codegen for custom functions path ***/
+    /** *Codegen for custom functions path ** */
+    //    spark.sql("create database if not exists cat.dbx121")
+    //    df1.write.format("orc").saveAsTable("cat.dbx121.tbsv")
+    //    spark.read.table("cat.dbx121.tbsv").show()
+    //    spark.sql("create table cat.dbx121.ttp1(c1 int, c2 String, c3 int) using parquet")
+    //    spark.sql("""insert into cat.dbx121.ttp1 values (1,'hello', 11), (2,'hi',22), (3,'bye',33)""")
+    ////    spark.sql("select fadd(c1,c3) from cat.dbx121.ttp1 ").show()
+    //    spark.sql("select c1, c2, fibo(c1) as c3 from cat.dbx121.ttp1").show
+    //    spark.sql("select fibo(4) as c4").show
+    /** *Codegen for custom functions path ** */
 
 
-
-//
-//        spark.sql("create database cat.dbx112")
-//      //  val df2 = spark.read.format("csv").option("header", "false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
-//        //df2.write.format("csv").mode(SaveMode.Overwrite).saveAsTable ("cat.dbx112.tt1")
-//        df2.write.format("csv").mode(SaveMode.Append).saveAsTable ("cat.dbx112.tt1")
-//        df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
-//    //    df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
-//        df2.write.format("delta").mode(SaveMode.Overwrite)saveAsTable("cat.dbx112.ttd")
-//
-//     spark.sql("create database cat.dbx107")
-//        spark.sql("create table cat.dbx107.tt(id int) using delta")
-//
-//        spark.sql(
-//          """ INSERT INTO cat.dbx107.tt
-//            |     VALUES (1), (2), (3)""".stripMargin)
+    //
+    //        spark.sql("create database cat.dbx112")
+    //      //  val df2 = spark.read.format("csv").option("header", "false").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/dbx110.db/tcsv/part-00000-de8ac9df-4d60-4440-9454-6840f3fea1c9-c000.csv")
+    //        //df2.write.format("csv").mode(SaveMode.Overwrite).saveAsTable ("cat.dbx112.tt1")
+    //        df2.write.format("csv").mode(SaveMode.Append).saveAsTable ("cat.dbx112.tt1")
+    //        df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
+    //    //    df2.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("cat.dbx112.ttp")
+    //        df2.write.format("delta").mode(SaveMode.Overwrite)saveAsTable("cat.dbx112.ttd")
+    //
+    //     spark.sql("create database cat.dbx107")
+    //        spark.sql("create table cat.dbx107.tt(id int) using delta")
+    //
+    //        spark.sql(
+    //          """ INSERT INTO cat.dbx107.tt
+    //            |     VALUES (1), (2), (3)""".stripMargin)
 
 
     //   spark.sql("create view cat.dbx107.v(id) as select * from cat.dbx107.tt")
@@ -751,20 +750,20 @@ object App {
 
 
     /** Hive Relation testing start * */
-     //   spark.sql("create database cat.dbx108");
+    //   spark.sql("create database cat.dbx108");
     //  spark.conf.set("spark.insert.catalog","cat")
-//        df1.write.mode(SaveMode.Append).insertInto("cat.dbx108.hive_tbl")
+    //        df1.write.mode(SaveMode.Append).insertInto("cat.dbx108.hive_tbl")
     //    //    spark.sql(""" INSERT INTO cat.dbx103.tcsv
     //
-//        spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
-//        spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
-//        val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
-//        val df4 = spark.read.table("cat.dbx108.hive_tbl")
-//        df3.show()
-//        df4.show()
-//        spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
-//        val df5 = spark.read.table("cat.dbx108.v1")
-//        df5.show()
+    //        spark.sql("CREATE TABLE cat.dbx108.hive_tbl (col1 String) USING hive OPTIONS ('fileformat'='csv')")
+    //        spark.sql(""" INSERT INTO cat.dbx108.hive_tbl VALUES ('new_value')""".stripMargin)
+    //        val df3 = spark.sql("select * from cat.dbx108.hive_tbl")
+    //        val df4 = spark.read.table("cat.dbx108.hive_tbl")
+    //        df3.show()
+    //        df4.show()
+    //        spark.sql("""create view cat.dbx108.v1(c) as select * from cat.dbx108.hive_tbl""")
+    //        val df5 = spark.read.table("cat.dbx108.v1")
+    //        df5.show()
     //
     //    spark.sql("CREATE TABLE cat.dbx108.csv_tbl (col1 String) USING csv")
     //    spark.sql(""" INSERT INTO cat.dbx108.csv_tbl VALUES ('new_value')""".stripMargin)

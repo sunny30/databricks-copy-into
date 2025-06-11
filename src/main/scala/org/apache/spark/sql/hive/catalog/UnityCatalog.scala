@@ -20,11 +20,13 @@ import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.iceberg.UnityIcebergCatalog
 
 import scala.collection.JavaConverters._
 import java.net.URI
 import java.util
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
+import scala.collection.convert.ImplicitConversions.`map AsScala`
 class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExtension
   with SupportsNamespaces
   with StagingTableCatalog with DeltaLogging with SQLConfHelper{
@@ -32,6 +34,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   private var catalogName: String = null
 
   private var delegatedCatalog: CatalogPlugin = null
+
+  var options: CaseInsensitiveStringMap = null
 
   lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
       new FSMetaStoreCatalog(
@@ -58,7 +62,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }else {
       this.catalogName = name
     }
-
+    this.options = options
     proxyCatalog = new ProxyCatalog(catalogName = catalogName, proxyDBName = None)
     // Initialize the catalog in any other provider that we can integrate with
   }
@@ -273,8 +277,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
 
       val tableProperties = properties.asScala
-      var location = Option(properties.get(TableCatalog.PROP_LOCATION))
-      var isExternal = location.isDefined
+      val inputLocation = Option(properties.get(TableCatalog.PROP_LOCATION))
+      var isExternal = inputLocation.isDefined
       val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
         .copy(locationUri = location.map(CatalogUtils.stringToURI))
       isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
@@ -296,6 +300,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         tracksPartitionsInCatalog = conf.manageFilesourcePartitions,
         comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
       try {
+
+        if(provider.equalsIgnoreCase("iceberg")){
+          val icebergProperties = (properties.asScala.toMap ++ Map(TableCatalog.PROP_LOCATION -> location.get))
+          val icebergCatalog = new UnityIcebergCatalog(externalCatalog, catalogName, options)
+          return icebergCatalog.createIcebergTable(ident, schema, partitions, icebergProperties.asJava, tableDesc)
+        }
         externalCatalog.createTable(tableDesc, ignoreIfExists = false)
         if(tableType == CatalogTableType.VIEW){
           V2Table(tableDesc)
