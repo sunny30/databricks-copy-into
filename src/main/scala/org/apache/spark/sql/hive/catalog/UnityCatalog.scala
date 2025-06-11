@@ -177,11 +177,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
     namespace match {
       case Array(db) =>
-      if(proxyCatalog.databaseExists(db)) {
-        proxyCatalog.getDatabase(db).properties.asJava
-      }else{
-        externalCatalog.getDatabase(db).properties.asJava
-      }
+        val properties = if (proxyCatalog.databaseExists(db)) {
+          proxyCatalog.getDatabase(db).properties.asJava
+        } else {
+
+          val augmentedProperties = externalCatalog.getDatabase(db).properties ++ Map("db_location" -> externalCatalog.getDatabase(db).locationUri.toString)
+          augmentedProperties.asJava
+        }
+        properties
+
       case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
   }

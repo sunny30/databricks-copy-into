@@ -218,16 +218,22 @@ public class UnityHadoopCatalog extends HadoopCatalog
     }
 
 
+    public String getDBPath(TableIdentifier identifier) throws org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException {
+        org.apache.spark.sql.connector.catalog.SupportsNamespaces asNameSpaceCatalog = (org.apache.spark.sql.connector.catalog.SupportsNamespaces)SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName) ;
+        String dbLocation = asNameSpaceCatalog.loadNamespaceMetadata(identifier.namespace().levels()).get("db_location") ;
+        return dbLocation ;
+    }
 
     @Override
     protected String defaultWarehouseLocation(TableIdentifier tableIdentifier) {
         String tableName = tableIdentifier.name();
         StringBuilder sb = new StringBuilder();
-
-        sb.append(warehouseLocation).append('/');
-        for (String level : tableIdentifier.namespace().levels()) {
-            sb.append(level).append('/');
+        try {
+            sb.append(getDBPath(tableIdentifier));
+        } catch (org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException e) {
+            throw new RuntimeException(e);
         }
+        sb.append("/");
         sb.append(tableName);
 
         return sb.toString();
