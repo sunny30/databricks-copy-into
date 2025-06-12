@@ -88,9 +88,9 @@ object App {
     ).toDF("col1", "col2", "col3")
 
     /*create iceberg table*/
-    spark.sql("create database cat.dbice")
-    spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
-    spark.sql("describe formatted cat.dbice.tbl").show()
+//    spark.sql("create database cat.dbice")
+//    spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
+//    spark.sql("describe formatted cat.dbice.tbl").show()
     /*create iceberg table ends*/
 
     /*Delta overwrite table*/
@@ -171,16 +171,16 @@ object App {
     //
     //  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
     //  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-   // spark.sql("create database ecat.customdb")
-   // spark.sql("create table ecat.customdb.nt(col1 int, col2 string, col3 double) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+    spark.sql("create database ecat.customdb1")
+    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
     //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
     //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
     //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
     //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
-  //  df3.write.mode("overwrite").insertInto("ecat.customdb.nt")
+    df3.write.mode("overwrite").saveAsTable("ecat.customdb1.nt")
 
     //    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
-    //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl1").show()
+    spark.read.options(Map("k6"->"v6")).table("ecat.customdb1.nt").show()
     //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl2")
     //    df3.write.saveAsTable("ecat.customdb.tbl2")
     //    spark.sql("describe formatted ecat.customdb.tbl2").show()

@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive.plan
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoStatement, LogicalPlan}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
-import org.apache.spark.sql.connector.catalog.{CatalogPlugin, Identifier, TableCatalog}
+import org.apache.spark.sql.connector.catalog.{CatalogPlugin, Identifier, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
@@ -58,6 +58,12 @@ object OverWriteToExternalSource {
     val tblProperties = props ++ getpersistOptionsForExternalSource(namespaceName,tableName)
     if(!externalCatalogTable)
       catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(tblProperties))
+    else{
+      catalog match {
+        case t:TableSchemaChangeCatalog => t.alterTable(ident, query.schema)
+        case _ => throw new IllegalArgumentException("existing table is not external catalog catalog table please drop it")
+      }
+    }
     val table = catalog.asTableCatalog.loadTable(ident)
     val catalogTable = table.asInstanceOf[V2Table].v1Table
     val dataSource = DataSource(

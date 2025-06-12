@@ -8,7 +8,7 @@ import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.connector.catalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
-import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, V1Table}
+import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, TableSchemaChangeCatalog, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.delta.{DeltaErrors, UnityDeltaCatalog}
@@ -29,7 +29,7 @@ import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapCo
 import scala.collection.convert.ImplicitConversions.`map AsScala`
 class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExtension
   with SupportsNamespaces
-  with StagingTableCatalog with DeltaLogging with SQLConfHelper{
+  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog{
 
   private var catalogName: String = null
 
@@ -93,6 +93,22 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       case _ =>
         throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
+  }
+
+  override def alterTable(ident: Identifier, schema: StructType): Unit = {
+
+    val catalogTable = try {
+      externalCatalog.getTable(ident.asTableIdentifier.database.getOrElse("default"), ident.asTableIdentifier.table)
+    } catch {
+      case _: NoSuchTableException =>
+        throw QueryCompilationErrors.noSuchTableError(ident)
+    }
+
+    externalCatalog.alterTable(
+      catalogTable.copy(
+       schema = schema))
+
+
   }
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
