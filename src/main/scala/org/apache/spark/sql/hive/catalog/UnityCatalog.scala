@@ -27,9 +27,10 @@ import java.net.URI
 import java.util
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
 import scala.collection.convert.ImplicitConversions.`map AsScala`
+
 class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExtension
   with SupportsNamespaces
-  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog{
+  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog {
 
   private var catalogName: String = null
 
@@ -37,13 +38,13 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   var options: CaseInsensitiveStringMap = null
 
-  lazy val  externalCatalog: ExternalCatalog = if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
-      new FSMetaStoreCatalog(
-        catalogName,
-        sparkConf = SparkSession.active.sharedState.conf,
-        hadoopConfig = SparkSession.active.sharedState.hadoopConf
-      )
-  }else{
+  lazy val externalCatalog: ExternalCatalog = if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")) {
+    new FSMetaStoreCatalog(
+      catalogName,
+      sparkConf = SparkSession.active.sharedState.conf,
+      hadoopConfig = SparkSession.active.sharedState.hadoopConf
+    )
+  } else {
     new HMSCatalog(
       catalogName,
       sparkConf = SparkSession.active.sharedState.conf,
@@ -51,15 +52,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     )
   }
 
-  var proxyCatalog: ProxyCatalog = null ;
+  var proxyCatalog: ProxyCatalog = null;
 
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
     // TODO
     log.info("Inside Catalog Plugin Initialize")
     // Initialize the catalog with the corresponding name
-    if(name.equalsIgnoreCase("hive")){
+    if (name.equalsIgnoreCase("hive")) {
       this.catalogName = "cat"
-    }else {
+    } else {
       this.catalogName = name
     }
     this.options = options
@@ -81,11 +82,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def listTables(namespace: Array[String]): Array[Identifier] = {
     namespace match {
       case Array(db) =>
-        if(proxyCatalog.databaseExists(db)){
+        if (proxyCatalog.databaseExists(db)) {
           proxyCatalog.listTables(db).map(tb => TableIdentifier(tb, Some(db)))
             .map(ident => Identifier.of(ident.database.map(Array(_)).getOrElse(Array()), ident.table))
             .toArray
-        }else {
+        } else {
           externalCatalog.listTables(db).map(tb => TableIdentifier(tb, Some(db)))
             .map(ident => Identifier.of(ident.database.map(Array(_)).getOrElse(Array()), ident.table))
             .toArray
@@ -106,21 +107,26 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
     externalCatalog.alterTable(
       catalogTable.copy(
-       schema = schema))
+        schema = schema))
 
 
   }
 
   override def alterTable(ident: Identifier, changes: TableChange*): Table = {
     val catalogTable = try {
-      externalCatalog.getTable(ident.asTableIdentifier.database.getOrElse("default"), ident.asTableIdentifier.table )
+      externalCatalog.getTable(ident.asTableIdentifier.database.getOrElse("default"), ident.asTableIdentifier.table)
     } catch {
       case _: NoSuchTableException =>
         throw QueryCompilationErrors.noSuchTableError(ident)
     }
 
-    if(catalogTable.provider.isDefined && catalogTable.provider.get.equalsIgnoreCase("delta")){
-      return (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
+    if (catalogTable.provider.isDefined) {
+      if (catalogTable.provider.get.equalsIgnoreCase("delta")) {
+        return (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
+      }
+      else if (catalogTable.provider.get.equalsIgnoreCase("iceberg")) {
+        return (new UnityIcebergCatalog(externalCatalog, catalogName, options)).alterTable(ident, changes: _*)
+      }
     }
 
     val properties = CatalogV2Util.applyPropertiesChanges(catalogTable.properties, changes)
@@ -134,9 +140,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       catalogTable.storage
     }
-    val table = if(loadTable(ident) == null){
+    val table = if (loadTable(ident) == null) {
       loadTable(ident, null)
-    }else{
+    } else {
       loadTable(ident)
     }
     table match {
@@ -160,7 +166,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def dropTable(ident: Identifier): Boolean = {
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    externalCatalog.dropTable(dbName, tableName, true,false)
+    externalCatalog.dropTable(dbName, tableName, true, false)
     true
   }
 
@@ -168,13 +174,19 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val oldTableName = oldIdent.asTableIdentifier.table
     val newTableName = newIdent.asTableIdentifier.table
     val dbName = newIdent.asTableIdentifier.database.getOrElse("default")
-    externalCatalog.renameTable(db = dbName, oldName = oldTableName, newName = newTableName)
+    val providerValue = externalCatalog.getTable(dbName,oldTableName).provider
+    providerValue match {
+      case Some(value) if(value.equalsIgnoreCase("iceberg"))=> (new UnityIcebergCatalog(externalCatalog, catalogName, options)).renameTable(oldIdent, newIdent)
+      case _ => externalCatalog.renameTable(db = dbName, oldName = oldTableName, newName = newTableName)
+    }
+
   }
+
   override def listNamespaces(): Array[Array[String]] = {
     (externalCatalog.
-        listDatabases() ++ proxyCatalog.listDatabase()).
-        map(x => Array(x)).
-        toArray
+      listDatabases() ++ proxyCatalog.listDatabase()).
+      map(x => Array(x)).
+      toArray
   }
 
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
@@ -208,10 +220,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def createNamespace(
                                 namespace: Array[String],
-                                metadata: util.Map[String, String]): Unit ={
+                                metadata: util.Map[String, String]): Unit = {
     val cd = namespace match {
       case Array(db) => toCatalogDatabase(db, metadata)
-      case  _ => throw  QueryCompilationErrors.noSuchNamespaceError(namespace)
+      case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
     externalCatalog.createDatabase(cd, false)
 
@@ -225,8 +237,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         try {
           externalCatalog.dropDatabase(db, false, cascade)
           true
-        }catch {
-          case e:Exception => false
+        } catch {
+          case e: Exception => false
         }
     }
   }
@@ -245,9 +257,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     BestEffortStagedTable(ident, table, this)
   }
 
-//  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-//    (new DeltaCatalog).stageCreate(ident = ident, columns,partitions = partitions, properties = properties)
-//  }
+  //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+  //    (new DeltaCatalog).stageCreate(ident = ident, columns,partitions = partitions, properties = properties)
+  //  }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     println("Inside stageCreateOrReplace")
@@ -280,7 +292,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val locationUri = location.map(CatalogUtils.stringToURI)
 
     val provider = properties.getOrDefault(TableCatalog.PROP_PROVIDER, conf.defaultDataSourceName)
-    if(provider.equalsIgnoreCase("delta")){
+    if (provider.equalsIgnoreCase("delta")) {
       new UnityDeltaCatalog(externalCatalog).createDeltaTable(
         ident,
         schema,
@@ -293,7 +305,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         isExternal
       )
 
-    }else {
+    } else {
       val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
 
       val tableProperties = properties.asScala
@@ -321,15 +333,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
       try {
 
-        if(provider.equalsIgnoreCase("iceberg")){
+        if (provider.equalsIgnoreCase("iceberg")) {
           val icebergProperties = (properties.asScala.toMap ++ Map(TableCatalog.PROP_LOCATION -> location.get))
           val icebergCatalog = new UnityIcebergCatalog(externalCatalog, catalogName, options)
           return icebergCatalog.createIcebergTable(ident, schema, partitions, icebergProperties.asJava, tableDesc)
         }
         externalCatalog.createTable(tableDesc, ignoreIfExists = false)
-        if(tableType == CatalogTableType.VIEW){
+        if (tableType == CatalogTableType.VIEW) {
           V2Table(tableDesc)
-        }else {
+        } else {
           loadTable(ident)
         }
       } catch {
@@ -338,7 +350,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }
   }
 
-  def createTable(tableDesc: CatalogTable, ignoreIfExists:Boolean):Unit={
+  def createTable(tableDesc: CatalogTable, ignoreIfExists: Boolean): Unit = {
     externalCatalog.createTable(tableDesc, ignoreIfExists)
   }
 
@@ -350,7 +362,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def tableExists(ident: Identifier): Boolean = {
     try {
-      loadTable(ident) != null || loadTable(ident, null) !=null
+      loadTable(ident) != null || loadTable(ident, null) != null
     } catch {
       case e: NoSuchTableException =>
         false
@@ -365,13 +377,13 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def loadTable(ident: Identifier): Table = {
     val tableName = ident.asTableIdentifier.table
     val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    val tt = if(proxyCatalog.tableExists(db = dbName, table = tableName)) {
+    val tt = if (proxyCatalog.tableExists(db = dbName, table = tableName)) {
       proxyCatalog.getTable(db = dbName, table = tableName)
-    }else {
+    } else {
       externalCatalog.getTable(table = tableName, db = dbName)
     }
 
-    if(tt == null)
+    if (tt == null)
       return null
     if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
       DeltaTableV2(
@@ -379,10 +391,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         new Path(tt.location),
         catalogTable = Some(tt),
         tableIdentifier = Some(ident.toString))
-    } else if(tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")){
+    } else if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")) {
       new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
     } else {
-      if(tt != null && tt.tableType == CatalogTableType.VIEW){
+      if (tt != null && tt.tableType == CatalogTableType.VIEW) {
         return null
       }
       if (tt != null) {
@@ -394,32 +406,49 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier, timestamp: Long): Table = {
-    if(timestamp ==null){
-      val tableName = ident.asTableIdentifier.table
-      val dbName = ident.asTableIdentifier.database.getOrElse("default")
-      val tt = externalCatalog.getTable(table = tableName, db = dbName)
-      if(tt!=null){
-        V2Table(tt)
-      }else{
-        null
-      }
-    }else {
-      new UnityDeltaCatalog(externalCatalog).loadTable(ident, timestamp)
-    }
-  }
-
-  override def loadTable(ident: Identifier, version: String): Table = {
-    if (version == null) {
-      val tableName = ident.asTableIdentifier.table
-      val dbName = ident.asTableIdentifier.database.getOrElse("default")
-      val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    val tableName = ident.asTableIdentifier.table
+    val dbName = ident.asTableIdentifier.database.getOrElse("default")
+    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    if (timestamp == null) {
       if (tt != null) {
         V2Table(tt)
       } else {
         null
       }
-    }else {
-      new UnityDeltaCatalog(externalCatalog).loadTable(ident, version)
+    } else {
+      tt.provider match {
+        case Some(value) => if(value.equalsIgnoreCase("delta")){
+          new UnityDeltaCatalog(externalCatalog).loadTable(ident, timestamp)
+        }else if(value.equalsIgnoreCase("iceberg")){
+          new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident, timestamp)
+        }else{
+          throw new IllegalArgumentException(s"${value} dataforat not supported")
+        }
+      }
+    }
+  }
+
+  override def loadTable(ident: Identifier, version: String): Table = {
+    val tableName = ident.asTableIdentifier.table
+    val dbName = ident.asTableIdentifier.database.getOrElse("default")
+    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    if (version == null) {
+
+      if (tt != null) {
+        V2Table(tt)
+      } else {
+        null
+      }
+    } else {
+      tt.provider match {
+        case Some(value) => if (value.equalsIgnoreCase("delta")) {
+          new UnityDeltaCatalog(externalCatalog).loadTable(ident, version)
+        } else if (value.equalsIgnoreCase("iceberg")) {
+          new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident, version)
+        } else {
+          throw new IllegalArgumentException(s"${value} dataforat not supported")
+        }
+      }
     }
   }
 
@@ -437,6 +466,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     println("Inside stage replace")
     (new DeltaCatalog).stageReplace(ident = ident, schema = schema, partitions = partitions, properties = properties)
   }
+
   override def name(): String = catalogName
 
   private def toCatalogDatabase(
@@ -454,17 +484,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         Seq(SupportsNamespaces.PROP_COMMENT, SupportsNamespaces.PROP_LOCATION))
   }
 
-  def getDBPath(db: String): URI={
+  def getDBPath(db: String): URI = {
     val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
-    val catalogPath = new Path(warehousePath, catalogName+".cat")
-    val dbPath = new Path(catalogPath,db+".db")
+    val catalogPath = new Path(warehousePath, catalogName + ".cat")
+    val dbPath = new Path(catalogPath, db + ".db")
     dbPath.toUri
   }
-
-
-
-
-
 
 
 }
