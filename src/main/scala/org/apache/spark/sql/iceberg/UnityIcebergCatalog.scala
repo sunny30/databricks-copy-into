@@ -16,6 +16,12 @@ import java.util
 import java.util.regex.Pattern
 class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: CaseInsensitiveStringMap) extends DeltaLogging{
 
+  lazy val icebergCatalog = {
+    val ct = new UnitySparkCatalog()
+    ct.initialize(catalogName, catalogOptions(catalogName, SQLConf.get))
+    ct
+  }
+
   def createIcebergTable(
                           ident: Identifier,
                           schema: StructType,
@@ -45,5 +51,13 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
     }
     new CaseInsensitiveStringMap(options)
   }
+
+
+  def loadTable(ident: Identifier): Table = {
+    val icebergTable = icebergCatalog.loadTable(ident)
+    icebergTable
+  }
+
+
 
 }

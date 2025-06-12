@@ -363,6 +363,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         new Path(tt.location),
         catalogTable = Some(tt),
         tableIdentifier = Some(ident.toString))
+    } else if(tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")){
+      new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
     } else {
       if(tt != null && tt.tableType == CatalogTableType.VIEW){
         return null

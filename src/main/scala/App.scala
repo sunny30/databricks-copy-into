@@ -90,6 +90,7 @@ object App {
     /*create iceberg table*/
     spark.sql("create database cat.dbice")
     spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
+    spark.sql("describe formatted cat.dbice.tbl").show()
     /*create iceberg table ends*/
 
     /*Delta overwrite table*/
