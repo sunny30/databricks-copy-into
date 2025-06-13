@@ -1,7 +1,8 @@
 package org.apache.spark.sql.iceberg
 
+import org.apache.hadoop.fs.Path
 import org.apache.iceberg.hadoop.{UnityHadoopCatalog, UnitySparkCatalog}
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, ExternalCatalog}
 import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, Table, TableChange}
 import org.apache.spark.sql.connector.expressions.Transform
@@ -43,6 +44,8 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
 
 
   private def catalogOptions(name: String, conf: SQLConf) = {
+    conf.setConfString("spark.sql.catalog.cat.type", "hadoop")
+    conf.setConfString("spark.sql.catalog.cat.warehouse", getCatlogPath)
     val prefix = Pattern.compile("^spark\\.sql\\.catalog\\." + name + "\\.(.+)")
     val options = new util.HashMap[String, String]
     conf.getAllConfs.foreach {
@@ -51,6 +54,13 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
         if (matcher.matches && matcher.groupCount > 0) options.put(matcher.group(1), value)
     }
     new CaseInsensitiveStringMap(options)
+  }
+
+
+  def getCatlogPath:String = {
+    val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
+    val catalogPath = new Path(warehousePath, catalogName + ".cat")
+    catalogPath.toString
   }
 
 

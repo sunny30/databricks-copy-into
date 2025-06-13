@@ -45,8 +45,7 @@ object App {
       .set("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.hive.catalog.UnityCatalog")
       .set("hive.exec.dynamic.partition.mode", "nonstrict")
       .set("parquet.compression", "SNAPPY")
-      .set("spark.sql.sources.default", "delta").set("spark.sql.catalog.cat.type", "hadoop")
-      .set("spark.sql.catalog.cat.warehouse", "/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat")
+      .set("spark.sql.sources.default", "delta")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -111,6 +110,8 @@ object App {
     spark.sql("select * from cat.dbice.tbl").show()
     spark.sql("delete from cat.dbice.tbl where where id = 12")
     spark.sql("select * from cat.dbice.tbl").show()
+
+   // spark.sql("select * from cat.dbice.tbl.snapshots").show()
 
 
     /*create iceberg table ends*/
