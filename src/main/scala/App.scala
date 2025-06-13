@@ -61,12 +61,12 @@ object App {
     /** Custom data format  write options* */
 
     import spark.implicits._
-    //spark.sql("create database cat.hivedb")
-    //   spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
-    //  spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
+  //  spark.sql("create database cat.hivedb")
+    //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
+   // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
-    //  spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
+    //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
 
     val df3 = Seq(
       (7, "John", 2.0),
@@ -87,10 +87,28 @@ object App {
       (12, "papa", 7.0)
     ).toDF("col1", "col2", "col3")
 
+    val df5 = Seq(
+      (7, "Hardy"),
+      (8, "vacum"),
+      (9, "sherlock"),
+      (10, "johny"),
+      (11, "Yes"),
+      (12, "papa")
+    ).toDF("col1", "col2")
+
     /*create iceberg table*/
-//    spark.sql("create database cat.dbice")
-//    spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
-//    spark.sql("describe formatted cat.dbice.tbl").show()
+    spark.sql("create database cat.dbice")
+    spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
+    spark.sql("describe formatted cat.dbice.tbl").show()
+    spark.sql("insert into cat.dbice.tbl values(1, 'sunny')")
+    df5.write.format("iceberg").mode("overwrite").saveAsTable("cat.dbice.tbl")
+    df5.write.format("iceberg").mode("append").saveAsTable("cat.dbice.tbl")
+    spark.sql("select * from cat.dbice.tbl").show()
+    spark.read.table("cat.dbice.tbl").show()
+    df4.write.format("iceberg").saveAsTable("cat.dbice.tbl1")
+    spark.read.table("cat.dbice.tbl1").show()
+
+
     /*create iceberg table ends*/
 
     /*Delta overwrite table*/
@@ -171,16 +189,16 @@ object App {
     //
     //  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
     //  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-    spark.sql("create database ecat.customdb1")
-    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
-    //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
-    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
-    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
-    df3.write.mode("overwrite").saveAsTable("ecat.customdb1.nt")
-
-    //    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
-    spark.read.options(Map("k6"->"v6")).table("ecat.customdb1.nt").show()
+//    spark.sql("create database ecat.customdb1")
+//    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
+//    //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
+//    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
+//    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
+//    df3.write.mode("overwrite").saveAsTable("ecat.customdb1.nt")
+//
+//    //    df3.write.format("custom").mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
+//    spark.read.options(Map("k6"->"v6")).table("ecat.customdb1.nt").show()
     //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl2")
     //    df3.write.saveAsTable("ecat.customdb.tbl2")
     //    spark.sql("describe formatted ecat.customdb.tbl2").show()

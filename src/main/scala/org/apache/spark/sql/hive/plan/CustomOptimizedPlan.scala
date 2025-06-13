@@ -1,6 +1,7 @@
 package org.apache.spark.sql.hive.plan
 
 import org.apache.hadoop.fs.Path
+import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker}
@@ -70,6 +71,8 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       catalog.asTableCatalog.loadTable(identifier) match {
         case v2Table: V2Table => v2Table.v1Table.provider.get
         case deltaTableV2: DeltaTableV2 => deltaTableV2.v1Table.provider.get
+        case sparkTable: SparkTable => "iceberg"
+        case _ => throw new IllegalArgumentException("not a valid data format table")
       }
     }else{
       val properties = CatalogV2Util.convertTableProperties(tableSpec)
@@ -121,6 +124,8 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           properties = getOldTableProps(catalog,ident,tableSpec)
           val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
           rtas.copy(tableSpec = newTableSpec,query = writePlan)
+        }else if(providerValue.equalsIgnoreCase("iceberg")){
+          rtas.copy(query = writePlan)
         }else {
 
           if (catalog.asTableCatalog.tableExists(ident)) {
@@ -182,6 +187,8 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             catalog.asTableCatalog.dropTable(ident)
           }
        // One has to drop Delta CTAS will create delta table
+          ctas.copy(query = writePlan)
+        } else if (providerValue.equalsIgnoreCase("iceberg")) {
           ctas.copy(query = writePlan)
         }else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))

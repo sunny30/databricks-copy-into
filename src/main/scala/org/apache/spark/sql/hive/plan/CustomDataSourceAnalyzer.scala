@@ -1,6 +1,7 @@
 package org.apache.spark.sql.hive.plan
 
 import org.apache.hadoop.fs.Path
+import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.arrow.ArrowFileFormat
 import org.apache.spark.sql.{SaveMode, SparkSession}
@@ -350,77 +351,82 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         resolvedLeafPlan
       }
 
-    //in managed catalog we have to fix this.
+    //code looks like it will throw error, if its nt V2Table but just above we solved it for V2Table only
     case x@Project(p, child@SubqueryAlias(identifier, child1: DataSourceV2Relation))
       if child1.catalog.isDefined =>
 
       println("Inside Project over DataSourceV2Relation")
       //  x.setAnalyzed()
 
-      val table = child1.table.asInstanceOf[V2Table]
-      if (table.v1Table.tableType == CatalogTableType.VIEW) {
-        return getViewPlan(table)
-      }
-      val provider = child1.table.asInstanceOf[V2Table].v1Table.provider.getOrElse("custom")
-      val dataSource = DataSource(
-        session,
-        // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
-        // inferred at runtime. We should still support it.
-        userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
-        partitionColumns = table.v1Table.partitionColumnNames,
-        bucketSpec = table.v1Table.bucketSpec,
-        className = table.v1Table.provider.get,
-        options = table.v1Table.storage.properties ++ child1.options.asScala.toMap ++ getReadOptionsForExternalSource ,
-        catalogTable = Some(table.v1Table))
+      child1.table match {
+        case sparkTable: SparkTable => x
+        case v2Table: V2Table =>
+          val table = child1.table.asInstanceOf[V2Table]
+          if (table.v1Table.tableType == CatalogTableType.VIEW) {
+            return getViewPlan(table)
+          }
+          val provider = child1.table.asInstanceOf[V2Table].v1Table.provider.getOrElse("custom")
+          val dataSource = DataSource(
+            session,
+            // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+            // inferred at runtime. We should still support it.
+            userSpecifiedSchema = if (table.schema.isEmpty) None else Some(table.schema),
+            partitionColumns = table.v1Table.partitionColumnNames,
+            bucketSpec = table.v1Table.bucketSpec,
+            className = table.v1Table.provider.get,
+            options = table.v1Table.storage.properties ++ child1.options.asScala.toMap ++ getReadOptionsForExternalSource,
+            catalogTable = Some(table.v1Table))
 
-      if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
-        || provider.equalsIgnoreCase("parquet")
-        || provider.equalsIgnoreCase("orc")
-        || provider.equalsIgnoreCase("avro") || provider.equalsIgnoreCase("arrow")) {
-        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
-        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
-        val dataCols = child1.output.filter(p => schemaColName.contains(p.name))
-        val partCols = child1.output.filter(p => partSchemaColNames.contains(p.name))
-        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
-        val fileCatalog = new CustomCatalogFileIndex(
-          SparkSession.active,
-          table.v1Table,
-          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
+          if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
+            || provider.equalsIgnoreCase("parquet")
+            || provider.equalsIgnoreCase("orc")
+            || provider.equalsIgnoreCase("avro") || provider.equalsIgnoreCase("arrow")) {
+            val schemaColName = table.v1Table.dataSchema.map(f => f.name)
+            val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
+            val dataCols = child1.output.filter(p => schemaColName.contains(p.name))
+            val partCols = child1.output.filter(p => partSchemaColNames.contains(p.name))
+            val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
+            val fileCatalog = new CustomCatalogFileIndex(
+              SparkSession.active,
+              table.v1Table,
+              table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
 
-        //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
-        //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
-        val ff = if (provider.equalsIgnoreCase("hive")) {
-          getHiveTableFileFormat(table.v1Table)
-        } else {
-          getFileFormat(provider)
-        }
+            //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
+            //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
+            val ff = if (provider.equalsIgnoreCase("hive")) {
+              getHiveTableFileFormat(table.v1Table)
+            } else {
+              getFileFormat(provider)
+            }
 
-        val relation = LogicalRelation(relation = HadoopFsRelation(
-          location = fileCatalog,
-          partitionSchema = table.v1Table.partitionSchema,
-          dataSchema = table.v1Table.dataSchema,
-          fileFormat = ff,
-          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
-          bucketSpec = None
-        )(SparkSession.active))
-        val newRelation = relation.copy(output = child1.output)
-        val newChild = child.copy(identifier = identifier, child = newRelation)
-        val op = x.copy(projectList = p, child = newChild)
-        op.resolved
-        //   op.setAnalyzed()
-        op
-      } else {
-        val relation = if (provider.equalsIgnoreCase("custom")) {
-          LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
-        } else {
-          LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
-        }
-        val newRelation = relation.copy(output = child1.output, catalogTable = Some(table.v1Table), relation = relation.relation, isStreaming = false)
-        val newChild = child.copy(identifier = identifier, child = newRelation)
-        val op = x.copy(child = newChild)
-        op.resolved
-       // op.setAnalyzed()
-        op
+            val relation = LogicalRelation(relation = HadoopFsRelation(
+              location = fileCatalog,
+              partitionSchema = table.v1Table.partitionSchema,
+              dataSchema = table.v1Table.dataSchema,
+              fileFormat = ff,
+              options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
+              bucketSpec = None
+            )(SparkSession.active))
+            val newRelation = relation.copy(output = child1.output)
+            val newChild = child.copy(identifier = identifier, child = newRelation)
+            val op = x.copy(projectList = p, child = newChild)
+            op.resolved
+            //   op.setAnalyzed()
+            op
+          } else {
+            val relation = if (provider.equalsIgnoreCase("custom")) {
+              LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
+            } else {
+              LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
+            }
+            val newRelation = relation.copy(output = child1.output, catalogTable = Some(table.v1Table), relation = relation.relation, isStreaming = false)
+            val newChild = child.copy(identifier = identifier, child = newRelation)
+            val op = x.copy(child = newChild)
+            op.resolved
+            // op.setAnalyzed()
+            op
+          }
+        case _ => x
       }
 
     case u: UnresolvedTable =>
