@@ -94,7 +94,7 @@ object App {
       (10, "johny"),
       (11, "Yes"),
       (12, "papa")
-    ).toDF("col1", "col2")
+    ).toDF("id", "name")
 
     /*create iceberg table*/
     spark.sql("create database cat.dbice")
@@ -107,6 +107,10 @@ object App {
     spark.read.table("cat.dbice.tbl").show()
     df4.write.format("iceberg").saveAsTable("cat.dbice.tbl1")
     spark.read.table("cat.dbice.tbl1").show()
+    spark.sql("update cat.dbice.tbl as t1 set name = 'Sunny' where id = 7")
+    spark.sql("select * from cat.dbice.tbl").show()
+    spark.sql("delete from cat.dbice.tbl where where id = 12")
+    spark.sql("select * from cat.dbice.tbl").show()
 
 
     /*create iceberg table ends*/
