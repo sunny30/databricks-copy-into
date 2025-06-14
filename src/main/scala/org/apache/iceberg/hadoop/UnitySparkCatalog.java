@@ -15,22 +15,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.iceberg.CachingCatalog;
-import org.apache.iceberg.CatalogProperties;
-import org.apache.iceberg.CatalogUtil;
-import org.apache.iceberg.EnvironmentContext;
-import org.apache.iceberg.HasTableOperations;
-import org.apache.iceberg.MetadataTableType;
-import org.apache.iceberg.Schema;
-import org.apache.iceberg.Snapshot;
-import org.apache.iceberg.SnapshotRef;
-import org.apache.iceberg.Transaction;
+import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.catalog.ViewCatalog;
 import org.apache.iceberg.exceptions.AlreadyExistsException;
+import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.iceberg.hadoop.HadoopTables;
@@ -740,10 +732,11 @@ public class UnitySparkCatalog
         SparkSession sparkSession = SparkSession.active();
         this.tables =
                 new HadoopTables(SparkUtil.hadoopConfCatalogOverrides(SparkSession.active(), name));
-        this.icebergCatalog =
-                cacheEnabled
-                        ? CachingCatalog.wrap(catalog, cacheCaseSensitive, cacheExpirationIntervalMs)
-                        : catalog;
+        this.icebergCatalog = catalog ;
+//        this.icebergCatalog =
+//                cacheEnabled
+//                        ? CachingCatalog.wrap(catalog, cacheCaseSensitive, cacheExpirationIntervalMs)
+//                        : catalog;
         if (catalog instanceof SupportsNamespaces) {
             this.asNamespaceCatalog = (SupportsNamespaces) catalog;
             if (options.containsKey("default-namespace")) {
@@ -996,4 +989,6 @@ public class UnitySparkCatalog
     public Catalog icebergCatalog() {
         return icebergCatalog;
     }
+
+
 }

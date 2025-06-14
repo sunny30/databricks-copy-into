@@ -9,4 +9,9 @@ trait TableSchemaChangeCatalog extends CatalogPlugin {
     def alterTable(
              ident:Identifier,
              schema:StructType):Unit={}
+
+
+    def getTableLocation(db:String,
+                         table: String
+                        ):String
 }

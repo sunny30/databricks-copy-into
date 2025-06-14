@@ -77,9 +77,7 @@ class FSMetaStoreCatalog(
 
 
   override def tableExists(db: String, table: String): Boolean = {
-    val dbPath = new Path(catalogPath, db+".db")
-    val tablePath = new Path(dbPath, table)
-    fs.exists(tablePath)
+    FSMetaStoreCatalog.catalog(db).tables.contains(table)
   }
 
   override def getDatabase(db: String): CatalogDatabase = {

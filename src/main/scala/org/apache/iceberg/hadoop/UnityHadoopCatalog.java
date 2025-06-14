@@ -10,6 +10,8 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.calcite.runtime.Unit;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -17,20 +19,12 @@ import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.PathFilter;
 import org.apache.hadoop.fs.RemoteIterator;
-import org.apache.iceberg.CatalogProperties;
-import org.apache.iceberg.CatalogUtil;
-import org.apache.iceberg.LockManager;
-import org.apache.iceberg.Schema;
-import org.apache.iceberg.TableMetadata;
-import org.apache.iceberg.TableOperations;
+import org.apache.iceberg.*;
+import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
-import org.apache.iceberg.exceptions.AlreadyExistsException;
-import org.apache.iceberg.exceptions.NamespaceNotEmptyException;
-import org.apache.iceberg.exceptions.NoSuchNamespaceException;
-import org.apache.iceberg.exceptions.NoSuchTableException;
-import org.apache.iceberg.exceptions.RuntimeIOException;
+import org.apache.iceberg.exceptions.*;
 import org.apache.iceberg.io.CloseableGroup;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.relocated.com.google.common.base.Joiner;
@@ -39,10 +33,12 @@ import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.base.Strings;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
+import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.spark.SparkUtil;
 import org.apache.iceberg.util.LocationUtil;
 import org.apache.iceberg.util.LockManagers;
+import org.apache.iceberg.util.PropertyUtil;
 import org.apache.spark.sql.SparkSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +77,8 @@ public class UnityHadoopCatalog extends HadoopCatalog
     private LockManager lockManager;
     private boolean suppressPermissionError = false;
     private Map<String, String> catalogProperties;
+
+    private String tableLocation ;
 
     public UnityHadoopCatalog() {}
 
@@ -213,15 +211,39 @@ public class UnityHadoopCatalog extends HadoopCatalog
 
     @Override
     protected TableOperations newTableOps(TableIdentifier identifier) {
+
         return new HadoopTableOperations(
                 new Path(defaultWarehouseLocation(identifier)), fileIO, conf, lockManager);
     }
+
+    protected TableOperations newTableOps(TableIdentifier identifier, String tablePath) {
+
+        if(tablePath == null) {
+            return new HadoopTableOperations(
+                    new Path(defaultWarehouseLocation(identifier)), fileIO, conf, lockManager);
+        }else{
+            return new HadoopTableOperations(
+                    new Path(tablePath), fileIO, conf, lockManager);
+        }
+    }
+
+
 
 
     public String getDBPath(TableIdentifier identifier) throws org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException {
         org.apache.spark.sql.connector.catalog.SupportsNamespaces asNameSpaceCatalog = (org.apache.spark.sql.connector.catalog.SupportsNamespaces)SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName) ;
         String dbLocation = asNameSpaceCatalog.loadNamespaceMetadata(identifier.namespace().levels()).get("db_location") ;
         return dbLocation ;
+    }
+
+    @Override
+    public Table loadTable(TableIdentifier identifier){
+        org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog asTableCatalog = (org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog)SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName) ;
+        String location = asTableCatalog.getTableLocation(identifier.namespace().level(0), identifier.name()) ;
+        TableOperations ops = newTableOps(identifier, location) ;
+        Table result = new BaseTable(ops, fullTableName(this.name(), identifier), this.metricsReporter());
+        return result ;
+
     }
 
     @Override
@@ -408,14 +430,84 @@ public class UnityHadoopCatalog extends HadoopCatalog
     private class HadoopCatalogTableBuilder extends BaseMetastoreCatalogTableBuilder {
         private String defaultLocation;
 
+        private String location = null;
+
+        private Schema schema;
+
+        private  TableIdentifier identifier;
+
+        private PartitionSpec spec = PartitionSpec.unpartitioned();
+        private SortOrder sortOrder = SortOrder.unsorted();
+
+        private  Map<String, String> tableProperties = Maps.newHashMap();
+
+
+
         private HadoopCatalogTableBuilder(TableIdentifier identifier, Schema schema) {
             super(identifier, schema);
+            this.identifier = identifier ;
+            this.schema = schema ;
             defaultLocation = defaultWarehouseLocation(identifier);
+        }
+
+        public Catalog.TableBuilder withProperties(Map<String, String> properties) {
+            if (properties != null) {
+                this.tableProperties.putAll(properties);
+            }
+
+            return this;
+        }
+
+        private HadoopCatalogTableBuilder(TableIdentifier identifier, Schema schema,Map<String, String> tableProperties ) {
+            super(identifier, schema);
+            this.identifier = identifier ;
+            this.schema = schema ;
+            defaultLocation = defaultWarehouseLocation(identifier);
+            this.tableProperties = tableProperties ;
+            if(tableProperties.containsKey("location")){
+                this.location = tableProperties.get("location") ;
+            }
+        }
+
+
+        @Override
+        public Table create() {
+            String baseLocation = this.location != null ? this.location : defaultWarehouseLocation(this.identifier) ;
+            TableOperations ops = newTableOps(this.identifier,baseLocation);
+            if (ops.current() != null) {
+                throw new AlreadyExistsException("Table already exists: %s", new Object[]{this.identifier});
+            } else {
+                ;
+                this.tableProperties.putAll(this.tableOverrideProperties());
+                TableMetadata metadata = TableMetadata.newTableMetadata(this.schema, this.spec, this.sortOrder, baseLocation, this.tableProperties);
+
+                try {
+                    ops.commit((TableMetadata)null, metadata);
+                } catch (CommitFailedException var5) {
+                    throw new AlreadyExistsException("Table was created concurrently: %s", new Object[]{this.identifier});
+                }
+
+                return new BaseTable(ops, BaseMetastoreCatalog.fullTableName(UnityHadoopCatalog.this.name(), this.identifier), UnityHadoopCatalog.this.metricsReporter());
+            }
+        }
+
+        private Map<String, String> tableDefaultProperties() {
+            Map<String, String> tableDefaultProperties = PropertyUtil.propertiesWithPrefix(UnityHadoopCatalog.this.properties(), "table-default.");
+          //  BaseMetastoreCatalog.LOG.info("Table properties set at catalog level through catalog properties: {}", tableDefaultProperties);
+            return tableDefaultProperties;
+        }
+
+        private Map<String, String> tableOverrideProperties() {
+            Map<String, String> tableOverrideProperties = PropertyUtil.propertiesWithPrefix(UnityHadoopCatalog.this.properties(), "table-override.");
+         //   BaseMetastoreCatalog.LOG.info("Table properties enforced at catalog level through catalog properties: {}", tableOverrideProperties);
+            return tableOverrideProperties;
         }
 
         @Override
         public TableBuilder withLocation(String location) {
             this.defaultLocation = location ;
+            this.location = location ;
+
 //            Preconditions.checkArgument(
 //                    location == null || location.equals(defaultLocation),
 //                    "Cannot set a custom location for a path-based table. Expected "

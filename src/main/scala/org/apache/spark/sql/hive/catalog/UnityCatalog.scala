@@ -96,6 +96,13 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }
   }
 
+  override def getTableLocation(db: String, table: String): String = {
+    if (externalCatalog.tableExists(db, table))
+      externalCatalog.getTable(db, table).storage.locationUri.get.toString
+    else
+      null
+  }
+
   override def alterTable(ident: Identifier, schema: StructType): Unit = {
 
     val catalogTable = try {
