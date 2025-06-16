@@ -77,9 +77,7 @@ class FSMetaStoreCatalog(
 
 
   override def tableExists(db: String, table: String): Boolean = {
-    val dbPath = new Path(catalogPath, db+".db")
-    val tablePath = new Path(dbPath, table)
-    fs.exists(tablePath)
+    FSMetaStoreCatalog.catalog(db).tables.contains(table)
   }
 
   override def getDatabase(db: String): CatalogDatabase = {
@@ -165,7 +163,8 @@ class FSMetaStoreCatalog(
     val db = tableDefinition.identifier.database.get
     val table = tableDefinition.identifier.table
     if (tableExists(db, table)) {
-      if(tableDefinition.provider.isDefined && tableDefinition.provider.get.equalsIgnoreCase("delta")){
+      if(tableDefinition.provider.isDefined &&
+        (tableDefinition.provider.get.equalsIgnoreCase("delta") || tableDefinition.provider.get.equalsIgnoreCase("iceberg"))){
         FSMetaStoreCatalog.catalog(db).tables.put(table, new TableDesc(tableDefinition.copy(identifier=TableIdentifier(tableDefinition.identifier.table, database = Some(tableDefinition.database),catalog = Some(catalogName)),properties = tableDefinition.properties)))
       }
       if (!ignoreIfExists) {
