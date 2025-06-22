@@ -382,32 +382,37 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier): Table = {
-    val tableName = ident.asTableIdentifier.table
-    val dbName = ident.asTableIdentifier.database.getOrElse("default")
-    val tt = if (proxyCatalog.tableExists(db = dbName, table = tableName)) {
-      proxyCatalog.getTable(db = dbName, table = tableName)
-    } else {
-      externalCatalog.getTable(table = tableName, db = dbName)
-    }
-
-    if (tt == null)
-      return null
-    if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
-      DeltaTableV2(
-        SparkSession.active,
-        new Path(tt.location),
-        catalogTable = Some(tt),
-        tableIdentifier = Some(ident.toString))
-    } else if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")) {
+    if (ident.namespace().size > 1) {
+      //this if block for history,snapshots..so far its only possible for
       new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
     } else {
-      if (tt != null && tt.tableType == CatalogTableType.VIEW) {
-        return null
-      }
-      if (tt != null) {
-        V2Table(tt)
+      val tableName = ident.asTableIdentifier.table
+      val dbName = ident.asTableIdentifier.database.getOrElse("default")
+      val tt = if (proxyCatalog.tableExists(db = dbName, table = tableName)) {
+        proxyCatalog.getTable(db = dbName, table = tableName)
       } else {
-        null
+        externalCatalog.getTable(table = tableName, db = dbName)
+      }
+
+      if (tt == null)
+        return null
+      if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
+        DeltaTableV2(
+          SparkSession.active,
+          new Path(tt.location),
+          catalogTable = Some(tt),
+          tableIdentifier = Some(ident.toString))
+      } else if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")) {
+        new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
+      } else {
+        if (tt != null && tt.tableType == CatalogTableType.VIEW) {
+          return null
+        }
+        if (tt != null) {
+          V2Table(tt)
+        } else {
+          null
+        }
       }
     }
   }

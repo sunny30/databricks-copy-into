@@ -98,6 +98,7 @@ object App {
     /*create iceberg table*/
     spark.sql("create database cat.dbice")
     spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
+
     spark.sql("describe formatted cat.dbice.tbl").show()
     spark.sql("insert into cat.dbice.tbl values(1, 'sunny')")
     df5.write.format("iceberg").mode("overwrite").saveAsTable("cat.dbice.tbl")
@@ -110,6 +111,8 @@ object App {
     spark.sql("select * from cat.dbice.tbl").show()
     spark.sql("delete from cat.dbice.tbl where where id = 12")
     spark.sql("select * from cat.dbice.tbl").show()
+    println("History command coming!!")
+    spark.sql("select * from cat.dbice.tbl.history").show()
 
     spark.sql("create database cat.dbice1")
     spark.sql("create table cat.dbice1.tbl(id int, name string) using iceberg location '/tmp/tbl'")
@@ -121,6 +124,8 @@ object App {
     spark.sql("select * from cat.dbice1.tbl").show()
     spark.sql("delete from cat.dbice1.tbl where where id = 12")
     spark.sql("select * from cat.dbice1.tbl").show()
+    println("History command coming!!")
+    spark.sql("select * from cat.dbice1.tbl.history").show()
     //    spark.sql("describe formatted cat.dbice.tbl").show()
     //    spark.sql("create table cat.dbice.tbl(id i
    // spark.sql("select * from cat.dbice.tbl.snapshots").show()
