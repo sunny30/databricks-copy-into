@@ -4,7 +4,10 @@ import io.delta.sql.DeltaSparkSessionExtension
 import io.delta.sql.parser.DeltaSqlParser
 import org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
 import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.catalyst.analysis.{ProcedureArgumentCoercion, ResolveProcedures}
+import org.apache.spark.sql.catalyst.optimizer.ReplaceStaticInvoke
 import org.apache.spark.sql.catalyst.plans.logical.DescribeRelation
+import org.apache.spark.sql.execution.datasources.v2.ExtendedDataSourceV2Strategy
 import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFuncIn, FiboIter, ModelFunc}
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
@@ -22,14 +25,18 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
       CustomSparkSQLParser
     }
     extensions.injectResolutionRule(session => new ResolveCatalogViews(session))
+    extensions.injectResolutionRule(session => new ResolveProcedures(session))
     extensions.injectResolutionRule(session => new DescribeUnResolvedRelation(session))
     extensions.injectResolutionRule(session => new DescribeViewRelationRule(session))
    // extensions.injectResolutionRule(session => new RowLevelFilter(session))
     extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
+    extensions.injectResolutionRule { _ => ProcedureArgumentCoercion }
 
     extensions.injectOptimizerRule(CustomOptimizedPlan)
+    extensions.injectOptimizerRule(_ => ReplaceStaticInvoke)
     extensions.injectOptimizerRule(ExternalCatalogWrite)
     extensions.injectPlannerStrategy(_ => CustomStrategy)
+    extensions.injectPlannerStrategy { spark => ExtendedDataSourceV2Strategy(spark) }
     extensions.injectFunction(CustomAdd.fd)
     extensions.injectFunction(Fibo.fd)
     extensions.injectFunction(ModelFunc.fd)
