@@ -14,6 +14,7 @@ import org.apache.spark.sql.delta.skipping.clustering.temp.{ClusterByParserUtils
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.internal.VariableSubstitution
 import org.apache.spark.sql.types.{DataType, StructType}
+import org.apache.spark.sql.catalyst.parser.extensions.IcebergSparkSqlExtensionsParser
 
 class CustomDeltaSqlParser(val delegate: CustomSparkSQLParser) extends ParserInterface {
 
@@ -26,7 +27,12 @@ class CustomDeltaSqlParser(val delegate: CustomSparkSQLParser) extends ParserInt
       case clusterByPlan: ClusterByPlan =>
         ClusterByParserUtils(clusterByPlan, new SparkSqlParser).parsePlan(sqlText)
       case plan: LogicalPlan => plan
-      case _ => delegate.parserSparkSQLPlan(sqlText)
+      case _ =>
+        try {
+          delegate.parserSparkSQLPlan(sqlText)
+        }catch {
+          case e:Exception => new IcebergSparkSqlExtensionsParser(delegate).parsePlan(sqlText)
+        }
     }
   }
 

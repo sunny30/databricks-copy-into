@@ -238,12 +238,45 @@ public class UnityHadoopCatalog extends HadoopCatalog
 
     @Override
     public Table loadTable(TableIdentifier identifier){
+        if(MetadataTableType.from(identifier.name()) != null){
+            return loadMetadataTable(identifier) ;
+        }
         org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog asTableCatalog = (org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog)SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName) ;
         String location = asTableCatalog.getTableLocation(identifier.namespace().level(0), identifier.name()) ;
         TableOperations ops = newTableOps(identifier, location) ;
         Table result = new BaseTable(ops, fullTableName(this.name(), identifier), this.metricsReporter());
         return result ;
 
+    }
+
+    public String existingTableLocation(TableIdentifier identifier){
+        org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog asTableCatalog = (org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog)SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName) ;
+        String location = asTableCatalog.getTableLocation(identifier.namespace().level(0), identifier.name()) ;
+        return location ;
+    }
+
+    public Table loadMetadataTable(TableIdentifier identifier){
+
+        String tableName = identifier.name();
+        MetadataTableType type = MetadataTableType.from(tableName);
+        if (type != null) {
+            TableIdentifier baseTableIdentifier = TableIdentifier.of(identifier.namespace().levels());
+            String location = existingTableLocation(baseTableIdentifier) ;
+            TableOperations ops = newTableOps(baseTableIdentifier, location);
+            if (ops.current() == null) {
+                throw new NoSuchTableException("Table does not exist: %s", baseTableIdentifier);
+            }
+
+            return MetadataTableUtils.createMetadataTableInstance(
+                    ops, name(), baseTableIdentifier, identifier, type);
+        } else {
+            throw new NoSuchTableException("Table does not exist: %s", identifier);
+        }
+    }
+
+    private boolean isValidMetadataIdentifier(TableIdentifier identifier) {
+        return MetadataTableType.from(identifier.name()) != null
+                && isValidIdentifier(TableIdentifier.of(identifier.namespace().levels()));
     }
 
     @Override

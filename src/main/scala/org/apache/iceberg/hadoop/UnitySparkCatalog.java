@@ -147,9 +147,11 @@ public class UnitySparkCatalog
         try {
             return load(ident);
         } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
-            throw new NoSuchTableException(ident);
+           throw e ;
         }
     }
+
+
 
 
     public Table loadTable(Identifier ident, String version) throws NoSuchTableException {
@@ -209,6 +211,8 @@ public class UnitySparkCatalog
             throw new IllegalArgumentException("Unknown Spark table type: " + table.getClass().getName());
         }
     }
+
+
 
 
     public Table createTable(
