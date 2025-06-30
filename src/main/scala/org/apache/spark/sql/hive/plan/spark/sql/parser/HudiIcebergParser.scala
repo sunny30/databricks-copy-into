@@ -15,6 +15,8 @@ class HudiIcebergParser(val delegate: ParserInterface) {
 
     val icebergParser = new IcebergSparkSqlExtensionsParser(delegate)
     val conf = SparkSession.active.sqlContext.conf
+    conf.setConfString("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+    conf.setConfString("spark.kryo.registrator", "org.apache.spark.HoodieSparkKryoRegistrar")
     val hudiParser = new HoodieCommonSqlParser(SparkSession.active, delegate)
 
     try{
