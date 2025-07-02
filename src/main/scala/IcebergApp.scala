@@ -4,7 +4,6 @@ import org.apache.spark.sql.SparkSession
 object IcebergApp {
 
   def main(args:Array[String]):Unit={
-    org.apache.spark.sql.hudi.parser.PostProcessor
     val sparkConf = new SparkConf().setAppName("Example Spark App").setMaster("local[*]").
       set("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions").
       set("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog").

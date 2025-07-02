@@ -120,8 +120,8 @@
 
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark-bundle_2.12</artifactId>
-            <version>0.15.0</version>
+            <artifactId>hudi-spark3.5-bundle_2.12</artifactId>
+            <version>1.0.1</version>
         </dependency>
 
         <dependency>

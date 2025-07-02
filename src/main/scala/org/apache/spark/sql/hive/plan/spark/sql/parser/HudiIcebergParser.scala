@@ -5,7 +5,6 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.parser.extensions.IcebergSparkSqlExtensionsParser
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
-import org.apache.spark.sql.hudi.parser.HoodieSpark2ExtendedSqlParser
 import org.apache.spark.sql.parser.HoodieCommonSqlParser
 
 class HudiIcebergParser(val delegate: ParserInterface) {
