@@ -15,16 +15,16 @@ object HudiApp {
 
     spark.sql(
       """
-        |CREATE TABLE hudi_table5 (
-        |    ts BIGINT,
-        |    uuid STRING,
-        |    rider STRING,
-        |    driver STRING,
-        |    fare DOUBLE,
+        |CREATE TABLE if not exists hudi_table7(
+        |    id long,
         |    city STRING
         |) USING HUDI
         |PARTITIONED BY (city);
         |""".stripMargin)
+
+
+    spark.sql("""insert into hudi_table7 values (1, "mum"),(2, "mum") , (4, "bng"), (5, "bng"),(6, "bng") , (3, "mum")""")
+    spark.sql("select id from hudi_table7 where city = 'bng'").show
 
 
   }
