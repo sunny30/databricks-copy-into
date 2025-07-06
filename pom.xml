@@ -119,6 +119,12 @@
         </dependency>
 
         <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-spark3.5-bundle_2.12</artifactId>
+            <version>1.0.1</version>
+        </dependency>
+
+        <dependency>
 
             <groupId>org.apache.spark</groupId>
             <artifactId>spark-catalyst_2.12</artifactId>
@@ -203,7 +209,7 @@
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-reflect</artifactId>
-            <version>2.12.8</version>
+            <version>2.12.12</version>
 <!--            <scope>provided</scope>-->
         </dependency>
 

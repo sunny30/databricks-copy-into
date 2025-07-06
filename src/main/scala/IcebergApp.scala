@@ -24,7 +24,8 @@ object IcebergApp {
 
     df.write.format("iceberg").saveAsTable("local.db.new_logs")
 
-    spark.sql("select * from local.db.logs.history").explain(true)
+    spark.sql("select * from local.db.logs").explain(true)
+
 
   }
 
