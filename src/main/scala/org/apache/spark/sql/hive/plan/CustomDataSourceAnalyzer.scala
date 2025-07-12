@@ -227,6 +227,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                   v2Table.v1Table,
                   v2Table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
 
+
                 //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
                 //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
                 val ff = if (provider.equalsIgnoreCase("hive")) {

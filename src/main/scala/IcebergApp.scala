@@ -4,6 +4,7 @@ import org.apache.spark.sql.SparkSession
 object IcebergApp {
 
   def main(args:Array[String]):Unit={
+
     val sparkConf = new SparkConf().setAppName("Example Spark App").setMaster("local[*]").
       set("spark.sql.extensions", "org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions").
       set("spark.sql.catalog.local", "org.apache.iceberg.spark.SparkCatalog").
@@ -16,15 +17,22 @@ object IcebergApp {
                 |    level string NOT NULL)
                 |USING iceberg""".stripMargin)
 
+    //org.apache.iceberg.spark.source.IcebergSource
     spark.sql("insert into local.db.logs values('a', 'b')")
 
-    spark.sql("describe formatted local.db.logs").show()
+   // spark.sql("describe formatted local.db.logs").show()
 
-    val df = spark.sql("select * from local.db.logs")
+   // val df = spark.sql("select * from local.db.logs")
 
-    df.write.format("iceberg").saveAsTable("local.db.new_logs")
+  //  df.show()
 
-    spark.sql("select * from local.db.logs").explain(true)
+    spark.sql("select * from local.db.logs").show()
+
+    spark.read.table("local.db.logs").show()
+
+  //  df.write.format("iceberg").saveAsTable("local.db.new_logs")
+
+  //  spark.sql("select * from local.db.logs").explain(true)
 
 
   }
