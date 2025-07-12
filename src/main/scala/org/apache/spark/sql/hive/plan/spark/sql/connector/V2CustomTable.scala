@@ -18,9 +18,6 @@ import java.util
 case class V2CustomTable(name: String,
                          sparkSession: SparkSession,
                          options: CaseInsensitiveStringMap,
-                         paths: Seq[String],
-                         userSpecifiedSchema: Option[StructType],
-                         catalogName: String,
                          catalogTable: CatalogTable) extends SupportsRead with Table{
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
     val provider = catalogTable.provider.getOrElse("parquet")
