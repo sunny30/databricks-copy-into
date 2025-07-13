@@ -138,7 +138,7 @@ object App {
     spark.sql("create database cat.dbopt")
     spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
     spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
-    spark.read.table("cat.dbopt.tbl").show()
+    spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
     /*** perf opt***/
   //  position_deletes
     //    spark.sql("describe formatted cat.dbice.tbl").show()

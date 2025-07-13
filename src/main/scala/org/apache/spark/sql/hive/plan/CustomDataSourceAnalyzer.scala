@@ -285,7 +285,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
 
-    case DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], _, _, options: CaseInsensitiveStringMap) =>
+    case dd@DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], _, _, options: CaseInsensitiveStringMap) =>
 
       println("Inside DataSourceV2Relation ")
       if (table.v1Table.tableType == CatalogTableType.VIEW) {
@@ -341,7 +341,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //
 //        val resolvedLeafPlan = relation.copy(output = output)
 //        resolvedLeafPlan
-        DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
+        val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
+        ds.copy(output = dd.output)
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {
