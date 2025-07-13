@@ -32,5 +32,5 @@ case class V2CustomTable(name: String,
 
   override def schema(): StructType = catalogTable.schema
 
-  override def capabilities(): util.Set[TableCapability] = util.EnumSet.noneOf(classOf[TableCapability])
+  override def capabilities(): util.Set[TableCapability] = util.EnumSet.allOf(classOf[TableCapability])
 }

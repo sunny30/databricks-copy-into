@@ -308,6 +308,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         || provider.equalsIgnoreCase("orc")
         || provider.equalsIgnoreCase("avro")
         || provider.equalsIgnoreCase("arrow")) {
+        val catalogName = table.getCatalogName
+        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+
         val schemaColName = table.v1Table.dataSchema.map(f => f.name)
         val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
         val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
@@ -327,17 +330,18 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         } else {
           getFileFormat(provider)
         }
-        val relation = LogicalRelation(relation = HadoopFsRelation(
-          location = fileCatalog,
-          partitionSchema = table.v1Table.partitionSchema,
-          dataSchema = table.v1Table.dataSchema,
-          fileFormat = ff,
-          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
-          bucketSpec = None
-        )(SparkSession.active), isStreaming = false)
-
-        val resolvedLeafPlan = relation.copy(output = output)
-        resolvedLeafPlan
+//        val relation = LogicalRelation(relation = HadoopFsRelation(
+//          location = fileCatalog,
+//          partitionSchema = table.v1Table.partitionSchema,
+//          dataSchema = table.v1Table.dataSchema,
+//          fileFormat = ff,
+//          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
+//          bucketSpec = None
+//        )(SparkSession.active), isStreaming = false)
+//
+//        val resolvedLeafPlan = relation.copy(output = output)
+//        resolvedLeafPlan
+        DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {
