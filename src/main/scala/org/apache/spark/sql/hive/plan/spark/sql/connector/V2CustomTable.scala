@@ -21,13 +21,22 @@ case class V2CustomTable(name: String,
                          catalogTable: CatalogTable) extends SupportsRead with Table{
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
     val provider = catalogTable.provider.getOrElse("parquet")
-    provider.toLowerCase match {
-      case "parquet" => new ParquetDataSourceV2().getTable(options).asInstanceOf[ParquetTable].newScanBuilder(options)
-      case "orc" => new OrcDataSourceV2().getTable(options).asInstanceOf[OrcTable].newScanBuilder(options)
-      case "avro" => new AvroDataSourceV2().getTable(options).asInstanceOf[AvroTable].newScanBuilder(options)
-      case "csv" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable].newScanBuilder(options)
-      case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable].newScanBuilder(options)
+
+    val fileTable = provider.toLowerCase match {
+      case "parquet" => new ParquetDataSourceV2().getTable(options).asInstanceOf[ParquetTable]
+      case "orc" => new OrcDataSourceV2().getTable(options).asInstanceOf[OrcTable]
+      case "avro" => new AvroDataSourceV2().getTable(options).asInstanceOf[AvroTable])
+      case "csv" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
+      case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable]
     }
+
+    val fileIndex = fileTable.fileIndex
+    val dataSchema = fileTable.dataSchema
+    val readSchema = fileTable.schema
+
+    V2CustomTableScanBuilder(provider, sparkSession, fileIndex,readSchema, dataSchema, options)
+
+
   }
 
   override def schema(): StructType = catalogTable.schema
