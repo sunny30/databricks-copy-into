@@ -21,6 +21,7 @@ case class V2CustomTable(name: String,
                          catalogTable: CatalogTable) extends SupportsRead with Table{
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
     val provider = catalogTable.provider.getOrElse("parquet")
+    val multiPartName  = Seq(catalogTable.identifier.catalog.getOrElse("spark_catalog"), catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
 
     val fileTable = provider.toLowerCase match {
       case "parquet" => new ParquetDataSourceV2().getTable(options).asInstanceOf[ParquetTable]
@@ -34,7 +35,7 @@ case class V2CustomTable(name: String,
     val dataSchema = fileTable.dataSchema
     val readSchema = fileTable.schema
 
-    V2CustomTableScanBuilder(provider, sparkSession, fileIndex,readSchema, dataSchema, options)
+    V2CustomTableScanBuilder(multiPartName,provider, sparkSession, fileIndex,readSchema, dataSchema, options)
 
 
   }

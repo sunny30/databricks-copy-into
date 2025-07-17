@@ -16,6 +16,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 case class V2CustomTableScanBuilder(
+                                     multiPartName: Seq[String],
                                      format: String,
                                      sparkSession: SparkSession,
                                      fileIndex: PartitioningAwareFileIndex,
@@ -90,7 +91,7 @@ case class V2CustomTableScanBuilder(
     if (pushedAggregations.isEmpty) {
       finalSchema = readDataSchema()
     }
-    V2CustomTableScan(format, sparkSession, hadoopConf, fileIndex, dataSchema, finalSchema,
+    V2CustomTableScan(multiPartName,format, sparkSession, hadoopConf, fileIndex, dataSchema, finalSchema,
       readPartitionSchema(), pushedDataFilters, options, pushedAggregations,
       partitionFilters, dataFilters)
   }

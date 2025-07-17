@@ -25,6 +25,7 @@ import org.apache.spark.util.SerializableConfiguration
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 case class V2CustomTableScan(
+                              multiPartName: Seq[String],
                               format: String,
                               sparkSession: SparkSession,
                               hadoopConf: Configuration,
