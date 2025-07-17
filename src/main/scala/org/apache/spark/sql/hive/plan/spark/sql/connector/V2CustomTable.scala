@@ -25,7 +25,7 @@ case class V2CustomTable(name: String,
     val fileTable = provider.toLowerCase match {
       case "parquet" => new ParquetDataSourceV2().getTable(options).asInstanceOf[ParquetTable]
       case "orc" => new OrcDataSourceV2().getTable(options).asInstanceOf[OrcTable]
-      case "avro" => new AvroDataSourceV2().getTable(options).asInstanceOf[AvroTable])
+      case "avro" => new AvroDataSourceV2().getTable(options).asInstanceOf[AvroTable]
       case "csv" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
       case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable]
     }
