@@ -88,7 +88,9 @@ case class V2CustomTableScan(
     case _ => false
   }
 
-  override def estimateStatistics(): Statistics = super.estimateStatistics()
+  override def estimateStatistics(): Statistics = {
+    super.estimateStatistics()
+  }
 
   override def hashCode(): Int = getClass.hashCode()
 

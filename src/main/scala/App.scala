@@ -11,6 +11,7 @@ import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
+import org.apache.spark.sql.hive.plan.spark.sql.stat.AnalyzeCommandUtil
 import org.apache.spark.sql.types.DecimalType
 
 object App {
@@ -46,6 +47,8 @@ object App {
       .set("hive.exec.dynamic.partition.mode", "nonstrict")
       .set("parquet.compression", "SNAPPY")
       .set("spark.sql.sources.default", "delta")
+      .set("spark.sql.cbo.enabled", "true")
+      .set("spark.sql.cbo.planStats.enabled", "true")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -139,6 +142,9 @@ object App {
     spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
     spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
     spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
+    val plugin = spark.sessionState.catalogManager.catalog("cat")
+    val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
+    AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
     /*** perf opt***/
   //  position_deletes
     //    spark.sql("describe formatted cat.dbice.tbl").show()
