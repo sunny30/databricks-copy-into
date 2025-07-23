@@ -7,11 +7,16 @@ import org.apache.spark.sql.connector.read.SupportsPushDownAggregates
 import org.apache.spark.sql.execution.datasources.{AggregatePushDownUtils, PartitioningAwareFileIndex}
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFilters, SparkToParquetSchemaConverter}
 import org.apache.spark.sql.execution.datasources.v2.FileScanBuilder
-import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
+import org.apache.spark.sql.execution.datasources.v2.csv.CSVScanBuilder
+import org.apache.spark.sql.execution.datasources.v2.json.JsonScanBuilder
+import org.apache.spark.sql.execution.datasources.v2.orc.OrcScanBuilder
+import org.apache.spark.sql.execution.datasources.v2.parquet.{ParquetScan, ParquetScanBuilder}
+import org.apache.spark.sql.execution.datasources.v2.text.TextScanBuilder
 import org.apache.spark.sql.internal.LegacyBehaviorPolicy
 import org.apache.spark.sql.sources.Filter
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.spark.sql.v2.avro.AvroScanBuilder
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
@@ -38,31 +43,14 @@ case class V2CustomTableScanBuilder(
   override protected val supportsNestedSchemaPruning: Boolean = true
 
   override def pushDataFilters(dataFilters: Array[Filter]): Array[Filter] = {
-    val sqlConf = sparkSession.sessionState.conf
-    if (sqlConf.parquetFilterPushDown) {
-      val pushDownDate = sqlConf.parquetFilterPushDownDate
-      val pushDownTimestamp = sqlConf.parquetFilterPushDownTimestamp
-      val pushDownDecimal = sqlConf.parquetFilterPushDownDecimal
-      val pushDownStringPredicate = sqlConf.parquetFilterPushDownStringPredicate
-      val pushDownInFilterThreshold = sqlConf.parquetFilterPushDownInFilterThreshold
-      val isCaseSensitive = sqlConf.caseSensitiveAnalysis
-      val parquetSchema =
-        new SparkToParquetSchemaConverter(sparkSession.sessionState.conf).convert(readDataSchema())
-      val parquetFilters = new ParquetFilters(
-        parquetSchema,
-        pushDownDate,
-        pushDownTimestamp,
-        pushDownDecimal,
-        pushDownStringPredicate,
-        pushDownInFilterThreshold,
-        isCaseSensitive,
-        // The rebase mode doesn't matter here because the filters are used to determine
-        // whether they is convertible.
-        RebaseSpec(LegacyBehaviorPolicy.CORRECTED))
-      parquetFilters.convertibleFilters(dataFilters).toArray
-    } else {
-      Array.empty[Filter]
-    }
+   format.toLowerCase match {
+     case "parquet" => ParquetScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+     case "orc" => OrcScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+     case "csv" => CSVScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+     case "json" => JsonScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+     case "avro" => AvroScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+     case "text" => TextScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+   }
   }
 
   override def pushAggregation(aggregation: Aggregation): Boolean = {

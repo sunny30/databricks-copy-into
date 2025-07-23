@@ -47,7 +47,7 @@ object App {
       .set("hive.exec.dynamic.partition.mode", "nonstrict")
       .set("parquet.compression", "SNAPPY")
       .set("spark.sql.sources.default", "delta")
-      .set("spark.sql.cbo.enabled", "true")
+      .set("spark.sql.cbo.enabled", "false")
       .set("spark.sql.cbo.planStats.enabled", "true")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
@@ -141,10 +141,12 @@ object App {
     spark.sql("create database cat.dbopt")
     spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
     spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
-    spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
+  //  spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
     val plugin = spark.sessionState.catalogManager.catalog("cat")
     val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
-    AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
+  //  AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
+    spark.sql("select sum(id) as sid, city from cat.dbopt.tbl group by city").show()
+
     /*** perf opt***/
   //  position_deletes
     //    spark.sql("describe formatted cat.dbice.tbl").show()
