@@ -49,7 +49,7 @@ case class V2CustomTableScanBuilder(
      case "csv" => CSVScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
      case "json" => JsonScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
      case "avro" => AvroScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
-     case "text" => TextScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
+     case "text" => Array.empty[Filter]
    }
   }
 
