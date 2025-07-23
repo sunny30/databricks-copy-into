@@ -49,6 +49,7 @@ object App {
       .set("spark.sql.sources.default", "delta")
       .set("spark.sql.cbo.enabled", "false")
       .set("spark.sql.cbo.planStats.enabled", "true")
+      .set("spark.sql.parquet.aggregatePushdown", "true")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
