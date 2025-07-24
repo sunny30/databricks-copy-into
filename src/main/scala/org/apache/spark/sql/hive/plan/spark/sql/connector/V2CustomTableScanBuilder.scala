@@ -54,6 +54,13 @@ case class V2CustomTableScanBuilder(
   }
 
   override def pushAggregation(aggregation: Aggregation): Boolean = {
+
+    if(format.equalsIgnoreCase("csv")
+      || format.equalsIgnoreCase("json")
+      || format.equalsIgnoreCase("avro")
+      || format.equalsIgnoreCase("text")) {
+      return false
+    }
     if (!sparkSession.sessionState.conf.parquetAggregatePushDown) {
       return false
     }
