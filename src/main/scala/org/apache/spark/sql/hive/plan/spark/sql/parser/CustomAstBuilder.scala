@@ -4,7 +4,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedTable, UnresolvedTableOrView, UnresolvedView}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
-import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{AlterViewQueryContext, CreateViewContext, IdentifierReferenceContext, RenameTableContext, SetTablePropertiesContext, UnsetTablePropertiesContext}
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{AlterViewQueryContext, AnalyzeContext, CreateViewContext, IdentifierReferenceContext, RenameTableContext, SetTablePropertiesContext, UnsetTablePropertiesContext}
 import org.apache.spark.sql.catalyst.plans.logical.{CreateView, LogicalPlan}
 import org.apache.spark.sql.catalyst.trees.TreePattern.PARAMETER
 import org.apache.spark.sql.errors.QueryParsingErrors
@@ -13,7 +13,9 @@ import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, ShowCatalogViews}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogAlterViewQueryCommand, NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
+import org.apache.spark.sql.hive.plan.spark.sql.stat.CustomAnalyzeTable
 
+import java.util.Locale
 import scala.collection.JavaConverters.asScalaBufferConverter
 
 class CustomAstBuilder extends SparkSqlAstBuilder{
@@ -126,6 +128,57 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     }
   }
 
+  override def visitAnalyze(ctx: AnalyzeContext): LogicalPlan = withOrigin(ctx) {
+    def checkPartitionSpec(): Unit = {
+      if (ctx.partitionSpec != null) {
+        logWarning("Partition specification is ignored when collecting column statistics: " +
+          ctx.partitionSpec.getText)
+      }
+    }
+
+    if (ctx.identifier != null &&
+      ctx.identifier.getText.toLowerCase(Locale.ROOT) != "noscan") {
+      throw QueryParsingErrors.computeStatisticsNotExpectedError(ctx.identifier())
+    }
+
+    if (ctx.ALL() != null) {
+      checkPartitionSpec()
+      AnalyzeColumn(
+        createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR ALL COLUMNS"),
+        None,
+        allColumns = true)
+    } else if (ctx.identifierSeq() == null) {
+      val partitionSpec = if (ctx.partitionSpec != null) {
+        visitPartitionSpec(ctx.partitionSpec)
+      } else {
+        Map.empty[String, Option[String]]
+      }
+      val multiPartName = ctx.identifierReference().multipartIdentifier()
+      if(multiPartName.parts.size()==3){
+        CustomAnalyzeTable(
+          createUnresolvedTableOrView(
+            ctx.identifierReference,
+            "ANALYZE TABLE",
+            allowTempView = false),
+          partitionSpec,
+          noScan = ctx.identifier != null)
+      }else {
+        AnalyzeTable(
+          createUnresolvedTableOrView(
+            ctx.identifierReference,
+            "ANALYZE TABLE",
+            allowTempView = false),
+          partitionSpec,
+          noScan = ctx.identifier != null)
+      }
+    } else {
+      checkPartitionSpec()
+      AnalyzeColumn(
+        createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR COLUMNS ..."),
+        Option(visitIdentifierSeq(ctx.identifierSeq())),
+        allColumns = false)
+    }
+  }
   override def visitDropView(ctx: SqlBaseParser.DropViewContext): AnyRef = withOrigin (ctx) {
 
     val nameParts = withIdentClause(ctx.identifierReference(),

@@ -311,13 +311,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val catalogName = table.getCatalogName
         val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
 
-        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
-        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
-        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
-        val fileCatalog = new CustomCatalogFileIndex(
-          SparkSession.active,
-          table.v1Table,
-          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
+//        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
+//        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
+//        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
+//        val fileCatalog = new CustomCatalogFileIndex(
+//          SparkSession.active,
+//          table.v1Table,
+//          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
 
         //       val tablePath  = new Path(table.v1Table.location.getPath)
         //        val fileCatalog = new MetadataLogFileIndex(SparkSession.active, tablePath,
@@ -325,11 +325,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
         //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
         //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
-        val ff = if (provider.equalsIgnoreCase("hive")) {
-          getHiveTableFileFormat(table.v1Table)
-        } else {
-          getFileFormat(provider)
-        }
+//
 //        val relation = LogicalRelation(relation = HadoopFsRelation(
 //          location = fileCatalog,
 //          partitionSchema = table.v1Table.partitionSchema,
