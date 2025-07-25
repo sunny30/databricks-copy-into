@@ -62,7 +62,7 @@ case class V2Table(v1Table: CatalogTable) extends Table {
   }
 
   def getV2CustomTable: Table = {
-    val options = V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.location.getPath)
+    val options = V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).getPath)
     V2CustomTable(name, SparkSession.active, new CaseInsensitiveStringMap(options.asJava), v1Table)
   }
 
