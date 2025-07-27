@@ -15,8 +15,12 @@ import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
 import org.apache.spark.internal.config.RDD_PARALLEL_LISTING_THRESHOLD
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, CatalogUtils, ExternalCatalogUtils}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTablePartition, CatalogTableType, CatalogUtils, ExternalCatalogUtils}
+import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{BinaryType, BooleanType, DataType, DatetimeType, DecimalType, DoubleType, FloatType, IntegralType, StringType}
 import org.apache.spark.util.{SerializableConfiguration, ThreadUtils}
 
 import java.net.URI
@@ -201,6 +205,75 @@ object AnalyzeCommandUtil extends Logging {
         (location, PartitionStatistics(statuses.length, statuses.map(_.getLen).sum))
       }.toMap
     }
+  }
+
+
+  private def analyzeColumnInCatalog(sparkSession: SparkSession, catalogName: String, dbName: String, tableName: String, columnNames: Option[Seq[String]], allColumns: Boolean): Unit = {
+
+    val tableIdent = TableIdentifier(table = tableName, database = Some(dbName), catalog = Some(catalogName) )
+    val plugin = sparkSession.sessionState.catalogManager.catalog(catalogName)
+    val v2table = plugin.asTableCatalog.loadTable(Identifier.of(Seq(tableIdent.database.getOrElse("default")).toArray, tableIdent.table))
+    if(v2table.isInstanceOf[V2Table]) {
+      val tableMeta = v2table.asInstanceOf[V2Table].v1Table
+      val (sizeInBytes, _) = CommandUtils.calculateTotalSize(sparkSession, tableMeta)
+      val relation = sparkSession.read.table(s"""${catalogName}.${dbName}.${tableName}""").logicalPlan
+      val columnsToAnalyze = getColumnsToAnalyze(tableIdent, relation, columnNames, allColumns)
+
+      // Compute stats for the computed list of columns.
+      val (rowCount, newColStats) =
+        CommandUtils.computeColumnStats(sparkSession, relation, columnsToAnalyze)
+
+      val newColCatalogStats = newColStats.map {
+        case (attr, columnStat) =>
+          attr.name -> columnStat.toCatalogColumnStat(attr.name, attr.dataType)
+      }
+
+      // We also update table-level stats in order to keep them consistent with column-level stats.
+      val statistics = CatalogStatistics(
+        sizeInBytes = sizeInBytes,
+        rowCount = Some(rowCount),
+        // Newly computed column stats should override the existing ones.
+        colStats = tableMeta.stats.map(_.colStats).getOrElse(Map.empty) ++ newColCatalogStats)
+
+      plugin.asInstanceOf[TableSchemaChangeCatalog].alterTableStats(tableIdent.database.getOrElse("default"), tableIdent.table, Some(statistics))
+   //   sessionState.catalog.alterTableStats(tableIdent, Some(statistics))
+    }
+
+  }
+
+
+  private def getColumnsToAnalyze(
+                                   tableIdent: TableIdentifier,
+                                   relation: LogicalPlan,
+                                   columnNames: Option[Seq[String]],
+                                   allColumns: Boolean = false): Seq[Attribute] = {
+    val columnsToAnalyze = if (allColumns) {
+      relation.output
+    } else {
+      columnNames.get.map { col =>
+        val exprOption = relation.output.find(attr => SQLConf.get.resolver(attr.name, col))
+        exprOption.getOrElse(throw QueryCompilationErrors.columnNotFoundError(col))
+      }
+    }
+    // Make sure the column types are supported for stats gathering.
+    columnsToAnalyze.foreach { attr =>
+      if (!supportsType(attr.dataType)) {
+        throw QueryCompilationErrors.columnTypeNotSupportStatisticsCollectionError(
+          attr.name, tableIdent, attr.dataType)
+      }
+    }
+    columnsToAnalyze
+  }
+
+
+  private def supportsType(dataType: DataType): Boolean = dataType match {
+    case _: IntegralType => true
+    case _: DecimalType => true
+    case DoubleType | FloatType => true
+    case BooleanType => true
+    case _: DatetimeType => true
+    case BinaryType | StringType => true
+    case _ => false
   }
 
 }
