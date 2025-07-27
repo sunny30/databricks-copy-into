@@ -12,3 +12,15 @@ case class CustomAnalyzeTable(
     copy(child = newChild)
 }
 
+
+case class CustomAnalyzeColumn(
+                          child: LogicalPlan,
+                          columnNames: Option[Seq[String]],
+                          allColumns: Boolean) extends UnaryCommand {
+  require(columnNames.isDefined ^ allColumns, "Parameter `columnNames` or `allColumns` are " +
+    "mutually exclusive. Only one of them should be specified.")
+
+  override protected def withNewChildInternal(newChild: LogicalPlan): CustomAnalyzeColumn =
+    copy(child = newChild)
+}
+
