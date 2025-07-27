@@ -208,14 +208,15 @@ object AnalyzeCommandUtil extends Logging {
   }
 
 
-  private def analyzeColumnInCatalog(sparkSession: SparkSession, catalogName: String, dbName: String, tableName: String, columnNames: Option[Seq[String]], allColumns: Boolean): Unit = {
+  def analyzeColumnInCatalog(sparkSession: SparkSession, catalogName: String, dbName: String, tableName: String, columnNames: Option[Seq[String]], allColumns: Boolean): Unit = {
 
     val tableIdent = TableIdentifier(table = tableName, database = Some(dbName), catalog = Some(catalogName) )
     val plugin = sparkSession.sessionState.catalogManager.catalog(catalogName)
     val v2table = plugin.asTableCatalog.loadTable(Identifier.of(Seq(tableIdent.database.getOrElse("default")).toArray, tableIdent.table))
     if(v2table.isInstanceOf[V2Table]) {
       val tableMeta = v2table.asInstanceOf[V2Table].v1Table
-      val (sizeInBytes, _) = CommandUtils.calculateTotalSize(sparkSession, tableMeta)
+      val (sizeInBytes, _) = (calculateSingleLocationSize(SparkSession.active.sessionState, tableMeta.identifier, tableMeta.storage.locationUri)
+      , Seq.empty[CatalogTablePartition])
       val relation = sparkSession.read.table(s"""${catalogName}.${dbName}.${tableName}""").logicalPlan
       val columnsToAnalyze = getColumnsToAnalyze(tableIdent, relation, columnNames, allColumns)
 

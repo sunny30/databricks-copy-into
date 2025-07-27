@@ -140,17 +140,19 @@ object App {
 //    spark.sql("select * from cat.dbice1.tbl.files").show()
 //    spark.sql("select * from cat.dbice1.tbl.position_deletes").show()
     /*** perf opt***/
-//    spark.sql("create database cat.dbopt")
-//    spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
-//    spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
+    spark.sql("create database cat.dbopt")
+    spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
+    spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
 //    spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
-  //  spark.sql("select min(id) as sid, name from cat.dbopt.tbl group by name").show()
-    //spark.sql("analyze table cat.dbopt.tbl COMPUTE STATISTICS")
-//    val plugin = spark.sessionState.catalogManager.catalog("cat")
-//    val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
-  //  AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
-   // spark.sql("select sum(id) as sid, city from cat.dbopt.tbl group by city").show()
-   // spark.sql("select sum(id) as sid, name from cat.dbopt.tbl group by name").show()
+ //   spark.sql("select min(id) as sid, name from cat.dbopt.tbl group by name").show()
+  //  spark.sql("analyze table cat.dbopt.tbl COMPUTE STATISTICS")
+    val plugin = spark.sessionState.catalogManager.catalog("cat")
+    val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
+   // AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
+    AnalyzeCommandUtil.analyzeColumnInCatalog(spark, "cat", "dbopt","tbl", None, true)
+
+    spark.sql("select sum(id) as sid, city from cat.dbopt.tbl group by city").show()
+    spark.sql("select sum(id) as sid, name from cat.dbopt.tbl group by name").show()
 
     /*** perf opt***/
   //  position_deletes
@@ -172,17 +174,17 @@ object App {
     //   spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.reuseBroadcastOnly", "false")
     //   // spark.sql.exchange.reuse
     //    spark.conf.set("spark.sql.exchange.reuse", "false")
-        spark.sql("create database cat.db7")
-        spark.sql("create table cat.db7.t1(id int, name string, city string) using parquet partitioned by(city)")
-        spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
-        spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-        spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
-        val df = spark.sql("select  distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
-        df.explain(true)
-        println("-----Plan serialize------")
-        df.show()
-        df.write.saveAsTable("cat.db7.t4")
-        spark.sql("create table cat.db7.t3 as select distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+//        spark.sql("create database cat.db7")
+//        spark.sql("create table cat.db7.t1(id int, name string, city string) using parquet partitioned by(city)")
+//        spark.sql("create table cat.db7.t2(id int, name string, city string) partitioned by(city)")
+//        spark.sql("insert into cat.db7.t1 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+//        spark.sql("insert into cat.db7.t2 values (1, 'ss', 'vns'), (2, 'ash', 'vns'), (1, 'xy', 'sea'), (2, 'jhn', 'sea')")
+//        val df = spark.sql("select  distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
+//        df.explain(true)
+//        println("-----Plan serialize------")
+//        df.show()
+//        df.write.saveAsTable("cat.db7.t4")
+//        spark.sql("create table cat.db7.t3 as select distinct cat.db7.t1.id, cat.db7.t1.name from cat.db7.t1 LEFT SEMI JOIN cat.db7.t2 on cat.db7.t1.city = cat.db7.t2.city and cat.db7.t1.id<2 and cat.db7.t1.name = 'ss'")
     //
     ////
     ////    /** distinct operation* */
