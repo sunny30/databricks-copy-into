@@ -13,7 +13,7 @@ import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, ShowCatalogViews}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogAlterViewQueryCommand, NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
-import org.apache.spark.sql.hive.plan.spark.sql.stat.CustomAnalyzeTable
+import org.apache.spark.sql.hive.plan.spark.sql.stat.{CustomAnalyzeColumn, CustomAnalyzeTable}
 
 import java.util.Locale
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -140,20 +140,27 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
       ctx.identifier.getText.toLowerCase(Locale.ROOT) != "noscan") {
       throw QueryParsingErrors.computeStatisticsNotExpectedError(ctx.identifier())
     }
-
+    val multiPartName = ctx.identifierReference().multipartIdentifier()
     if (ctx.ALL() != null) {
       checkPartitionSpec()
-      AnalyzeColumn(
-        createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR ALL COLUMNS"),
-        None,
-        allColumns = true)
+      if(multiPartName.parts.size()==3){
+        CustomAnalyzeColumn(
+          createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR ALL COLUMNS"),
+          None,
+          allColumns = true)
+      }else {
+        AnalyzeColumn(
+          createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR ALL COLUMNS"),
+          None,
+          allColumns = true)
+      }
     } else if (ctx.identifierSeq() == null) {
       val partitionSpec = if (ctx.partitionSpec != null) {
         visitPartitionSpec(ctx.partitionSpec)
       } else {
         Map.empty[String, Option[String]]
       }
-      val multiPartName = ctx.identifierReference().multipartIdentifier()
+
       if(multiPartName.parts.size()==3){
         CustomAnalyzeTable(
           createUnresolvedTableOrView(
@@ -173,10 +180,17 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
       }
     } else {
       checkPartitionSpec()
-      AnalyzeColumn(
-        createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR COLUMNS ..."),
-        Option(visitIdentifierSeq(ctx.identifierSeq())),
-        allColumns = false)
+      if(multiPartName.parts.size() == 3){
+        CustomAnalyzeColumn(
+          createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR COLUMNS ..."),
+          Option(visitIdentifierSeq(ctx.identifierSeq())),
+          allColumns = false)
+      }else {
+        AnalyzeColumn(
+          createUnresolvedTableOrView(ctx.identifierReference, "ANALYZE TABLE ... FOR COLUMNS ..."),
+          Option(visitIdentifierSeq(ctx.identifierSeq())),
+          allColumns = false)
+      }
     }
   }
   override def visitDropView(ctx: SqlBaseParser.DropViewContext): AnyRef = withOrigin (ctx) {

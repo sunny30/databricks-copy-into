@@ -23,11 +23,9 @@ class DescribeViewRelationRule(session: SparkSession)
       case ca@CustomAnalyzeColumn(r@ResolvedTable(tableCatalog: TableCatalog,identifier: Identifier ,table: Table , outputAttributes: Seq[Attribute]), columns, allColumns) =>
         r.table match {
           case v: V2Table =>
-            val catalogName = v.v1Table.identifier.catalog.getOrElse("spark_catalog")
-            val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
             val tableIdent = v.v1Table.identifier
             CustomAnalyzeColumnCommand(tableIdent, columns, allColumns )
-            
+
           case _ => throw new IllegalStateException("Only V2Table is allowed for Analyze SQL")
         }
 

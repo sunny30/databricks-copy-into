@@ -145,14 +145,14 @@ object App {
     spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
 //    spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
  //   spark.sql("select min(id) as sid, name from cat.dbopt.tbl group by name").show()
-  //  spark.sql("analyze table cat.dbopt.tbl COMPUTE STATISTICS")
+    spark.sql("analyze table cat.dbopt.tbl COMPUTE STATISTICS for all columns")
     val plugin = spark.sessionState.catalogManager.catalog("cat")
     val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
    // AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
-    AnalyzeCommandUtil.analyzeColumnInCatalog(spark, "cat", "dbopt","tbl", None, true)
+  //  AnalyzeCommandUtil.analyzeColumnInCatalog(spark, "cat", "dbopt","tbl", None, true)
 
-    spark.sql("select sum(id) as sid, city from cat.dbopt.tbl group by city").show()
-    spark.sql("select sum(id) as sid, name from cat.dbopt.tbl group by name").show()
+   // spark.sql("select sum(id) as sid, city from cat.dbopt.tbl group by city").show()
+  //  spark.sql("select sum(id) as sid, name from cat.dbopt.tbl group by name").show()
 
     /*** perf opt***/
   //  position_deletes
@@ -260,22 +260,22 @@ object App {
 
 
     /** View DDL Compiler starts* */
-        spark.sql("create database cat.viewdb1")
-        spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
-        spark.sql("create table cat.viewdb1.t3(id int, name string) using delta")
-        spark.sql("insert into cat.viewdb1.t2 values('hello')")
-        spark.sql("insert into cat.viewdb1.t3 values(1,'hello')")
-        spark.sql("create view cat.viewdb1.v1(cl1) as select attributes from cat.viewdb1.t2")
-        spark.sql("show views in cat.viewdb1").show()
-       // spark.sql("drop view cat.viewdb1.v1")
-        spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
-        spark.sql("alter view cat.viewdb1.v1 as select * from cat.viewdb1.t3")
-     spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
-      spark.sql("select * from cat.viewdb1.v1").show()
-        spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
-        spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
-        spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
-        spark.sql("select * from cat.viewdb1.v2")
+//        spark.sql("create database cat.viewdb1")
+//        spark.sql("create table cat.viewdb1.t2(attributes string) using avro")
+//        spark.sql("create table cat.viewdb1.t3(id int, name string) using delta")
+//        spark.sql("insert into cat.viewdb1.t2 values('hello')")
+//        spark.sql("insert into cat.viewdb1.t3 values(1,'hello')")
+//        spark.sql("create view cat.viewdb1.v1(cl1) as select attributes from cat.viewdb1.t2")
+//        spark.sql("show views in cat.viewdb1").show()
+//       // spark.sql("drop view cat.viewdb1.v1")
+//        spark.sql("alter view cat.viewdb1.v1 set TBLPROPERTIES ('k' = 'v')")
+//        spark.sql("alter view cat.viewdb1.v1 as select * from cat.viewdb1.t3")
+//     spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
+//      spark.sql("select * from cat.viewdb1.v1").show()
+//        spark.sql("alter view cat.viewdb1.v1 UNSET TBLPROPERTIES if exists ('k')")
+//        spark.sql("alter view cat.viewdb1.v1 rename to cat.viewdb1.v2")
+//        spark.sql("describe formatted cat.viewdb1.v1").show(40, false)
+//        spark.sql("select * from cat.viewdb1.v2")
 
 
     /** View DDL Compile ends r* */
