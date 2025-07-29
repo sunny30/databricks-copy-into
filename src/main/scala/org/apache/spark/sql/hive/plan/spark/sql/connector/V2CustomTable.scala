@@ -11,6 +11,7 @@ import org.apache.spark.sql.execution.datasources.v2.orc.{OrcDataSourceV2, OrcTa
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.execution.datasources.v2.parquet.{ParquetDataSourceV2, ParquetTable}
+import org.apache.spark.sql.execution.datasources.v2.text.{TextDataSourceV2, TextTable}
 import org.apache.spark.sql.v2.avro.{AvroDataSourceV2, AvroTable}
 
 import java.util
@@ -20,8 +21,14 @@ case class V2CustomTable(name: String,
                          options: CaseInsensitiveStringMap,
                          catalogTable: CatalogTable) extends SupportsRead with Table{
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
-    val provider = catalogTable.provider.getOrElse("parquet")
+    val provider = if(catalogTable.provider.get.equalsIgnoreCase("hive")) {
+      catalogTable.storage.properties("fileformat").toLowerCase
+
+    }else{
+      catalogTable.provider.getOrElse("parquet")
+    }
     val multiPartName  = Seq(catalogTable.identifier.catalog.getOrElse("spark_catalog"), catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
+
 
     val fileTable = provider.toLowerCase match {
       case "parquet" => new ParquetDataSourceV2().getTable(options).asInstanceOf[ParquetTable]
@@ -29,6 +36,7 @@ case class V2CustomTable(name: String,
       case "avro" => new AvroDataSourceV2().getTable(options).asInstanceOf[AvroTable]
       case "csv" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
       case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable]
+      case "text" => new TextDataSourceV2().getTable(options).asInstanceOf[TextTable]
     }
 
     val fileIndex = fileTable.fileIndex

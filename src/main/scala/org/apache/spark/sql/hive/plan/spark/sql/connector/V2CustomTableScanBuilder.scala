@@ -43,6 +43,7 @@ case class V2CustomTableScanBuilder(
   override protected val supportsNestedSchemaPruning: Boolean = true
 
   override def pushDataFilters(dataFilters: Array[Filter]): Array[Filter] = {
+
    format.toLowerCase match {
      case "parquet" => ParquetScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
      case "orc" => OrcScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)

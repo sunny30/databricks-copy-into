@@ -47,7 +47,7 @@ object AnalyzeCommandUtil extends Logging {
         (calculateSingleLocationSize(SparkSession.active.sessionState, catalogTable.identifier,
           catalogTable.storage.locationUri), Seq.empty[CatalogTablePartition])
       } else {
-        val root = new Path(catalogTable.location)
+        val root = new Path(catalogTable.storage.locationUri.getOrElse(catalogTable.location).toString)
         val hadoopConf = SparkSession.active.sessionState.newHadoopConf()
         val fs = root.getFileSystem(hadoopConf)
         val threshold = SparkSession.active.sparkContext.conf.get(RDD_PARALLEL_LISTING_THRESHOLD)
