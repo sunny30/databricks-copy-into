@@ -227,6 +227,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                   v2Table.v1Table,
                   v2Table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
 
+
                 //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
                 //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
                 val ff = if (provider.equalsIgnoreCase("hive")) {
@@ -284,7 +285,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
 
 
-    case DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], _, _, options: CaseInsensitiveStringMap) =>
+    case dd@DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], _, _, options: CaseInsensitiveStringMap) =>
 
       println("Inside DataSourceV2Relation ")
       if (table.v1Table.tableType == CatalogTableType.VIEW) {
@@ -307,13 +308,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         || provider.equalsIgnoreCase("orc")
         || provider.equalsIgnoreCase("avro")
         || provider.equalsIgnoreCase("arrow")) {
-        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
-        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
-        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
-        val fileCatalog = new CustomCatalogFileIndex(
-          SparkSession.active,
-          table.v1Table,
-          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
+        val catalogName = table.getCatalogName
+        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+
+//        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
+//        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
+//        val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
+//        val fileCatalog = new CustomCatalogFileIndex(
+//          SparkSession.active,
+//          table.v1Table,
+//          table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
 
         //       val tablePath  = new Path(table.v1Table.location.getPath)
         //        val fileCatalog = new MetadataLogFileIndex(SparkSession.active, tablePath,
@@ -321,22 +325,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
         //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
         //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
-        val ff = if (provider.equalsIgnoreCase("hive")) {
-          getHiveTableFileFormat(table.v1Table)
-        } else {
-          getFileFormat(provider)
-        }
-        val relation = LogicalRelation(relation = HadoopFsRelation(
-          location = fileCatalog,
-          partitionSchema = table.v1Table.partitionSchema,
-          dataSchema = table.v1Table.dataSchema,
-          fileFormat = ff,
-          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
-          bucketSpec = None
-        )(SparkSession.active), isStreaming = false)
-
-        val resolvedLeafPlan = relation.copy(output = output)
-        resolvedLeafPlan
+//
+//        val relation = LogicalRelation(relation = HadoopFsRelation(
+//          location = fileCatalog,
+//          partitionSchema = table.v1Table.partitionSchema,
+//          dataSchema = table.v1Table.dataSchema,
+//          fileFormat = ff,
+//          options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
+//          bucketSpec = None
+//        )(SparkSession.active), isStreaming = false)
+//
+//        val resolvedLeafPlan = relation.copy(output = output)
+//        resolvedLeafPlan
+        val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
+        ds.copy(output = dd.output)
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {

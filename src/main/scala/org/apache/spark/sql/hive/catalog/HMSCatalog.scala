@@ -28,7 +28,7 @@ import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_AS
 import org.apache.hadoop.hive.ql.metadata.{Hive, HiveException, Partition => HivePartition, Table => HiveTable}
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.escapePathName
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
-import org.apache.spark.sql.hive.HiveExternalCatalog.{STATISTICS_COL_STATS_PREFIX, STATISTICS_NUM_ROWS, STATISTICS_TOTAL_SIZE}
+import org.apache.spark.sql.hive.HiveExternalCatalog.{STATISTICS_COL_STATS_PREFIX, STATISTICS_NUM_ROWS, STATISTICS_PREFIX, STATISTICS_TOTAL_SIZE}
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.internal.SQLConf
 
@@ -37,6 +37,7 @@ import java.io.PrintStream
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.Locale
 import java.util.concurrent.TimeUnit.MILLISECONDS
+import scala.collection.convert.ImplicitConversions.`map AsScala`
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
@@ -249,9 +250,20 @@ class HMSCatalog(
   }
 
   override def alterTableStats(db: String, table: String, stats: Option[CatalogStatistics]): Unit ={
-    val ct = getTable(db, table)
-    val newCt = ct.copy(stats = stats)
-    alterTable(newCt)
+    val ht = msClient.getTable(catalogName, db, table)
+    val oldProps = ht.getParameters.filterNot(_._1.startsWith(STATISTICS_PREFIX))
+    val newProps =
+      if (stats.isDefined) {
+        oldProps ++ statsToProperties(stats.get)
+      } else {
+        oldProps
+      }
+    import java.util.{HashMap => JHashMap}
+
+    val newPropsMap = new JHashMap[String, String]()
+    newPropsMap.putAll(newProps.asJava)
+    ht.setParameters(newPropsMap)
+    msClient.alter_table(ht.getDbName, ht.getTableName, ht)
   }
 
 
@@ -369,8 +381,45 @@ class HMSCatalog(
       viewOriginalText = Option(h.getViewOriginalText),
       viewText = Option(h.getViewExpandedText),
       unsupportedFeatures = unsupportedFeatures.toSeq,
-      ignoredProperties = ignoredProperties.toMap)
+      ignoredProperties = ignoredProperties.toMap,
+      stats = readHiveStats(properties))
   }
+
+  private def readHiveStats(properties: Map[String, String]): Option[CatalogStatistics] = {
+    val totalSize = properties.get(StatsSetupConst.TOTAL_SIZE).filter(_.nonEmpty).map(BigInt(_))
+    val rawDataSize = properties.get(StatsSetupConst.RAW_DATA_SIZE).filter(_.nonEmpty)
+      .map(BigInt(_))
+    val rowCount = properties.get(StatsSetupConst.ROW_COUNT).filter(_.nonEmpty).map(BigInt(_))
+    // NOTE: getting `totalSize` directly from params is kind of hacky, but this should be
+    // relatively cheap if parameters for the table are populated into the metastore.
+    // Currently, only totalSize, rawDataSize, and rowCount are used to build the field `stats`
+    // TODO: stats should include all the other two fields (`numFiles` and `numPartitions`).
+    // (see StatsSetupConst in Hive)
+
+    // When table is external, `totalSize` is always zero, which will influence join strategy.
+    // So when `totalSize` is zero, use `rawDataSize` instead. When `rawDataSize` is also zero,
+    // return None.
+    // In Hive, when statistics gathering is disabled, `rawDataSize` and `numRows` is always
+    // zero after INSERT command. So they are used here only if they are larger than zero.
+    if (totalSize.isDefined && totalSize.get > 0L) {
+      Some(CatalogStatistics(sizeInBytes = totalSize.get, rowCount = rowCount.filter(_ > 0)))
+    } else if (rawDataSize.isDefined && rawDataSize.get > 0) {
+      Some(CatalogStatistics(sizeInBytes = rawDataSize.get, rowCount = rowCount.filter(_ > 0)))
+    } else {
+      // TODO: still fill the rowCount even if sizeInBytes is empty. Might break anything?
+      None
+    }
+  }
+
+  // Below is the key of table properties for storing Hive-generated statistics
+  private val HiveStatisticsProperties = Set(
+    StatsSetupConst.COLUMN_STATS_ACCURATE,
+    StatsSetupConst.NUM_FILES,
+    StatsSetupConst.NUM_PARTITIONS,
+    StatsSetupConst.ROW_COUNT,
+    StatsSetupConst.RAW_DATA_SIZE,
+    StatsSetupConst.TOTAL_SIZE
+  )
 
   override def getTable(db: String, table: String): CatalogTable = {
     try {
@@ -474,31 +523,7 @@ class HMSCatalog(
       stats = readHiveStats(properties))
   }
 
-  private def readHiveStats(properties: Map[String, String]): Option[CatalogStatistics] = {
-    val totalSize = properties.get(StatsSetupConst.TOTAL_SIZE).filter(_.nonEmpty).map(BigInt(_))
-    val rawDataSize = properties.get(StatsSetupConst.RAW_DATA_SIZE).filter(_.nonEmpty)
-      .map(BigInt(_))
-    val rowCount = properties.get(StatsSetupConst.ROW_COUNT).filter(_.nonEmpty).map(BigInt(_))
-    // NOTE: getting `totalSize` directly from params is kind of hacky, but this should be
-    // relatively cheap if parameters for the table are populated into the metastore.
-    // Currently, only totalSize, rawDataSize, and rowCount are used to build the field `stats`
-    // TODO: stats should include all the other two fields (`numFiles` and `numPartitions`).
-    // (see StatsSetupConst in Hive)
 
-    // When table is external, `totalSize` is always zero, which will influence join strategy.
-    // So when `totalSize` is zero, use `rawDataSize` instead. When `rawDataSize` is also zero,
-    // return None.
-    // In Hive, when statistics gathering is disabled, `rawDataSize` and `numRows` is always
-    // zero after INSERT command. So they are used here only if they are larger than zero.
-    if (totalSize.isDefined && totalSize.get > 0L) {
-      Some(CatalogStatistics(sizeInBytes = totalSize.get, rowCount = rowCount.filter(_ > 0)))
-    } else if (rawDataSize.isDefined && rawDataSize.get > 0) {
-      Some(CatalogStatistics(sizeInBytes = rawDataSize.get, rowCount = rowCount.filter(_ > 0)))
-    } else {
-      // TODO: still fill the rowCount even if sizeInBytes is empty. Might break anything?
-      None
-    }
-  }
 
 
   override def listViews(db: String, pattern: String): Seq[String] = {

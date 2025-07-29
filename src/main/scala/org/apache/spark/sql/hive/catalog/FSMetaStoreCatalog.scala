@@ -266,7 +266,10 @@ class FSMetaStoreCatalog(
 
   override def alterTableDataSchema(db: String, table: String, newDataSchema: StructType): Unit = ???
 
-  override def alterTableStats(db: String, table: String, stats: Option[CatalogStatistics]): Unit = ???
+  override def alterTableStats(db: String, table: String, stats: Option[CatalogStatistics]): Unit = {
+    val ct = getTable(db,table).copy(stats = stats)
+    alterTable(ct)
+  }
 
   override def loadPartition(db: String, table: String, loadPath: String, partition: TablePartitionSpec, isOverwrite: Boolean, inheritTableSpecs: Boolean, isSrcLocal: Boolean): Unit = ???
 

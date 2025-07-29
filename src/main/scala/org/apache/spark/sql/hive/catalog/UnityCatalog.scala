@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive.catalog
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogTable, CatalogTableType, CatalogUtils, ExternalCatalog}
+import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStatistics, CatalogTable, CatalogTableType, CatalogUtils, ExternalCatalog}
 import org.apache.spark.sql.{Column, SparkSession}
 import org.apache.spark.sql.connector.catalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
@@ -76,6 +76,16 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       this.delegatedCatalog = delegate
       // Set delegated catalog in any other provider that we can integrate with
     } else throw new IllegalArgumentException("Invalid session catalog: " + delegate)
+  }
+
+  override def alterTableStats(db: String, table: String, stats: Option[CatalogStatistics]): Unit = {
+    if (externalCatalog.tableExists(db, table) && stats.isDefined) {
+      externalCatalog.alterTableStats(db, table, stats)
+    }
+  }
+
+  override def getTableStats(db: String, table: String): Option[CatalogStatistics] ={
+    externalCatalog.getTable(db, table).stats
   }
 
 

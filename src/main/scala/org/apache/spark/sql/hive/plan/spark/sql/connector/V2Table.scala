@@ -1,5 +1,7 @@
 package org.apache.spark.sql.hive.plan.spark.sql.connector
 
+import org.apache.spark.sql.SparkSession
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
@@ -8,6 +10,7 @@ import org.apache.spark.sql.connector.catalog.{CatalogV2Implicits, Table, TableC
 import org.apache.spark.sql.connector.catalog.V1Table.addV2TableProperties
 import org.apache.spark.sql.connector.expressions.{LogicalExpressions, Transform}
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.util
 
@@ -52,6 +55,20 @@ case class V2Table(v1Table: CatalogTable) extends Table {
     util.EnumSet.noneOf(classOf[TableCapability])
 
   override def toString: String = s"V1Table($name)"
+
+  def getTableCaseInsensitiveStringMap: CaseInsensitiveStringMap={
+    val options = V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.get.toString)
+    new CaseInsensitiveStringMap(options.asJava)
+  }
+
+  def getV2CustomTable: Table = {
+    val options = V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    V2CustomTable(name, SparkSession.active, new CaseInsensitiveStringMap(options.asJava), v1Table)
+  }
+
+  def getCatalogName: String = {
+    v1Table.identifier.catalog.getOrElse("spark_catalog")
+  }
 }
 
 object V2Table {
@@ -61,7 +78,8 @@ object V2Table {
 
     v1Table.properties ++
       v1Table.storage.properties.map { case (key, value) =>
-        TableCatalog.OPTION_PREFIX + key -> value } ++
+        TableCatalog.OPTION_PREFIX + key -> value
+      } ++
       v1Table.provider.map(TableCatalog.PROP_PROVIDER -> _) ++
       v1Table.comment.map(TableCatalog.PROP_COMMENT -> _) ++
       v1Table.storage.locationUri.map(TableCatalog.PROP_LOCATION -> _.toString) ++
