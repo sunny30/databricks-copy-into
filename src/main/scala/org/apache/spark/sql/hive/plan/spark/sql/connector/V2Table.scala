@@ -9,6 +9,8 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TableIdentifier
 import org.apache.spark.sql.connector.catalog.{CatalogV2Implicits, Table, TableCapability, TableCatalog}
 import org.apache.spark.sql.connector.catalog.V1Table.addV2TableProperties
 import org.apache.spark.sql.connector.expressions.{LogicalExpressions, Transform}
+import org.apache.spark.sql.execution.datasources.FileFormat
+import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -57,17 +59,65 @@ case class V2Table(v1Table: CatalogTable) extends Table {
   override def toString: String = s"V1Table($name)"
 
   def getTableCaseInsensitiveStringMap: CaseInsensitiveStringMap={
-    val options = V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.get.toString)
+
+    val options = if (v1Table.provider.getOrElse("delta").equalsIgnoreCase("csv")) {
+      mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat) ++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    } else if (v1Table.provider.getOrElse("delta").equalsIgnoreCase("hive") && v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("csv")) {
+      mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat) ++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    } else {
+      V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    }
     new CaseInsensitiveStringMap(options.asJava)
   }
 
   def getV2CustomTable: Table = {
-    val options = V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+
+    val options = if(v1Table.provider.getOrElse("delta").equalsIgnoreCase("csv")){
+      mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat)++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    }else if(v1Table.provider.getOrElse("delta").equalsIgnoreCase("hive") &&  v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("csv")){
+      mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat)++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    }else{
+      V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
+    }
     V2CustomTable(name, SparkSession.active, new CaseInsensitiveStringMap(options.asJava), v1Table)
   }
 
   def getCatalogName: String = {
     v1Table.identifier.catalog.getOrElse("spark_catalog")
+  }
+
+  def mapHiveCSVPropertiesToSparkOption(ct: CatalogTable, fileFormat: FileFormat): Map[String, String] = {
+    var tblProps = ct.properties
+
+    //tblProps.
+    if (fileFormat.isInstanceOf[CSVFileFormat]) {
+      if (!tblProps.contains("option.delimiter")) {
+        tblProps = tblProps ++ Map("delimiter" -> tblProps.getOrElse("field.delim", ","))
+      }
+
+      if (!tblProps.contains("option.quote")) {
+        tblProps = tblProps ++ Map("quote" -> tblProps.getOrElse("quoteChar", '\"'.toString))
+      }
+
+      if (!tblProps.contains("option.escape")) {
+        tblProps = tblProps ++ Map("escape" -> tblProps.getOrElse("escape.delim", '\\'.toString))
+      }
+
+      if (!tblProps.contains("option.header")) {
+        //tblProps.getOrElse("skip")
+        tblProps = tblProps ++ Map("header" -> tblProps.getOrElse("hasheaders", "false"))
+      }
+
+      if (!tblProps.contains("option.lineSep")) {
+        //tblProps.getOrElse("skip")
+        tblProps = tblProps ++ Map("lineSep" -> tblProps.getOrElse("recorddelimiter", "\n"))
+      }
+
+      tblProps
+    } else {
+      tblProps
+    }
+
   }
 }
 
