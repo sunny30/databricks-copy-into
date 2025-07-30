@@ -139,17 +139,212 @@ object App {
 //    spark.sql("select * from cat.dbice1.tbl.snapshots").show()
 //    spark.sql("select * from cat.dbice1.tbl.files").show()
 //    spark.sql("select * from cat.dbice1.tbl.position_deletes").show()
+
+
+    /**tpcds query*/
+//    spark.sql("create database cat.tpcds")
+//    spark.sql(
+//      """
+//        |create table cat.tpcds.date_dim
+//        |(
+//        |d_date_sk                 int,
+//        |d_date_id                 string,
+//        |d_date                    date,
+//        |d_month_seq               int,
+//        |d_week_seq                int,
+//        |d_quarter_seq             int,
+//        |d_year                    int,
+//        |d_dow                     int,
+//        |d_moy                     int,
+//        |d_dom                     int,
+//        |d_qoy                     int,
+//        |d_fy_year                 int,
+//        |d_fy_quarter_seq          int,
+//        |d_fy_week_seq             int,
+//        |d_day_name                string,
+//        |d_quarter_name            string,
+//        |d_holiday                 string,
+//        |d_weekend                 string,
+//        |d_following_holiday       string,
+//        |d_first_dom               int,
+//        |d_last_dom                int,
+//        |d_same_day_ly             int,
+//        |d_same_day_lq             int,
+//        |d_current_day             string,
+//        |d_current_week            string,
+//        |d_current_month           string,
+//        |d_current_quarter         string,
+//        |d_current_year            string
+//        |) using parquet
+//        |""".stripMargin)
+//
+//    spark.sql(
+//      """
+//        create table cat.tpcds.web_sales
+//        |(
+//        |ws_sold_date_sk           int,
+//        |ws_sold_time_sk           int,
+//        |ws_ship_date_sk           int,
+//        |ws_item_sk                int,
+//        |ws_bill_customer_sk       int,
+//        |ws_bill_cdemo_sk          int,
+//        |ws_bill_hdemo_sk          int,
+//        |ws_bill_addr_sk           int,
+//        |ws_ship_customer_sk       int,
+//        |ws_ship_cdemo_sk          int,
+//        |ws_ship_hdemo_sk          int,
+//        |ws_ship_addr_sk           int,
+//        |ws_web_page_sk            int,
+//        |ws_web_site_sk            int,
+//        |ws_ship_mode_sk           int,
+//        |ws_warehouse_sk           int,
+//        |ws_promo_sk               int,
+//        |ws_order_number           long,
+//        |ws_quantity               int,
+//        |ws_wholesale_cost         decimal(7,2),
+//        |ws_list_price             decimal(7,2),
+//        |ws_sales_price            decimal(7,2),
+//        |ws_ext_discount_amt       decimal(7,2),
+//        |ws_ext_sales_price        decimal(7,2),
+//        |ws_ext_wholesale_cost     decimal(7,2),
+//        |ws_ext_list_price         decimal(7,2),
+//        |ws_ext_tax                decimal(7,2),
+//        |ws_coupon_amt             decimal(7,2),
+//        |ws_ext_ship_cost          decimal(7,2),
+//        |ws_net_paid               decimal(7,2),
+//        |ws_net_paid_inc_tax       decimal(7,2),
+//        |ws_net_paid_inc_ship      decimal(7,2),
+//        |ws_net_paid_inc_ship_tax  decimal(7,2),
+//        |ws_net_profit             decimal(7,2)
+//        |)
+//        |USING parquet
+//        |partitioned by (ws_sold_date_sk)
+//        |
+//        |""".stripMargin)
+//
+//
+//    spark.sql(
+//      """
+//        |
+//        |create table cat.tpcds.catalog_sales
+//        |(
+//        |cs_sold_date_sk           int,
+//        |cs_sold_time_sk           int,
+//        |cs_ship_date_sk           int,
+//        |cs_bill_customer_sk       int,
+//        |cs_bill_cdemo_sk          int,
+//        |cs_bill_hdemo_sk          int,
+//        |cs_bill_addr_sk           int,
+//        |cs_ship_customer_sk       int,
+//        |cs_ship_cdemo_sk          int,
+//        |cs_ship_hdemo_sk          int,
+//        |cs_ship_addr_sk           int,
+//        |cs_call_center_sk         int,
+//        |cs_catalog_page_sk        int,
+//        |cs_ship_mode_sk           int,
+//        |cs_warehouse_sk           int,
+//        |cs_item_sk                int,
+//        |cs_promo_sk               int,
+//        |cs_order_number           long,
+//        |cs_quantity               int,
+//        |cs_wholesale_cost         decimal(7,2),
+//        |cs_list_price             decimal(7,2),
+//        |cs_sales_price            decimal(7,2),
+//        |cs_ext_discount_amt       decimal(7,2),
+//        |cs_ext_sales_price        decimal(7,2),
+//        |cs_ext_wholesale_cost     decimal(7,2),
+//        |cs_ext_list_price         decimal(7,2),
+//        |cs_ext_tax                decimal(7,2),
+//        |cs_coupon_amt             decimal(7,2),
+//        |cs_ext_ship_cost          decimal(7,2),
+//        |cs_net_paid               decimal(7,2),
+//        |cs_net_paid_inc_tax       decimal(7,2),
+//        |cs_net_paid_inc_ship      decimal(7,2),
+//        |cs_net_paid_inc_ship_tax  decimal(7,2),
+//        |cs_net_profit             decimal(7,2)
+//        |)
+//        |USING parquet
+//        |partitioned by (cs_sold_date_sk)
+//        |
+//        |""".stripMargin)
+//
+//    spark.sql(
+//      """
+//        |with wscs as
+//        | (select sold_date_sk
+//        |        ,sales_price
+//        |  from  (select ws_sold_date_sk sold_date_sk
+//        |              ,ws_ext_sales_price sales_price
+//        |        from cat.tpcds.web_sales
+//        |        union all
+//        |        select cs_sold_date_sk sold_date_sk
+//        |              ,cs_ext_sales_price sales_price
+//        |        from cat.tpcds.catalog_sales) x ),
+//        | wswscs as
+//        | (select d_week_seq,
+//        |        sum(case when (d_day_name='Sunday') then sales_price else null end) sun_sales,
+//        |        sum(case when (d_day_name='Monday') then sales_price else null end) mon_sales,
+//        |        sum(case when (d_day_name='Tuesday') then sales_price else  null end) tue_sales,
+//        |        sum(case when (d_day_name='Wednesday') then sales_price else null end) wed_sales,
+//        |        sum(case when (d_day_name='Thursday') then sales_price else null end) thu_sales,
+//        |        sum(case when (d_day_name='Friday') then sales_price else null end) fri_sales,
+//        |        sum(case when (d_day_name='Saturday') then sales_price else null end) sat_sales
+//        | from wscs
+//        |     ,cat.tpcds.date_dim
+//        | where d_date_sk = sold_date_sk
+//        | group by d_week_seq)
+//        | select d_week_seq1
+//        |       ,round(sun_sales1/sun_sales2,2)
+//        |       ,round(mon_sales1/mon_sales2,2)
+//        |       ,round(tue_sales1/tue_sales2,2)
+//        |       ,round(wed_sales1/wed_sales2,2)
+//        |       ,round(thu_sales1/thu_sales2,2)
+//        |       ,round(fri_sales1/fri_sales2,2)
+//        |       ,round(sat_sales1/sat_sales2,2)
+//        | from
+//        | (select wswscs.d_week_seq d_week_seq1
+//        |        ,sun_sales sun_sales1
+//        |        ,mon_sales mon_sales1
+//        |        ,tue_sales tue_sales1
+//        |        ,wed_sales wed_sales1
+//        |        ,thu_sales thu_sales1
+//        |        ,fri_sales fri_sales1
+//        |        ,sat_sales sat_sales1
+//        |  from wswscs,cat.tpcds.date_dim
+//        |  where cat.tpcds.date_dim.d_week_seq = wswscs.d_week_seq and
+//        |        d_year = 2001) y,
+//        | (select wswscs.d_week_seq d_week_seq2
+//        |        ,sun_sales sun_sales2
+//        |        ,mon_sales mon_sales2
+//        |        ,tue_sales tue_sales2
+//        |        ,wed_sales wed_sales2
+//        |        ,thu_sales thu_sales2
+//        |        ,fri_sales fri_sales2
+//        |        ,sat_sales sat_sales2
+//        |  from wswscs
+//        |      ,cat.tpcds.date_dim
+//        |  where cat.tpcds.date_dim.d_week_seq = wswscs.d_week_seq and
+//        |        d_year = 2001+1) z
+//        | where d_week_seq1=d_week_seq2-53
+//        | order by d_week_seq1
+//        |""".stripMargin).show()
+
+
+    /**tpcds query*/
     /*** perf opt***/
+
     spark.sql("create database cat.dbopt")
     spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
     spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
+    spark.sql("select * from (select sum(id) as sid, city from cat.dbopt.tbl group by city)").show()
     spark.sql("select * from cat.dbopt.tbl").show()
     spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
     spark.sql("select min(id) as sid, name from cat.dbopt.tbl group by name").show()
 
+
 //    spark.sql("analyze table cat.dbopt.tbl COMPUTE STATISTICS for all columns")
-    val plugin = spark.sessionState.catalogManager.catalog("cat")
-    val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
+ //   val plugin = spark.sessionState.catalogManager.catalog("cat")
+ //   val tid = TableIdentifier(table = "tbl", database = Some("dbopt"), catalog = Some("cat"))
    // AnalyzeCommandUtil.analyzeTable(sparkSession = spark, tableIdent = tid, plugin = plugin)
   //  AnalyzeCommandUtil.analyzeColumnInCatalog(spark, "cat", "dbopt","tbl", None, true)
 

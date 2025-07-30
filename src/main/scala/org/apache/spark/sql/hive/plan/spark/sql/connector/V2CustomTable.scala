@@ -40,8 +40,8 @@ case class V2CustomTable(name: String,
     }
 
     val fileIndex = fileTable.fileIndex
-    val dataSchema = fileTable.dataSchema
-    val readSchema = fileTable.schema
+    val dataSchema = catalogTable.dataSchema
+    val readSchema = catalogTable.schema
 
     V2CustomTableScanBuilder(multiPartName,provider, sparkSession, fileIndex,readSchema, dataSchema, options)
 
