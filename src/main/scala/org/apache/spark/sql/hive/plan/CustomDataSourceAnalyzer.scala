@@ -307,7 +307,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         || provider.equalsIgnoreCase("parquet")
         || provider.equalsIgnoreCase("orc")
         || provider.equalsIgnoreCase("avro")
-        || provider.equalsIgnoreCase("arrow")) {
+        || provider.equalsIgnoreCase("arrow")
+        || provider.equalsIgnoreCase("textfile")) {
         val catalogName = table.getCatalogName
         val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
 
@@ -382,7 +383,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
             || provider.equalsIgnoreCase("parquet")
             || provider.equalsIgnoreCase("orc")
-            || provider.equalsIgnoreCase("avro") || provider.equalsIgnoreCase("arrow")) {
+            || provider.equalsIgnoreCase("avro")
+            || provider.equalsIgnoreCase("arrow")
+            || provider.equalsIgnoreCase("textfile")) {
             val schemaColName = table.v1Table.dataSchema.map(f => f.name)
             val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
             val dataCols = child1.output.filter(p => schemaColName.contains(p.name))

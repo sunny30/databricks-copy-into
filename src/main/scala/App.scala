@@ -104,6 +104,18 @@ object App {
     spark.sql("create database cat.csvdb")
     spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
     spark.read.table("cat.csvdb.csvtbl1").show()
+    spark.sql(
+      """
+        |CREATE EXTERNAL TABLE cat.csvdb.hive_format_table
+        |(no integer, name string)
+        |ROW FORMAT DELIMITED
+        |FIELDS TERMINATED BY ";"
+        |STORED AS TEXTFILE
+        |LOCATION '/tmp/csv1/'
+        |TBLPROPERTIES ("skip.header.line.count"="1");
+        |""".stripMargin)
+
+    spark.read.table("cat.csvdb.hive_format_table").show()
     /*csv options*/
 
     /*create iceberg table*/

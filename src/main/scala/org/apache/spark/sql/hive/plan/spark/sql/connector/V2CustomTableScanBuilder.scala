@@ -51,6 +51,7 @@ case class V2CustomTableScanBuilder(
      case "json" => JsonScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
      case "avro" => AvroScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
      case "text" => Array.empty[Filter]
+     case "textfile" =>  CSVScanBuilder(sparkSession, fileIndex, schema,dataSchema, options).pushDataFilters(dataFilters)
    }
   }
 
@@ -59,7 +60,8 @@ case class V2CustomTableScanBuilder(
     if(format.equalsIgnoreCase("csv")
       || format.equalsIgnoreCase("json")
       || format.equalsIgnoreCase("avro")
-      || format.equalsIgnoreCase("text")) {
+      || format.equalsIgnoreCase("text")
+      || format.equalsIgnoreCase("textfile")) {
       return false
     }
     if (!sparkSession.sessionState.conf.parquetAggregatePushDown) {

@@ -39,6 +39,7 @@ case class V2CustomTable(name: String,
       case "csv" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
       case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable]
       case "text" => new TextDataSourceV2().getTable(options).asInstanceOf[TextTable]
+      case "textfile" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
     }
 
     val fileIndex = fileTable.fileIndex

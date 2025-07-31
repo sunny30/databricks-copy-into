@@ -60,9 +60,11 @@ case class V2Table(v1Table: CatalogTable) extends Table {
 
   def getTableCaseInsensitiveStringMap: CaseInsensitiveStringMap={
 
-    val options = if (v1Table.provider.getOrElse("delta").equalsIgnoreCase("csv")) {
+    val options = if (v1Table.provider.getOrElse("delta").equalsIgnoreCase("csv") ||
+      v1Table.provider.getOrElse("delta").equalsIgnoreCase("textfile")) {
       mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat) ++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
-    } else if (v1Table.provider.getOrElse("delta").equalsIgnoreCase("hive") && v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("csv")) {
+    } else if (v1Table.provider.getOrElse("delta").equalsIgnoreCase("hive") && (v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("csv") ||
+      v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("textfile"))) {
       mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat) ++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
     } else {
       V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
@@ -72,9 +74,11 @@ case class V2Table(v1Table: CatalogTable) extends Table {
 
   def getV2CustomTable: Table = {
 
-    val options = if(v1Table.provider.getOrElse("delta").equalsIgnoreCase("csv")){
+    val options = if(v1Table.provider.getOrElse("delta").equalsIgnoreCase("csv") ||
+      v1Table.provider.getOrElse("delta").equalsIgnoreCase("textfile")){
       mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat)++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
-    }else if(v1Table.provider.getOrElse("delta").equalsIgnoreCase("hive") &&  v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("csv")){
+    }else if(v1Table.provider.getOrElse("delta").equalsIgnoreCase("hive") &&  (v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("csv") ||
+      v1Table.storage.properties("fileformat").toLowerCase.equalsIgnoreCase("textfile"))){
       mapHiveCSVPropertiesToSparkOption(v1Table, new CSVFileFormat)++ V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
     }else{
       V2Table.addV2TableProperties(v1Table) ++ Map("path" -> v1Table.storage.locationUri.getOrElse(v1Table.location).toString)
@@ -92,7 +96,8 @@ case class V2Table(v1Table: CatalogTable) extends Table {
     //tblProps.
     if (fileFormat.isInstanceOf[CSVFileFormat]) {
       if (!tblProps.contains("option.delimiter")) {
-        tblProps = tblProps ++ Map("delimiter" -> tblProps.getOrElse("field.delim", ","))
+        val defaultDelimValue = tblProps.getOrElse("option.field.delim",",")
+        tblProps = tblProps ++ Map("delimiter" -> tblProps.getOrElse("field.delim", defaultDelimValue))
       }
 
       if (!tblProps.contains("option.quote")) {
@@ -105,7 +110,12 @@ case class V2Table(v1Table: CatalogTable) extends Table {
 
       if (!tblProps.contains("option.header")) {
         //tblProps.getOrElse("skip")
-        tblProps = tblProps ++ Map("header" -> tblProps.getOrElse("hasheaders", "false"))
+        val headerValue = if(tblProps.contains("skip.header.line.count")) {
+          "true"
+        }else{
+          "false"
+        }
+        tblProps = tblProps ++ Map("header" -> tblProps.getOrElse("hasheaders", headerValue))
       }
 
       if (!tblProps.contains("option.lineSep")) {

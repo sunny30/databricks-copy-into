@@ -308,7 +308,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
     val locationUri = location.map(CatalogUtils.stringToURI)
 
-    val provider = properties.getOrDefault(TableCatalog.PROP_PROVIDER, conf.defaultDataSourceName)
+    val provider = getProvider(properties)
+
     if (provider.equalsIgnoreCase("delta")) {
       new UnityDeltaCatalog(externalCatalog).createDeltaTable(
         ident,
@@ -365,6 +366,20 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         case e: Exception => throw e
       }
     }
+  }
+
+  private def getProvider(properties: util.Map[String, String]):String = {
+    val hiveStoredAsKey = "hive.stored-as"
+    val provider = properties.asScala.get(TableCatalog.PROP_PROVIDER) match {
+      case Some(value) => value
+      case None =>
+        if(properties.containsKey(hiveStoredAsKey)){
+          properties.asScala.get(hiveStoredAsKey).get
+        }else{
+          conf.defaultDataSourceName
+        }
+    }
+    provider
   }
 
   def createTable(tableDesc: CatalogTable, ignoreIfExists: Boolean): Unit = {
