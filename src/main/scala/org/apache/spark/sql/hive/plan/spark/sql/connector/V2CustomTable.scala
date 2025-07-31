@@ -5,6 +5,8 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.connector.catalog.{SupportsRead, Table, TableCapability}
 import org.apache.spark.sql.connector.read.ScanBuilder
+import org.apache.spark.sql.execution.datasources.FileFormat
+import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.v2.csv.{CSVDataSourceV2, CSVTable}
 import org.apache.spark.sql.execution.datasources.v2.json.{JsonDataSourceV2, JsonTable}
 import org.apache.spark.sql.execution.datasources.v2.orc.{OrcDataSourceV2, OrcTable}
@@ -37,6 +39,7 @@ case class V2CustomTable(name: String,
       case "csv" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
       case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable]
       case "text" => new TextDataSourceV2().getTable(options).asInstanceOf[TextTable]
+      case "textfile" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
     }
 
     val fileIndex = fileTable.fileIndex
@@ -51,4 +54,38 @@ case class V2CustomTable(name: String,
   override def schema(): StructType = catalogTable.schema
 
   override def capabilities(): util.Set[TableCapability] = util.EnumSet.allOf(classOf[TableCapability])
+
+  def mapHiveCSVPropertiesToSparkOption(ct: CatalogTable, fileFormat: FileFormat): Map[String, String] = {
+    var tblProps = ct.properties
+
+    //tblProps.
+    if (fileFormat.isInstanceOf[CSVFileFormat]) {
+      if (!tblProps.contains("option.delimiter")) {
+        tblProps = tblProps ++ Map("delimiter" -> tblProps.getOrElse("field.delim", ","))
+      }
+
+      if (!tblProps.contains("option.quote")) {
+        tblProps = tblProps ++ Map("quote" -> tblProps.getOrElse("quoteChar", '\"'.toString))
+      }
+
+      if (!tblProps.contains("option.escape")) {
+        tblProps = tblProps ++ Map("escape" -> tblProps.getOrElse("escape.delim", '\\'.toString))
+      }
+
+      if (!tblProps.contains("option.header")) {
+        //tblProps.getOrElse("skip")
+        tblProps = tblProps ++ Map("header" -> tblProps.getOrElse("hasheaders", "false"))
+      }
+
+      if (!tblProps.contains("option.lineSep")) {
+        //tblProps.getOrElse("skip")
+        tblProps = tblProps ++ Map("lineSep" -> tblProps.getOrElse("recorddelimiter", "\n"))
+      }
+
+      tblProps
+    } else {
+      tblProps
+    }
+
+  }
 }

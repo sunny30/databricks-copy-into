@@ -100,6 +100,24 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
 
+    /*csv options*/
+    spark.sql("create database cat.csvdb")
+    spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
+    spark.read.table("cat.csvdb.csvtbl1").show()
+    spark.sql(
+      """
+        |CREATE EXTERNAL TABLE cat.csvdb.hive_format_table
+        |(no integer, name string)
+        |ROW FORMAT DELIMITED
+        |FIELDS TERMINATED BY ";"
+        |STORED AS TEXTFILE
+        |LOCATION '/tmp/csv1/'
+        |TBLPROPERTIES ("skip.header.line.count"="1");
+        |""".stripMargin)
+
+    spark.read.table("cat.csvdb.hive_format_table").show()
+    /*csv options*/
+
     /*create iceberg table*/
 //    spark.sql("create database cat.dbice")
 //    spark.sql("create table cat.dbice.tbl(id int, name string) using iceberg")
@@ -333,13 +351,13 @@ object App {
     /**tpcds query*/
     /*** perf opt***/
 
-    spark.sql("create database cat.dbopt")
-    spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
-    spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
-    spark.sql("select * from (select sum(id) as sid, city from cat.dbopt.tbl group by city)").show()
-    spark.sql("select * from cat.dbopt.tbl").show()
-    spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
-    spark.sql("select min(id) as sid, name from cat.dbopt.tbl group by name").show()
+//    spark.sql("create database cat.dbopt")
+//    spark.sql("create table cat.dbopt.tbl(id int, name string, city string) using parquet partitioned by(city) ")
+//    spark.sql("insert into cat.dbopt.tbl values(1, 'sharad', 'bng'), (2, 'xiaoyu', 'sfo'), (3, 'shashi', 'sfo'), (4, 'ram', 'bng')")
+//    spark.sql("select * from (select sum(id) as sid, city from cat.dbopt.tbl group by city)").show()
+//    spark.sql("select * from cat.dbopt.tbl").show()
+//    spark.sql("select * from cat.dbopt.tbl values where city = 'bng' ").show()
+//    spark.sql("select min(id) as sid, name from cat.dbopt.tbl group by name").show()
 
 
 //    spark.sql("analyze table cat.dbopt.tbl COMPUTE STATISTICS for all columns")

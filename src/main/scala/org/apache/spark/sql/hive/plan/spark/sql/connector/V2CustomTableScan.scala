@@ -73,6 +73,10 @@ case class V2CustomTableScan(
 
       case "text" => TextScan(sparkSession, fileIndex, dataSchema, readDataSchema, readPartitionSchema,
          options,  partitionFilters, dataFilters).createReaderFactory()
+
+      case "textfile" => CSVScan(sparkSession, fileIndex, dataSchema, readDataSchema, readPartitionSchema,
+        options, pushedFilters, partitionFilters, dataFilters).createReaderFactory()
+
     }
   }
 
