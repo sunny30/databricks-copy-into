@@ -101,21 +101,22 @@ object App {
     ).toDF("id", "name")
 
     /*csv options*/
-    spark.sql("create database cat.csvdb")
-    spark.sql("create table cat.csvdb.csvtbl1(id int, name string)  using csv  location '/tmp/csv1/' TBLPROPERTIES('field.delim' = ';','hasheaders' = 'true' )")
-    spark.read.table("cat.csvdb.csvtbl1").show()
-    spark.sql(
-      """
-        |CREATE EXTERNAL TABLE cat.csvdb.hive_format_table
-        |(no integer, name string)
-        |ROW FORMAT DELIMITED
-        |FIELDS TERMINATED BY ";"
-        |STORED AS TEXTFILE
-        |LOCATION '/tmp/csv1/'
-        |TBLPROPERTIES ("skip.header.line.count"="1");
-        |""".stripMargin)
-
-    spark.read.table("cat.csvdb.hive_format_table").show()
+//    spark.sql("create database cat.pdb")
+//    df5.writeTo("cat.pdb.tbl").using("delta").createOrReplace()
+    //spark.sql("create table cat.padb.csvtbl1(id int, name string)  stored as parquet")
+  //  spark.read.table("cat.pdb.csvtbl1").show()
+//    spark.sql(
+//      """
+//        |CREATE EXTERNAL TABLE cat.csvdb.hive_format_table
+//        |(no integer, name string)
+//        |ROW FORMAT DELIMITED
+//        |FIELDS TERMINATED BY ";"
+//        |STORED AS TEXTFILE
+//        |LOCATION '/tmp/csv1/'
+//        |TBLPROPERTIES ("skip.header.line.count"="1");
+//        |""".stripMargin)
+//
+//    spark.read.table("cat.csvdb.hive_format_table").show()
     /*csv options*/
 
     /*create iceberg table*/
@@ -456,10 +457,11 @@ object App {
     //
     //  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
     //  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-//    spark.sql("create database ecat.customdb1")
-//    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-//    //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
-//    //    spark.read.options(Map("k6"->"v6")).table("ecat.customdb.tbl").show()
+    spark.sql("create database ecat.customdb1")
+    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string,col3 int) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    val providedSchema = df5.schema
+    //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
+    spark.read.option("dt.override","col1, col3").options(Map("k6"->"v6", "override" -> "true")).table("ecat.customdb1.nt").show()
 //    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
 //    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
 //    df3.write.mode("overwrite").saveAsTable("ecat.customdb1.nt")
