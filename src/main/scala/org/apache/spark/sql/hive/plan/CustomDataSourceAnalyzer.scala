@@ -36,10 +36,13 @@ import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.types.{StringType, StructType}
 
 import java.util.Locale
-import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import scala.collection.JavaConversions.mapAsJavaMap
+
 
 
 class CustomDataSourceAnalyzer(session: SparkSession)
@@ -55,6 +58,22 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case "json" => new JsonFileFormat
       case "arrow" => new ArrowFileFormat
       case _ => new CSVFileFormat
+    }
+  }
+
+  def getExternalCatalogOverrideSchema(options: Map[String,String], schema:StructType):StructType = {
+    options.get("dt.override") match {
+      case None => schema
+      case Some(value) =>
+        val colNames = value.split(",").map(x => x.toLowerCase.trim).toSeq
+        val newFields = schema.fields.map(f => {
+          if(colNames.contains(f.name)){
+            f.copy(dataType = StringType)
+          }else{
+            f
+          }
+        }).toSeq
+        StructType.apply(newFields)
     }
   }
 
@@ -292,7 +311,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         return getViewPlan(table)
       }
       val provider = table.v1Table.provider.getOrElse("custom")
-      val dataSource = DataSource(
+      var dataSource = DataSource(
         session,
         // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
         // inferred at runtime. We should still support it.
@@ -301,7 +320,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         bucketSpec = table.v1Table.bucketSpec,
         className = table.v1Table.provider.get,
         options = table.v1Table.storage.properties ++ options.asScala.toMap ++ getReadOptionsForExternalSource,
-        catalogTable = Some(table.v1Table))
+        catalogTable = None)
 
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
         || provider.equalsIgnoreCase("parquet")
@@ -343,7 +362,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {
-          LogicalRelation(dataSource.resolveRelation(false), table.v1Table)
+          if(options.asScala.contains("dt.override") && !options.asScala.contains("override.complete")){
+            val overridenSchema = getExternalCatalogOverrideSchema(options.asScala.toMap, table.v1Table.schema)
+            dataSource = dataSource.copy(userSpecifiedSchema = Some(overridenSchema))
+            val newCt = table.v1Table.copy(schema = overridenSchema)
+            val table1 = V2Table(newCt)
+            val newOptions: Map[String, String] = options.asScala.toMap ++ Map("override.complete" -> "true")
+            val newCaseOptions = new CaseInsensitiveStringMap(mapAsJavaMap(newOptions))
+            SparkSession.active.sessionState.analyzer.execute(dd.copy(table = table1, options = newCaseOptions))
+          }
+          LogicalRelation(dataSource.resolveRelation(false))
         } else {
           LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
         }
