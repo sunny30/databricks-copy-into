@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive.plan.spark.sql.connector
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.connector.catalog.{SupportsRead, Table, TableCapability}
+import org.apache.spark.sql.connector.catalog.{SupportsRead, Table, TableCapability, TableProvider}
 import org.apache.spark.sql.connector.read.ScanBuilder
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
@@ -14,9 +14,13 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.execution.datasources.v2.parquet.{ParquetDataSourceV2, ParquetTable}
 import org.apache.spark.sql.execution.datasources.v2.text.{TextDataSourceV2, TextTable}
+import org.apache.spark.sql.hive.classloader.reflection.ReflectionUtil
+import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.v2.avro.{AvroDataSourceV2, AvroTable}
+import org.apache.spark.util.Utils
 
 import java.util
+import java.util.ServiceLoader
 
 case class V2CustomTable(name: String,
                          sparkSession: SparkSession,
@@ -31,6 +35,11 @@ case class V2CustomTable(name: String,
     }
     val multiPartName  = Seq(catalogTable.identifier.catalog.getOrElse("spark_catalog"), catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
 
+    if(provider.toLowerCase.equalsIgnoreCase("custom")){
+      val clazzName = "org.apache.spark.sql.hive.plan.spark.sql.connector.custom.CustomTable"
+      val methodName = "newScanBuilder"
+      return ReflectionUtil.reflectScanBuilder(clazzName, methodName, schema, options)
+    }
 
     val fileTable = provider.toLowerCase match {
       case "parquet" => new ParquetDataSourceV2().getTable(options).asInstanceOf[ParquetTable]
@@ -40,6 +49,7 @@ case class V2CustomTable(name: String,
       case "json" => new JsonDataSourceV2().getTable(options).asInstanceOf[JsonTable]
       case "text" => new TextDataSourceV2().getTable(options).asInstanceOf[TextTable]
       case "textfile" => new CSVDataSourceV2().getTable(options).asInstanceOf[CSVTable]
+
     }
 
     val fileIndex = fileTable.fileIndex
