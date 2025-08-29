@@ -461,7 +461,7 @@ object App {
     spark.sql("create table ecat.customdb1.nt(col1 int, col2 string,col3 int) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
 //    val providedSchema = df5.schema
     //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
-    spark.read.option("dt.override","col1, col3").options(Map("k6"->"v6", "override" -> "true")).table("ecat.customdb1.nt").show()
+    spark.read.option("source.pushdown.enabled","true").options(Map("k6"->"v6", "override" -> "true")).table("ecat.customdb1.nt").show()
 //    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
 //    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
 //    df3.write.mode("overwrite").saveAsTable("ecat.customdb1.nt")

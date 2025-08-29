@@ -322,14 +322,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         options = table.v1Table.storage.properties ++ options.asScala.toMap ++ getReadOptionsForExternalSource,
         catalogTable = None)
 
+      val catalogName = table.getCatalogName
+      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+
       if (provider.equalsIgnoreCase("hive") || provider.equalsIgnoreCase("csv")
         || provider.equalsIgnoreCase("parquet")
         || provider.equalsIgnoreCase("orc")
         || provider.equalsIgnoreCase("avro")
         || provider.equalsIgnoreCase("arrow")
         || provider.equalsIgnoreCase("textfile")) {
-        val catalogName = table.getCatalogName
-        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
 
 //        val schemaColName = table.v1Table.dataSchema.map(f => f.name)
 //        val partSchemaColNames = table.v1Table.partitionSchema.map(f => f.name)
@@ -371,15 +372,25 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             val newCaseOptions = new CaseInsensitiveStringMap(mapAsJavaMap(newOptions))
             SparkSession.active.sessionState.analyzer.execute(dd.copy(table = table1, options = newCaseOptions))
           }
-          LogicalRelation(dataSource.resolveRelation(false))
+          options.asScala.get("source.pushdown.enabled") match {
+            case Some("true") => val optionsMap = dataSource.options
+              val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = new CaseInsensitiveStringMap(optionsMap))
+              ds.copy(output = dd.output)
+            case Some("false") =>  LogicalRelation(dataSource.resolveRelation(false))
+            case None =>  LogicalRelation(dataSource.resolveRelation(false))
+
+          }
         } else {
           LogicalRelation(dataSource.resolveRelation(true), table.v1Table)
         }
-        val resolvedLeafPlan = leafPlan.copy(output = output)
+        leafPlan match {
+          case d: DataSourceV2Relation => d
+          case l: LogicalRelation =>
+            val resolvedLeafPlan = l.copy(output = output)
+            resolvedLeafPlan.resolved
+            resolvedLeafPlan
+        }
 
-        resolvedLeafPlan.resolved
-     //   resolvedLeafPlan.setAnalyzed()
-        resolvedLeafPlan
       }
 
     //code looks like it will throw error, if its nt V2Table but just above we solved it for V2Table only

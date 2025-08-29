@@ -1,5 +1,9 @@
 package org.apache.spark.sql.hive.classloader.reflection
 
+import org.apache.spark.sql.connector.read.ScanBuilder
+import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
+
 import scala.reflect.runtime.{universe => ru}
 import ru._
 import scala.reflect.internal.util.ScalaClassLoader
@@ -10,11 +14,11 @@ object ReflectionUtil {
 
     val m = ru.runtimeMirror(getClass.getClassLoader)
     val classSymbol = m.staticClass(clazzName)
+
     val ctor = classSymbol.primaryConstructor.asMethod
     val method = classSymbol.toType.decl(ru.TermName(methodName)).asMethod
     val cm = m.reflectClass(classSymbol)
     val instance =  cm.reflectConstructor(ctor).apply("param1",2)
-
   //  val instance = ctorm(constructorParams: _*)
     val instancem = m.reflect(instance)
     val methodm = instancem.reflectMethod(method)
@@ -49,6 +53,27 @@ object ReflectionUtil {
     println(result)
     result.toString
 
+  }
+
+  def reflectScanBuilder(clazzName: String, methodName: String, schema:StructType, options: CaseInsensitiveStringMap):ScanBuilder={
+    var instance: Any = null;
+    var instancem: InstanceMirror = null
+    val m = ru.runtimeMirror(getClass.getClassLoader)
+    val classSymbol = m.staticClass(clazzName)
+    val constructors = classSymbol.typeSignature.members.filter(_.isConstructor).toList
+    val secCtor = constructors.filter(c => c.asMethod.paramLists(0).length == 2).head
+
+    val method = classSymbol.toType.decl(ru.TermName(methodName)).asMethod
+    val cm = m.reflectClass(classSymbol)
+
+    if (instance == null) {
+      instance = cm.reflectConstructor(secCtor.asMethod).apply(schema, options.asCaseSensitiveMap()) //  val instance = ctorm(constructorParams: _*)
+      instancem = m.reflect(instance)
+    }
+
+    val methodm = instancem.reflectMethod(method)
+    val result = methodm.apply(options).asInstanceOf[ScanBuilder]
+    result
   }
 
 }
