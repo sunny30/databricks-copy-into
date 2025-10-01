@@ -19,19 +19,19 @@ import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
 class RowLevelFilter(session: SparkSession)
-  extends Rule[LogicalPlan] with AnalysisHelper with Logging{
+  extends Rule[LogicalPlan] with AnalysisHelper with Logging {
 
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
 
-//    case f@Filter(c, ds:DataSourceV2Relation) =>
-//      if(f.getTagValue(TreeNodeTag[String]("row-sec")).isDefined){
-//        ds.setTagValue(TreeNodeTag[String]("row-sec"), "ds-row-sec")
-//      }
-//      f
+    //    case f@Filter(c, ds:DataSourceV2Relation) =>
+    //      if(f.getTagValue(TreeNodeTag[String]("row-sec")).isDefined){
+    //        ds.setTagValue(TreeNodeTag[String]("row-sec"), "ds-row-sec")
+    //      }
+    //      f
 
-    case d@DataSourceV2Relation(table: V2Table, output:Seq[AttributeReference], _, _, _) =>
-      if(table.v1Table.properties.contains("row_sec_func")) {
+    case d@DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], _, _, _) =>
+      if (table.v1Table.properties.contains("row_sec_func")) {
         val funcName = table.v1Table.properties.getOrElse("row_sec_func", "none")
         val ct = session.sessionState.catalog.getTableMetadata(TableIdentifier(funcName))
         val conditionString = ct.properties.getOrElse("cond", "")
@@ -45,7 +45,7 @@ class RowLevelFilter(session: SparkSession)
         } else {
           d
         }
-      }else{
+      } else {
         d
       }
 
@@ -53,14 +53,14 @@ class RowLevelFilter(session: SparkSession)
 
       catalogTable match {
         case Some(cattbl) =>
-          if(cattbl.provider.getOrElse("csv").equalsIgnoreCase("delta")){
+          if (cattbl.provider.getOrElse("csv").equalsIgnoreCase("delta")) {
             val cat = cattbl.identifier.catalog.get
             val db = cattbl.identifier.database.get
             val tbl = cattbl.identifier.table
             val sessionCat = SparkSession.active.sessionState.catalogManager.catalog(cat).asTableCatalog
-            val dt = sessionCat.loadTable( Identifier.of(Seq(db).toArray, tbl))
+            val dt = sessionCat.loadTable(Identifier.of(Seq(db).toArray, tbl))
             val props = dt.properties().asScala
-            if(props.contains("row_sec_func")){
+            if (props.contains("row_sec_func")) {
               val funcName = props.get("row_sec_func").get
               val ct = session.sessionState.catalog.getTableMetadata(TableIdentifier(funcName))
               val conditionString = ct.properties.getOrElse("cond", "")
@@ -74,11 +74,11 @@ class RowLevelFilter(session: SparkSession)
               } else {
                 l
               }
-            }else{
+            } else {
               l
             }
 
-          }else{
+          } else {
             l
           }
 
@@ -88,8 +88,8 @@ class RowLevelFilter(session: SparkSession)
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
       val relation = (new CustomDataSourceAnalyzer(session)).apply(u)
-      if(relation.isInstanceOf[View]) {
-        if(relation.asInstanceOf[View].desc.properties.contains("row_sec_func")) {
+      if (relation.isInstanceOf[View]) {
+        if (relation.asInstanceOf[View].desc.properties.contains("row_sec_func")) {
           val viewCt = relation.asInstanceOf[View].desc
           val funcName = viewCt.properties.getOrElse("row_sec_func", "none")
           val ct = session.sessionState.catalog.getTableMetadata(TableIdentifier(funcName))
@@ -99,10 +99,10 @@ class RowLevelFilter(session: SparkSession)
           val filter = Filter(condition, relation)
           val analyzed = session.sessionState.analyzer.execute(filter)
           analyzed
-        }else{
+        } else {
           u
         }
-      }else{
+      } else {
         u
       }
 

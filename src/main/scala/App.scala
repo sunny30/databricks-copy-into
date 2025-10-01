@@ -101,6 +101,11 @@ object App {
     ).toDF("id", "name")
 
     /*csv options*/
+    spark.sql("create database cat.csvdb2")
+    spark.sql("create table cat.csvdb2.ctbl(name string, id int,value int) using csv location '/tmp/csvt/' options('header' = 'true')")
+    val df = spark. read.table("cat.csvdb2.ctbl")
+    df.show()
+    println(df.count())
 //    spark.sql("create database cat.pdb")
 //    df5.writeTo("cat.pdb.tbl").using("delta").createOrReplace()
     //spark.sql("create table cat.padb.csvtbl1(id int, name string)  stored as parquet")
@@ -457,11 +462,11 @@ object App {
     //
     //  //  df3.write.options(Map("k3"->"v3")).mode(SaveMode.Append).insertInto("cat.customdb.tbl")
     //  //  spark.read.options(Map("k4"->"v4")).table("cat.customdb.tbl").show()
-    spark.sql("create database ecat.customdb1")
-    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string,col3 int) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+   // spark.sql("create database ecat.customdb1")
+   // spark.sql("create table ecat.customdb1.nt(col1 int, col2 string,col3 int) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
 //    val providedSchema = df5.schema
     //    df3.write.options(Map("k5"->"v5")).mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl")
-    spark.read.option("source.pushdown.enabled","true").options(Map("k6"->"v6", "override" -> "true")).table("ecat.customdb1.nt").show()
+   // spark.read.option("source.pushdown.enabled","true").options(Map("k6"->"v6", "override" -> "true")).table("ecat.customdb1.nt").show()
 //    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.tbl1")
 //    //    df3.write.mode(SaveMode.Overwrite).saveAsTable("ecat.customdb.nt")
 //    df3.write.mode("overwrite").saveAsTable("ecat.customdb1.nt")
