@@ -14,6 +14,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.spark.sql.stat.AnalyzeCommandUtil
 import org.apache.spark.sql.types.DecimalType
 
+
 object App {
 
   def getConf: SparkConf = {
@@ -100,12 +101,18 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
 
+//    var df = spark.read.option("inferSchema", "true").option("multiLine", "true").json("/Users/sharadsingh/Desktop/sample_json/")
+//    df = df.selectExpr("Policy.`Party.Party` as party_details")
+//    df = df.select(explode(col("party_details")).as("party_details_field"))
+//    df = df.select($"party_details_field.*")
+//    df.select(concat(col("PartyKey"), col("FullName")).as("new_col")).show(false)
+
     /*csv options*/
-    spark.sql("create database cat.csvdb2")
-    spark.sql("create table cat.csvdb2.ctbl(name string, id int,value int) using csv location '/tmp/csvt/' options('header' = 'true')")
-    val df = spark. read.table("cat.csvdb2.ctbl")
-    df.show()
-    println(df.count())
+//    spark.sql("create database cat.csvdb2")
+//    spark.sql("create table cat.csvdb2.ctbl(name string, id int,value int) using csv location '/tmp/csvt/' options('header' = 'true')")
+//    val df = spark. read.table("cat.csvdb2.ctbl")
+//    df.show()
+//    println(df.count())
 //    spark.sql("create database cat.pdb")
 //    df5.writeTo("cat.pdb.tbl").using("delta").createOrReplace()
     //spark.sql("create table cat.padb.csvtbl1(id int, name string)  stored as parquet")

@@ -30,6 +30,20 @@ object IcebergApp {
 
     spark.read.table("local.db.logs").show()
 
+//    spark.sql("""create table local.db.logs_orc(
+//      | uuid string NOT NULL,
+//      | level string NOT NULL)
+//    | USING orc""".stripMargin)
+//
+//    spark.sql("insert into local.db.logs_orc values('a', 'b')")
+    spark.sql(
+      """create table if not exists logs_orc2(
+        | uuid string NOT NULL,
+        | level string NOT NULL)
+        | USING orc""".stripMargin)
+
+    spark.sql("insert into logs_orc2 values('a', 'b')")
+    spark.sql("CALL local.system.snapshot('logs_orc2', 'local.db.log_orc_snap')")
   //  df.write.format("iceberg").saveAsTable("local.db.new_logs")
 
   //  spark.sql("select * from local.db.logs").explain(true)
