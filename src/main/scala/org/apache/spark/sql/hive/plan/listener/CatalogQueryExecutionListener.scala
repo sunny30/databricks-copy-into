@@ -13,15 +13,16 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
   override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
 
     val res = qe.logical.find(pl => pl.getTagValue(TreeNodeTag[String]("spark-sql")).isDefined)
-    if(res.isDefined){
-      val res1 = res.get.getTagValue(TreeNodeTag[String]("spark-sql")).get
-      println("Hi there is: "+res1)
-    }else{
-      println("Hi there is: No SQL")
+    val printableResult = res match {
+      case Some(pl) => String.format("%s: %s","Hi result is", pl.getTagValue(TreeNodeTag[String]("spark-sql")).get)
+      case None => "Hi there is: No SQL"
     }
+    println(printableResult)
   }
 
-  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = ???
+  override def onFailure(funcName: String, qe: QueryExecution, exception: Exception): Unit = {
+    println("failed")
+  }
 
 }
 
@@ -53,7 +54,14 @@ object ListenerUtil{
       val res1 = res.get.getTagValue(TreeNodeTag[String]("spark-sql")).get
       Some(res1)
     }else{
-      Some("No Result as tag")
+      None
+    }
+  }
+
+  def copyPlanTagsIfExists(source:LogicalPlan, target:LogicalPlan):Unit={
+    getSQLTextIfExists(source) match {
+      case Some(sql) => setSQLText(target, sql)
+      case None => println("Nothing found")
     }
   }
   def setSQLText(plan: LogicalPlan, sql:String):Unit={

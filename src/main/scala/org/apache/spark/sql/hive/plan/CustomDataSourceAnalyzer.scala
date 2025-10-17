@@ -32,6 +32,7 @@ import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
+import org.apache.spark.sql.hive.plan.listener.ListenerUtil
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
@@ -682,6 +683,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning, query, tableSpec,writeOptions, ignoreIfExists, isAnalyzed) =>
             val optionString = ctas.writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
             println("CTAS Option String: " + optionString)
+            println("Analyzer check for listener ctas"+ ListenerUtil.getSQLTextIfExists(ctas))
+            println("Analyzer check for listener ctas query"+ ListenerUtil.getSQLTextIfExists(query))
+
             val providerValue = getActualProvider(catalog,ident,tableSpec)
             if(catalog.name().equalsIgnoreCase("ecat")){
               val properties = getOldTableProps(catalog, ident, tableSpec)
