@@ -560,6 +560,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
       val retPlan = new DeltaAnalysis(SparkSession.active).apply(CustomResolveInsertInto(i))
+      println("Insert into plan output for listener "+ ListenerUtil.getSQLTextIfExists(i))
+      ListenerUtil.copyPlanTagsIfExists(i, retPlan)
       retPlan
     }
 
