@@ -33,6 +33,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectResolutionRule { _ => ProcedureArgumentCoercion }
 
     extensions.injectOptimizerRule(CustomOptimizedPlan)
+
     extensions.injectOptimizerRule(_ => ReplaceStaticInvoke)
     extensions.injectOptimizerRule(ExternalCatalogWrite)
     extensions.injectPlannerStrategy(_ => CustomStrategy)

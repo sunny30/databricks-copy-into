@@ -6,6 +6,7 @@ import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.hive.parser.CustomSqlParser
+import org.apache.spark.sql.hive.plan.listener.ListenerUtil
 import org.xbill.DNS.ZoneTransferIn.Delta
 
 
@@ -48,7 +49,9 @@ object CustomSparkSQLParser extends SparkSqlParser{
     SparkSession.active.conf.set("spark.sql.catalog.hive", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     val delegate = new CustomSparkSQLParser()
     new CustomSqlParser(delegate).parse(sqlText) match {
-      case plan: LogicalPlan => plan
+      case plan: LogicalPlan =>
+        ListenerUtil.setSQLText(plan, sqlText)
+        plan
       case _ => throw new IllegalArgumentException("Invalid SQL")
     }
   }

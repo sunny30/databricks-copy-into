@@ -41,6 +41,7 @@ import org.apache.spark.sql.types.{StringType, StructType}
 import java.util.Locale
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+
 import scala.collection.JavaConversions.mapAsJavaMap
 
 
@@ -194,6 +195,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //    case c:CustomInsertIntoHadoopFsRelationCommand =>
     //      c.setAnalyzed()
     //      c
+
 
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>

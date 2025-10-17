@@ -10,6 +10,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.execution.DiscoverCatalogPartiti
 import org.json4s.DefaultFormats
 import org.json4s.jackson.JsonMethods
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.spark.sql.stat.AnalyzeCommandUtil
 import org.apache.spark.sql.types.DecimalType
@@ -62,7 +63,7 @@ object App {
       enableHiveSupport().
       getOrCreate()
 
-
+    spark.listenerManager.register(new CatalogQueryExecutionListener)
     /** Custom data format  write options* */
 
     import spark.implicits._
@@ -101,6 +102,17 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
 
+    /**Listener test **/
+    spark.sql("create database cat.lidb")
+    spark.sql("create table cat.lidb.tbl(id int, name string) using iceberg")
+    spark.sql("select * from cat.lidb.tbl").show()
+
+    spark.sql("create table cat.lidb.tbl1 as select * from cat.lidb.tbl")
+    spark.sql("insert into cat.lidb.tbl values(1, 'sunny')")
+
+
+
+    /**Listener test end **/
 //    var df = spark.read.option("inferSchema", "true").option("multiLine", "true").json("/Users/sharadsingh/Desktop/sample_json/")
 //    df = df.selectExpr("Policy.`Party.Party` as party_details")
 //    df = df.select(explode(col("party_details")).as("party_details_field"))
