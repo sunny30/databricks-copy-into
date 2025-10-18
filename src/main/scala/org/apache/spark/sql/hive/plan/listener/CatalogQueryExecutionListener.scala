@@ -12,6 +12,7 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
 
   override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
 
+
     println("Plan at listern end: ", qe.logical.prettyJson)
     val res = qe.logical.find(pl => pl.getTagValue(TreeNodeTag[String]("spark-sql")).isDefined)
     val printableResult = res match {
