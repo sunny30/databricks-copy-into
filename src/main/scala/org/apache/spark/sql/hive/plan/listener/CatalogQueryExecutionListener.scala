@@ -1,11 +1,8 @@
 package org.apache.spark.sql.hive.plan.listener
 
-import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, UnaryNode}
-import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.execution.QueryExecution
-import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.util.QueryExecutionListener
 
 class CatalogQueryExecutionListener extends QueryExecutionListener{
