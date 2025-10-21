@@ -32,7 +32,7 @@ import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
-import org.apache.spark.sql.hive.plan.listener.ListenerUtil
+import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
@@ -49,6 +49,9 @@ import scala.collection.JavaConversions.mapAsJavaMap
 
 class CustomDataSourceAnalyzer(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging {
+
+  session.listenerManager.register(new CatalogQueryExecutionListener)
+
 
   def getFileFormat(formatName: String): FileFormat = {
     formatName.toLowerCase match {

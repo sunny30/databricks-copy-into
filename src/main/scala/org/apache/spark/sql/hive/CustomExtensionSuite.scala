@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive
 import io.delta.sql.DeltaSparkSessionExtension
 import io.delta.sql.parser.DeltaSqlParser
 import org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
-import org.apache.spark.sql.SparkSessionExtensions
+import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.catalyst.analysis.{ProcedureArgumentCoercion, ResolveProcedures}
 import org.apache.spark.sql.catalyst.optimizer.ReplaceStaticInvoke
 import org.apache.spark.sql.catalyst.plans.logical.DescribeRelation
@@ -23,7 +23,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectParser { (session, parser) =>
      // val delegate = new DeltaSqlParser(parser)
      // new CustomParser(delegate)
-      session.listenerManager.register(new CatalogQueryExecutionListener)
+
       CustomSparkSQLParser
     }
     extensions.injectResolutionRule(session => new ResolveCatalogViews(session))

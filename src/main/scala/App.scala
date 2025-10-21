@@ -109,6 +109,8 @@ object App {
 
     spark.sql("create table cat.lidb.tbl1 as select * from cat.lidb.tbl")
     spark.sql("insert into cat.lidb.tbl values(1, 'sunny')")
+   // spark.sql("")
+    spark.sql("update  cat.lidb.tbl1 as t1 set name = 'Sunny Singh' where id = 1")
 
 
 
