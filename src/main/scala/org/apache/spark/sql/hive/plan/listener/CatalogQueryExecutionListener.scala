@@ -1,8 +1,10 @@
 package org.apache.spark.sql.hive.plan.listener
 
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, DeltaMergeInto, LogicalPlan, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
+import org.apache.spark.sql.delta.commands.{DeleteCommand, MergeIntoCommand, UpdateCommand}
 import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.util.QueryExecutionListener
 
@@ -15,7 +17,7 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
     val printableResult = ListenerUtil.getSQLTextIfExists(qe.analyzed)
     printableResult match {
       case Some(desc) =>
-        println("Leaf nodes are "+ ListenerUtil.getCatables(qe.optimizedPlan).mkString(","))
+        println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
         println(String.format("%s...%s", "Hi final result is", desc))
       case None => println("Nothing in SQL")
     }
@@ -64,8 +66,35 @@ object ListenerUtil{
 
 
   def getCatables(plan: LogicalPlan):Seq[String]={
-    plan.collectLeaves().toSeq.map {
-      p=> p.toString()
+    plan match {
+      case ap: AppendData => Seq(ap.table.name)++getCatables(ap.query)
+      case _ => plan.collectLeaves().toSeq.map {
+        case d: DataSourceV2Relation => d.table.name()
+
+        case up: UpdateCommand =>
+          up.catalogTable match {
+            case Some(ct) => ct.qualifiedName
+            case None => up.toString()
+          }
+        case m: MergeIntoCommand => m.catalogTable match {
+          case Some(ct) => ct.qualifiedName
+          case None => m.toString()
+        }
+
+        case dm: DeltaMergeInto => getCatables(dm.target).head
+
+        case d: DeleteCommand => d.catalogTable match {
+          case Some(ct) => ct.qualifiedName
+          case None => d.toString()
+        }
+        case l: LogicalRelation => l.catalogTable match {
+          case Some(ct) => ct.qualifiedName
+          case None => l.toString()
+        }
+
+        case view: View => view.desc.qualifiedName
+        case p => p.toString()
+      }
     }
   }
   def setSQLText(plan: LogicalPlan, sql:String):Unit={
