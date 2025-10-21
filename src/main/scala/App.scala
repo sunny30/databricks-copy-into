@@ -63,7 +63,7 @@ object App {
       enableHiveSupport().
       getOrCreate()
 
-    spark.listenerManager.register(new CatalogQueryExecutionListener)
+
     /** Custom data format  write options* */
 
     import spark.implicits._
