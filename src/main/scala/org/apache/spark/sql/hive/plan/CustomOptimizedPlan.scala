@@ -158,6 +158,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
       _, _, _) =>
         println("Inside CTAS")
+
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
        // val projectPlan = EliminateSubqueryAliases(query)
        // spark.sessionState.

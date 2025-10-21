@@ -3,10 +3,11 @@ package org.apache.spark.sql.hive.plan.spark.sql.parser
 import io.delta.sql.parser.DeltaSqlAstBuilder
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, CreateView, LogicalPlan}
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.hive.parser.CustomSqlParser
 import org.apache.spark.sql.hive.plan.listener.ListenerUtil
+import org.apache.spark.sql.hive.plan.spark.sql.execution.NonDefaultCatalogCreateViewCommand
 import org.xbill.DNS.ZoneTransferIn.Delta
 
 
@@ -50,7 +51,12 @@ object CustomSparkSQLParser extends SparkSqlParser{
     val delegate = new CustomSparkSQLParser()
     new CustomSqlParser(delegate).parse(sqlText) match {
       case plan: LogicalPlan =>
-        ListenerUtil.setSQLText(plan, sqlText)
+        plan match {
+          case c: NonDefaultCatalogCreateViewCommand => ListenerUtil.setSQLText(c.plan, sqlText)
+          case createTableAsSelect: CreateTableAsSelect => ListenerUtil.setSQLText(createTableAsSelect.query, sqlText)
+          case _ =>  ListenerUtil.setSQLText(plan, sqlText)
+        }
+
         plan
       case _ => throw new IllegalArgumentException("Invalid SQL")
     }
