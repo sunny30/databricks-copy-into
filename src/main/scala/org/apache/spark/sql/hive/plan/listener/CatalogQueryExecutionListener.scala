@@ -1,7 +1,9 @@
 package org.apache.spark.sql.hive.plan.listener
 
+import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.analysis.ResolvedIdentifier
 import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, DeltaMergeInto, LogicalPlan, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaMergeInto, LogicalPlan, ReplaceTableAsSelect, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
 import org.apache.spark.sql.delta.commands.{DeleteCommand, MergeIntoCommand, UpdateCommand}
@@ -9,6 +11,7 @@ import org.apache.spark.sql.execution.{ExplainUtils, QueryExecution}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.util.QueryExecutionListener
+import org.apache.zookeeper.Op.Create
 
 class CatalogQueryExecutionListener extends QueryExecutionListener{
 
@@ -37,6 +40,17 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
 
 }
 
+object CrossThreadSqlHolder {
+
+  private val SQLLocalPropertyKey = "user.sql.text"
+
+  def setSqlText(sql: String): Unit = SparkSession.active.sparkContext.setLocalProperty(SQLLocalPropertyKey,sql)
+
+  def getSqlText: String = SparkSession.active.sparkContext.getLocalProperty(SQLLocalPropertyKey)
+
+  def clear(): Unit = SparkSession.active.sparkContext.setLocalProperty(SQLLocalPropertyKey, null)
+}
+
 
 
 object ListenerUtil{
@@ -60,7 +74,13 @@ object ListenerUtil{
       })
       Some(res1)
     }else{
-      None
+      if(CrossThreadSqlHolder.getSqlText !=null) {
+        val fallbackResponse = Some(CrossThreadSqlHolder.getSqlText)
+        CrossThreadSqlHolder.clear()
+        fallbackResponse
+      }else{
+        None
+      }
     }
   }
 
@@ -75,6 +95,8 @@ object ListenerUtil{
   def getCatables(plan: LogicalPlan):Seq[String]={
     val leafNodes = plan match {
       case ap: AppendData => Seq(ap.table.name)++getCatables(ap.query)
+      case ctas@ CreateTableAsSelect(r@ResolvedIdentifier(catalog, ident),_,query,_,_,_,_) => Seq(catalog.name()+"."+ident.name()) ++ getCatables(query)
+      case rtas@ReplaceTableAsSelect(r@ResolvedIdentifier(catalog, ident), _, query, _, _, _, _) => Seq(catalog.name()+"."+ident.name()) ++ getCatables(query)
       case _ => plan.collectLeaves().toSeq.map {
         case d: DataSourceV2Relation => d.table.name()
         case ds: DataSourceV2ScanRelation => getCatables(ds.relation).head
@@ -110,6 +132,7 @@ object ListenerUtil{
   }
   def setSQLText(plan: LogicalPlan, sql:String):Unit={
     println("Hello, Setting SQL "+ sql + " for "+ plan.toString())
+    CrossThreadSqlHolder.setSqlText(sql)
     //plan.setTagValue(TreeNodeTag[String]("spark-sql"), sql)
     plan.foreach(p=>{
       p.setTagValue(TreeNodeTag[String]("spark-sql"), sql)
