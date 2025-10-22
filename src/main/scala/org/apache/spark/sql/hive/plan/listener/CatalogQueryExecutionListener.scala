@@ -2,8 +2,9 @@ package org.apache.spark.sql.hive.plan.listener
 
 import org.apache.spark.sql.catalyst.plans.logical.{AppendData, DeltaMergeInto, LogicalPlan, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
+import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
 import org.apache.spark.sql.delta.commands.{DeleteCommand, MergeIntoCommand, UpdateCommand}
-import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.execution.{ExplainUtils, QueryExecution}
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.util.QueryExecutionListener
@@ -20,8 +21,11 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
         println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
         println(String.format("%s...%s", "Hi final result is", desc))
       case None  =>
+        println("Inside none in listener")
         println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
-      //  println(String.format("%s...%s", "Hi final DataFrame result", qe.analyzed.prettyJson))
+        var explainPlan = new PlanStringConcat()
+        ExplainUtils.processPlan(qe.analyzed,explainPlan.append)
+        println(String.format("%s...%s", "Hi final DataFrame result", explainPlan.toString()))
     }
 
   }
@@ -77,22 +81,22 @@ object ListenerUtil{
         case up: UpdateCommand =>
           up.catalogTable match {
             case Some(ct) => ct.qualifiedName
-            case None => up.toString()
+            case None => String.format("%s.%s", "--NO REL",up.toString())
           }
         case m: MergeIntoCommand => m.catalogTable match {
           case Some(ct) => ct.qualifiedName
-          case None => m.toString()
+          case None => String.format("%s.%s", "--NO REL",m.toString())
         }
 
         case dm: DeltaMergeInto => getCatables(dm.target).head
 
         case d: DeleteCommand => d.catalogTable match {
           case Some(ct) => ct.qualifiedName
-          case None => d.toString()
+          case None => String.format("%s.%s", "--NO REL",d.toString())
         }
         case l: LogicalRelation => l.catalogTable match {
           case Some(ct) => ct.qualifiedName
-          case None => l.toString()
+          case None => String.format("%s.%s", "--NO REL",l.toString())
         }
 
         case view: View => view.desc.qualifiedName
