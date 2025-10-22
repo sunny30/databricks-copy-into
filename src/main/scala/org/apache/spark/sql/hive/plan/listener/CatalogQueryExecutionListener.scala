@@ -20,16 +20,21 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
 
 
     val printableResult = ListenerUtil.getSQLTextIfExists(qe.analyzed)
+    val leafNodes = ListenerUtil.getCatables(qe.analyzed).filter(rel => !rel.startsWith("--"))
     printableResult match {
       case Some(desc) =>
-        println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
-        println(String.format("%s...%s", "Hi final result is", desc))
+        if(leafNodes.nonEmpty) {
+          println("Leaf nodes are " +leafNodes.mkString(","))
+          println(String.format("%s...%s", "Hi final result is", desc))
+        }
       case None  =>
         println("Inside none in listener")
-        println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
-        var explainPlan = new PlanStringConcat()
-        QueryPlan.append(qe.analyzed, explainPlan.append, verbose = false, addSuffix = true)
-        println(String.format("%s...%s", "Hi final DataFrame result", explainPlan.toString()))
+        if(leafNodes.nonEmpty) {
+          println("Leaf nodes are " +leafNodes.mkString(","))
+          var explainPlan = new PlanStringConcat()
+          QueryPlan.append(qe.analyzed, explainPlan.append, verbose = false, addSuffix = true)
+          println(String.format("%s...%s", "Hi final DataFrame result", explainPlan.toString()))
+        }
     }
 
   }
