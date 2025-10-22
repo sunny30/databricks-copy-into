@@ -1,5 +1,6 @@
 package org.apache.spark.sql.hive.plan.listener
 
+import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{AppendData, DeltaMergeInto, LogicalPlan, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
@@ -24,7 +25,7 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
         println("Inside none in listener")
         println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
         var explainPlan = new PlanStringConcat()
-        ExplainUtils.processPlan(qe.analyzed,explainPlan.append)
+        QueryPlan.append(qe.analyzed, explainPlan.append, verbose = false, addSuffix = true)
         println(String.format("%s...%s", "Hi final DataFrame result", explainPlan.toString()))
     }
 
