@@ -5,7 +5,7 @@ import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.delta.commands.{DeleteCommand, MergeIntoCommand, UpdateCommand}
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.util.QueryExecutionListener
 
 class CatalogQueryExecutionListener extends QueryExecutionListener{
@@ -13,13 +13,15 @@ class CatalogQueryExecutionListener extends QueryExecutionListener{
   override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {
 
 
-  //  println("Plan at listener end: ", qe.logical.prettyJson)
+
     val printableResult = ListenerUtil.getSQLTextIfExists(qe.analyzed)
     printableResult match {
       case Some(desc) =>
         println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
         println(String.format("%s...%s", "Hi final result is", desc))
-      case None => println("Nothing in SQL")
+      case None  =>
+        println("Leaf nodes are "+ ListenerUtil.getCatables(qe.analyzed).mkString(","))
+      //  println(String.format("%s...%s", "Hi final DataFrame result", qe.analyzed.prettyJson))
     }
 
   }
@@ -66,10 +68,11 @@ object ListenerUtil{
 
 
   def getCatables(plan: LogicalPlan):Seq[String]={
-    plan match {
+    val leafNodes = plan match {
       case ap: AppendData => Seq(ap.table.name)++getCatables(ap.query)
       case _ => plan.collectLeaves().toSeq.map {
         case d: DataSourceV2Relation => d.table.name()
+        case ds: DataSourceV2ScanRelation => getCatables(ds.relation).head
 
         case up: UpdateCommand =>
           up.catalogTable match {
@@ -93,9 +96,12 @@ object ListenerUtil{
         }
 
         case view: View => view.desc.qualifiedName
-        case p => p.toString()
+        case p => String.format("%s.%s", "--NO REL",p.toString())
       }
     }
+
+    leafNodes
+
   }
   def setSQLText(plan: LogicalPlan, sql:String):Unit={
     println("Hello, Setting SQL "+ sql + " for "+ plan.toString())
