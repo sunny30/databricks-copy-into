@@ -365,6 +365,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        val resolvedLeafPlan = relation.copy(output = output)
 //        resolvedLeafPlan
         val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
+        ListenerUtil.copyPlanTagsIfExists(dd, ds)
         ds.copy(output = dd.output)
 
       } else {
@@ -449,17 +450,18 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               getFileFormat(provider)
             }
 
-            val relation = LogicalRelation(relation = HadoopFsRelation(
-              location = fileCatalog,
-              partitionSchema = table.v1Table.partitionSchema,
-              dataSchema = table.v1Table.dataSchema,
-              fileFormat = ff,
-              options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
-              bucketSpec = None
-            )(SparkSession.active))
-            val newRelation = relation.copy(output = child1.output)
-            val newChild = child.copy(identifier = identifier, child = newRelation)
-            val op = x.copy(projectList = p, child = newChild)
+//            val relation = LogicalRelation(relation = HadoopFsRelation(
+//              location = fileCatalog,
+//              partitionSchema = table.v1Table.partitionSchema,
+//              dataSchema = table.v1Table.dataSchema,
+//              fileFormat = ff,
+//              options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
+//              bucketSpec = None
+//            )(SparkSession.active))
+            val relation = apply(child1)
+          //  val newRelation = relation.copy(output = child1.output)
+          //  val newChild = child.copy(identifier = identifier, child = newRelation)
+            val op = x.copy(projectList = p, child = relation)
             op.resolved
             //   op.setAnalyzed()
             op
@@ -784,11 +786,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           )
           val columnNames = v2.v1Table.schema.fieldNames
           val relation = LogicalRelation(dataSource.resolveRelation(false), table)
-          InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false)
+          val ins = InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false)
+          ListenerUtil.copyPlanTagsIfExists(ab, ins)
+          ins
 
         } else {
           val ff = getFileFormat(ct.provider.getOrElse("csv"))
-          InsertIntoHadoopFsRelationCommand(
+          val in = InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(ct.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
@@ -802,7 +806,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             fileIndex = None,
             outputColumnNames = ct.schema.map(f => f.name)
           )
-
+          ListenerUtil.copyPlanTagsIfExists(ab, in)
+          ListenerUtil.setTableNameInPlan(in, ct.qualifiedName)
+          in
         }
       case st: BestEffortStagedTable =>
         if (st.table.isInstanceOf[V2Table]) {

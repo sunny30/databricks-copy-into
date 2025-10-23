@@ -3,12 +3,12 @@ package org.apache.spark.sql.hive.plan.listener
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.ResolvedIdentifier
 import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaMergeInto, LogicalPlan, ReplaceTableAsSelect, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaMergeInto, InsertIntoStatement, LogicalPlan, ReplaceTableAsSelect, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
 import org.apache.spark.sql.delta.commands.{DeleteCommand, MergeIntoCommand, UpdateCommand}
 import org.apache.spark.sql.execution.{ExplainUtils, QueryExecution}
-import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.{InsertIntoHadoopFsRelationCommand, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.util.QueryExecutionListener
 import org.apache.zookeeper.Op.Create
@@ -102,6 +102,11 @@ object ListenerUtil{
       case ap: AppendData => Seq(ap.table.name)++getCatables(ap.query)
       case ctas@ CreateTableAsSelect(r@ResolvedIdentifier(catalog, ident),_,query,_,_,_,_) => Seq(catalog.name()+"."+ident.name()) ++ getCatables(query)
       case rtas@ReplaceTableAsSelect(r@ResolvedIdentifier(catalog, ident), _, query, _, _, _, _) => Seq(catalog.name()+"."+ident.name()) ++ getCatables(query)
+      case in: InsertIntoHadoopFsRelationCommand => Seq(ListenerUtil.getTableNameFromPlan(in))
+      case ins@InsertIntoStatement(l:LogicalRelation,_,_,_,_,_,_ ) => l.catalogTable match {
+        case Some(ct) => Seq(ct.qualifiedName)
+        case None => Seq("--NO RESULT")
+      }
       case _ => plan.collectLeaves().toSeq.map {
         case d: DataSourceV2Relation => d.table.name()
         case ds: DataSourceV2ScanRelation => getCatables(ds.relation).head
@@ -143,5 +148,13 @@ object ListenerUtil{
       p.setTagValue(TreeNodeTag[String]("spark-sql"), sql)
       p.expressions.foreach(attr => attr.setTagValue(TreeNodeTag[String]("spark-sql"), sql))
     })
+  }
+
+  def setTableNameInPlan(plan:LogicalPlan, qualifiedName:String): Unit ={
+    plan.setTagValue(TreeNodeTag[String]("qualified-name"), qualifiedName)
+  }
+
+  def getTableNameFromPlan(plan: LogicalPlan):String ={
+    plan.getTagValue(TreeNodeTag[String]("qualified-name")).getOrElse("--NO RESULT")
   }
 }

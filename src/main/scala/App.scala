@@ -104,13 +104,16 @@ object App {
 
     /**Listener test **/
     spark.sql("create database cat.lidb")
-    spark.sql("create table cat.lidb.tbl(id int, name string) using iceberg")
-    spark.sql("select * from cat.lidb.tbl").show()
-
-    spark.sql("create table cat.lidb.tbl1 as select * from cat.lidb.tbl")
-    spark.sql("insert into cat.lidb.tbl values(1, 'sunny')")
-   // spark.sql("")
-    spark.sql("update  cat.lidb.tbl1 as t1 set name = 'Sunny Singh' where id = 1")
+    spark.sql("create table cat.lidb.ptbl(id int) using parquet")
+    spark.sql("insert into cat.lidb.ptbl values (1), (2)")
+    spark.sql("select id from cat.lidb.ptbl").show()
+//    spark.sql("create table cat.lidb.tbl(id int, name string) using iceberg")
+//    spark.sql("select * from cat.lidb.tbl").show()
+//
+//    spark.sql("create table cat.lidb.tbl1 as select * from cat.lidb.tbl")
+//    spark.sql("insert into cat.lidb.tbl values(1, 'sunny')")
+//   // spark.sql("")
+//    spark.sql("update  cat.lidb.tbl1 as t1 set name = 'Sunny Singh' where id = 1")
 
 
 
