@@ -3,9 +3,11 @@ package org.apache.spark.sql.hive.plan.spark.sql.parser
 import io.delta.sql.parser.DeltaSqlAstBuilder
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
-import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, CreateView, LogicalPlan}
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.hive.parser.CustomSqlParser
+import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
+import org.apache.spark.sql.hive.plan.spark.sql.execution.NonDefaultCatalogCreateViewCommand
 import org.xbill.DNS.ZoneTransferIn.Delta
 
 
@@ -48,12 +50,21 @@ object CustomSparkSQLParser extends SparkSqlParser{
     SparkSession.active.conf.set("spark.sql.catalog.hive", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     val delegate = new CustomSparkSQLParser()
     new CustomSqlParser(delegate).parse(sqlText) match {
-      case plan: LogicalPlan => plan
+      case plan: LogicalPlan =>
+        plan match {
+          case c: NonDefaultCatalogCreateViewCommand => ListenerUtil.setSQLText(c.plan, sqlText)
+          case createTableAsSelect: CreateTableAsSelect => ListenerUtil.setSQLText(createTableAsSelect.query, sqlText)
+          case _ =>  ListenerUtil.setSQLText(plan, sqlText)
+        }
+
+        plan
       case _ => throw new IllegalArgumentException("Invalid SQL")
     }
   }
 
   override def parseMultipartIdentifier(sqlText: String): Seq[String] = {
+
+
     SparkSession.active.conf.set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     SparkSession.active.conf.set("spark.sql.catalog.ecat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
 

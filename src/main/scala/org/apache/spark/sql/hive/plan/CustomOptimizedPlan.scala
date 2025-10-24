@@ -24,6 +24,7 @@ import org.apache.spark.sql.execution.datasources.v2.{AtomicReplaceTableAsSelect
 import org.apache.spark.sql.execution.datasources.{FileFormat, InsertIntoHadoopFsRelationCommand, LogicalRelation}
 import org.apache.spark.sql.execution.dynamicpruning.CleanupDynamicPruningFilters
 import org.apache.spark.sql.hive.orc.OrcFileFormat
+import org.apache.spark.sql.hive.plan.listener.ListenerUtil
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.internal.StaticSQLConf.WAREHOUSE_PATH
 import org.apache.spark.sql.types.StructType
@@ -157,11 +158,16 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
       _, _, _) =>
         println("Inside CTAS")
+
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
        // val projectPlan = EliminateSubqueryAliases(query)
        // spark.sessionState.
         val qe = spark.sessionState.executePlan(query,CommandExecutionMode.NON_ROOT)
         val dynamicPartitonPruningExists = qe.optimizedPlan.exists(pl => pl.expressions.exists(e=>e.containsAnyPattern(DYNAMIC_PRUNING_SUBQUERY)))
+
+
+      println("results inside cts "+ListenerUtil.getSQLTextIfExists(ctas))
+      println("result inside ctas query "+ ListenerUtil.getSQLTextIfExists(ctas))
 
 
 

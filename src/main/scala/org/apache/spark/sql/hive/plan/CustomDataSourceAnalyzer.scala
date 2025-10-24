@@ -32,6 +32,7 @@ import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
+import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
@@ -41,12 +42,16 @@ import org.apache.spark.sql.types.{StringType, StructType}
 import java.util.Locale
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+
 import scala.collection.JavaConversions.mapAsJavaMap
 
 
 
 class CustomDataSourceAnalyzer(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging {
+
+  session.listenerManager.register(new CatalogQueryExecutionListener)
+
 
   def getFileFormat(formatName: String): FileFormat = {
     formatName.toLowerCase match {
@@ -194,6 +199,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //    case c:CustomInsertIntoHadoopFsRelationCommand =>
     //      c.setAnalyzed()
     //      c
+
 
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
@@ -359,6 +365,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        val resolvedLeafPlan = relation.copy(output = output)
 //        resolvedLeafPlan
         val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
+        ListenerUtil.copyPlanTagsIfExists(dd, ds)
         ds.copy(output = dd.output)
 
       } else {
@@ -443,17 +450,18 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               getFileFormat(provider)
             }
 
-            val relation = LogicalRelation(relation = HadoopFsRelation(
-              location = fileCatalog,
-              partitionSchema = table.v1Table.partitionSchema,
-              dataSchema = table.v1Table.dataSchema,
-              fileFormat = ff,
-              options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
-              bucketSpec = None
-            )(SparkSession.active))
-            val newRelation = relation.copy(output = child1.output)
-            val newChild = child.copy(identifier = identifier, child = newRelation)
-            val op = x.copy(projectList = p, child = newChild)
+//            val relation = LogicalRelation(relation = HadoopFsRelation(
+//              location = fileCatalog,
+//              partitionSchema = table.v1Table.partitionSchema,
+//              dataSchema = table.v1Table.dataSchema,
+//              fileFormat = ff,
+//              options = mapHiveCSVPropertiesToSparkOption(table.v1Table, ff),
+//              bucketSpec = None
+//            )(SparkSession.active))
+            val relation = apply(child1)
+          //  val newRelation = relation.copy(output = child1.output)
+          //  val newChild = child.copy(identifier = identifier, child = newRelation)
+            val op = x.copy(projectList = p, child = relation)
             op.resolved
             //   op.setAnalyzed()
             op
@@ -557,6 +565,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
       val retPlan = new DeltaAnalysis(SparkSession.active).apply(CustomResolveInsertInto(i))
+      println("Insert into plan output for listener "+ ListenerUtil.getSQLTextIfExists(i))
+      ListenerUtil.copyPlanTagsIfExists(i, retPlan)
       retPlan
     }
 
@@ -680,6 +690,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), partitioning, query, tableSpec,writeOptions, ignoreIfExists, isAnalyzed) =>
             val optionString = ctas.writeOptions.map(t => t._1 + "::" + t._2).mkString("||")
             println("CTAS Option String: " + optionString)
+            println("Analyzer check for listener ctas"+ ListenerUtil.getSQLTextIfExists(ctas))
+            println("Analyzer check for listener ctas query"+ ListenerUtil.getSQLTextIfExists(query))
+
             val providerValue = getActualProvider(catalog,ident,tableSpec)
             if(catalog.name().equalsIgnoreCase("ecat")){
               val properties = getOldTableProps(catalog, ident, tableSpec)
@@ -773,11 +786,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           )
           val columnNames = v2.v1Table.schema.fieldNames
           val relation = LogicalRelation(dataSource.resolveRelation(false), table)
-          InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false)
+          val ins = InsertIntoStatement(relation, Map.empty[String, Option[String]], columnNames, ab.query, false, false)
+          ListenerUtil.copyPlanTagsIfExists(ab, ins)
+          ins
 
         } else {
           val ff = getFileFormat(ct.provider.getOrElse("csv"))
-          InsertIntoHadoopFsRelationCommand(
+          val in = InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(ct.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
@@ -791,7 +806,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             fileIndex = None,
             outputColumnNames = ct.schema.map(f => f.name)
           )
-
+          ListenerUtil.copyPlanTagsIfExists(ab, in)
+          ListenerUtil.setTableNameInPlan(in, ct.qualifiedName)
+          in
         }
       case st: BestEffortStagedTable =>
         if (st.table.isInstanceOf[V2Table]) {
