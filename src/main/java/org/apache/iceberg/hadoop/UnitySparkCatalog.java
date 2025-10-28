@@ -1,4 +1,4 @@
-package org.apache.iceberg.hadoop;
+package main.java.org.apache.iceberg.hadoop;
 
 
 import static org.apache.iceberg.TableProperties.GC_ENABLED;
@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import main.java.org.apache.iceberg.hadoop.UnityHadoopCatalog;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.Catalog;
@@ -22,7 +24,6 @@ import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.catalog.ViewCatalog;
 import org.apache.iceberg.exceptions.AlreadyExistsException;
-import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.iceberg.hadoop.HadoopTables;
