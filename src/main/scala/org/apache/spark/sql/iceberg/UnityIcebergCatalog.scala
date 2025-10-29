@@ -1,6 +1,6 @@
 package org.apache.spark.sql.iceberg
 
-import main.java.org.apache.iceberg.hadoop.{UnityHadoopCatalog, UnitySparkCatalog}
+import org.apache.iceberg.hadoop.UnitySparkCatalog
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, ExternalCatalog}

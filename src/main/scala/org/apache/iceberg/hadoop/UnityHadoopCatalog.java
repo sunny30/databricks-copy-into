@@ -1,4 +1,4 @@
-package main.java.org.apache.iceberg.hadoop;
+package org.apache.iceberg.hadoop;
 
 
 

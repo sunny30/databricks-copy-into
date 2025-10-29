@@ -1,4 +1,4 @@
-package main.java.org.apache.iceberg.hadoop;
+package org.apache.iceberg.hadoop;
 
 
 import static org.apache.iceberg.TableProperties.GC_ENABLED;
@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-import main.java.org.apache.iceberg.hadoop.UnityHadoopCatalog;
+import org.apache.iceberg.hadoop.UnityHadoopCatalog;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.Catalog;
