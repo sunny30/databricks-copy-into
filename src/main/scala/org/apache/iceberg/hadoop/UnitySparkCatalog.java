@@ -38,6 +38,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.spark.*;
 import org.apache.iceberg.spark.actions.SparkActions;
+import org.apache.iceberg.spark.procedures.SparkProcedures;
 import org.apache.iceberg.spark.source.SparkChangelogTable;
 import org.apache.iceberg.spark.source.SparkTable;
 import org.apache.iceberg.spark.source.SparkView;
@@ -997,7 +998,10 @@ public class UnitySparkCatalog
     }
 
     public Procedure loadProcedure(Identifier ident){
-        return null ;
+        String[] namespace = ident.namespace();
+        String name = ident.name();
+        SparkProcedures.ProcedureBuilder builder = SparkProcedures.newBuilder(name);
+        return builder.build() ;
     }
 
 
