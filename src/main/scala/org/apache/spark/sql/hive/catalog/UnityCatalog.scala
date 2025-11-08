@@ -10,6 +10,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelpe
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
 import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, TableSchemaChangeCatalog, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.iceberg.catalog.{Procedure, ProcedureCatalog}
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.delta.{DeltaErrors, UnityDeltaCatalog}
 import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
@@ -29,7 +30,7 @@ import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapCo
 import scala.collection.convert.ImplicitConversions.`map AsScala`
 
 class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExtension
-  with SupportsNamespaces
+  with SupportsNamespaces with ProcedureCatalog
   with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog {
 
   private var catalogName: String = null
@@ -528,6 +529,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     dbPath.toUri
   }
 
+  def loadProcedure(identifier: Identifier): Procedure = {
+    new UnityIcebergCatalog(externalCatalog, catalogName, options).loadProcedure(identifier)
+  }
+
 
 }
 
@@ -555,4 +560,6 @@ case class BestEffortStagedTable(
     case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
     case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
   }
+
+
 }

@@ -11,6 +11,7 @@ import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.types.StructType
 import org.apache.iceberg.spark.SparkCatalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
+import org.apache.spark.sql.connector.iceberg.catalog.Procedure
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -106,6 +107,12 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
   def alterTable(ident: Identifier, changes: TableChange*): Table={
     icebergCatalog.alterTable(ident, changes:_*)
   }
+
+  def loadProcedure(identifier: Identifier): Procedure = {
+    icebergCatalog.loadProcedure(identifier)
+  }
+
+
 
 
 

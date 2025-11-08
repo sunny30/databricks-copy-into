@@ -65,6 +65,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.SetProperty;
 import org.apache.spark.sql.connector.catalog.View;
 import org.apache.spark.sql.connector.catalog.ViewChange;
 import org.apache.spark.sql.connector.expressions.Transform;
+import org.apache.spark.sql.connector.iceberg.catalog.Procedure;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
@@ -993,6 +994,10 @@ public class UnitySparkCatalog
 
     public Catalog icebergCatalog() {
         return icebergCatalog;
+    }
+
+    public Procedure loadProcedure(Identifier ident){
+        return null ;
     }
 
 
