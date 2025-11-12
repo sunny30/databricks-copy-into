@@ -47,12 +47,18 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
   private def catalogOptions(name: String, conf: SQLConf) = {
     conf.setConfString("spark.sql.catalog.cat.type", "hadoop")
     conf.setConfString("spark.sql.catalog.cat.warehouse", getCatlogPath)
+
     val prefix = Pattern.compile("^spark\\.sql\\.catalog\\." + name + "\\.(.+)")
     val options = new util.HashMap[String, String]
+    options.put("warehouse", getCatlogPath)
+    options.put("type", "hadoop")
     conf.getAllConfs.foreach {
       case (key, value) =>
         val matcher = prefix.matcher(key)
-        if (matcher.matches && matcher.groupCount > 0) options.put(matcher.group(1), value)
+        if (matcher.matches && matcher.groupCount > 0) {
+          options.put(matcher.group(1), value)
+          println("kv"+matcher.group(1)+":"+value)
+        }
     }
     new CaseInsensitiveStringMap(options)
   }
@@ -61,6 +67,7 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
   def getCatlogPath:String = {
     val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
     val catalogPath = new Path(warehousePath, catalogName + ".cat")
+    println("getCatalogPath is"+ catalogPath.toString)
     catalogPath.toString
   }
 
