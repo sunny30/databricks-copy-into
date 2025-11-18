@@ -73,7 +73,7 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
     }
 
     @Override
-    public MigrateTable tableProperties(Map<String, String> map) {
+    public UnityMigrateTableSparkAction tableProperties(Map<String, String> map) {
         this.setProperties(map);
         return this;
     }
@@ -98,6 +98,16 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
             LOG.error("Cannot drop the backup table {}, after the migration is completed.", this.backupIdent, var2);
         }
 
+    }
+
+    public UnityMigrateTableSparkAction dropBackup() {
+        this.dropBackup = true;
+        return this;
+    }
+
+    public UnityMigrateTableSparkAction backupTableName(String tableName) {
+        this.backupIdent = Identifier.of(this.sourceTableIdent().namespace(), tableName);
+        return this;
     }
 
     private void renameAndBackupSourceTable() {

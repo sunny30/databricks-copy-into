@@ -6,6 +6,8 @@ import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.spark.actions.MigrateTableSparkAction;
 import org.apache.iceberg.spark.actions.SparkActions;
+import org.apache.iceberg.spark.actions.UnityMigrateTableSparkAction;
+import org.apache.iceberg.spark.actions.UnitySparkActions;
 import org.apache.iceberg.spark.procedures.SparkProcedures.ProcedureBuilder;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.catalog.TableCatalog;
@@ -76,8 +78,10 @@ class UnityMigrateTableProcedure extends BaseProcedure {
         boolean dropBackup = args.isNullAt(2) ? false : args.getBoolean(2);
         String backupTableName = args.isNullAt(3) ? null : args.getString(3);
 
-        MigrateTableSparkAction migrateTableSparkAction =
-                SparkActions.get().migrateTable(tableName).tableProperties(properties);
+        SparkActions sparkActions = SparkActions.get() ;
+
+        UnityMigrateTableSparkAction migrateTableSparkAction =
+                UnitySparkActions.get(sparkActions).migrateTable(tableName).tableProperties(properties);
 
         if (dropBackup) {
             migrateTableSparkAction = migrateTableSparkAction.dropBackup();
