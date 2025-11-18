@@ -18,7 +18,7 @@ import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import scala.runtime.BoxedUnit;
 
-class UnityMigrateTableProcedure extends BaseProcedure {
+public class UnityMigrateTableProcedure extends BaseProcedure {
     private static final ProcedureParameter[] PARAMETERS =
             new ProcedureParameter[] {
                     ProcedureParameter.required("table", DataTypes.StringType),

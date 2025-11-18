@@ -39,6 +39,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.spark.*;
 import org.apache.iceberg.spark.actions.SparkActions;
 import org.apache.iceberg.spark.procedures.SparkProcedures;
+import org.apache.iceberg.spark.procedures.UnityMigrateTableProcedure;
 import org.apache.iceberg.spark.source.SparkChangelogTable;
 import org.apache.iceberg.spark.source.SparkTable;
 import org.apache.iceberg.spark.source.SparkView;
@@ -997,11 +998,15 @@ public class UnitySparkCatalog
         return icebergCatalog;
     }
 
-    public Procedure loadProcedure(Identifier ident){
+    public Procedure loadProcedure(Identifier ident) {
         String[] namespace = ident.namespace();
         String name = ident.name();
-        SparkProcedures.ProcedureBuilder builder = SparkProcedures.newBuilder(name);
-        return builder.build() ;
+        if (name.toLowerCase().equalsIgnoreCase("migrate")) {
+            return UnityMigrateTableProcedure.builder().build() ;
+        } else {
+            SparkProcedures.ProcedureBuilder builder = SparkProcedures.newBuilder(name);
+            return builder.build();
+        }
     }
 
 
