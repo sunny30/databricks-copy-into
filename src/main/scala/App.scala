@@ -107,7 +107,7 @@ object App {
     spark.sql("create table cat.lidb.ptbl(id int) using parquet")
     spark.sql("insert into cat.lidb.ptbl values (1), (2)")
     spark.sql("select id from cat.lidb.ptbl").show()
-    spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl')")
+    spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl')").show()
 //    spark.sql("create table cat.lidb.tbl(id int, name string) using iceberg")
 //    spark.sql("select * from cat.lidb.tbl").show()
 //

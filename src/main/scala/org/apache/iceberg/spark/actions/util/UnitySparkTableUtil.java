@@ -476,12 +476,8 @@ public class UnitySparkTableUtil {
             Table targetTable,
             boolean checkDuplicateFiles) {
         try {
-            CatalogTable sourceTable = spark.sessionState().catalog().getTableMetadata(sourceTableIdent);
-            Option<String> format =
-                    sourceTable.storage().serde().nonEmpty()
-                            ? sourceTable.storage().serde()
-                            : sourceTable.provider();
-            Preconditions.checkArgument(format.nonEmpty(), "Could not determine table format");
+            Tuple2<String, String> location = (new UnityCatalogUtil(spark)).getTableLocation(sourceTableIdent) ;
+
 
             Map<String, String> partition = Collections.emptyMap();
             PartitionSpec spec = PartitionSpec.unpartitioned();
@@ -494,8 +490,8 @@ public class UnitySparkTableUtil {
             List<DataFile> files =
                     TableMigrationUtil.listPartition(
                             partition,
-                            Util.uriToString(sourceTable.location()),
-                            format.get(),
+                            location._2(),
+                            location._1(),
                             spec,
                             conf,
                             metricsConfig,
@@ -521,10 +517,7 @@ public class UnitySparkTableUtil {
             AppendFiles append = targetTable.newAppend();
             files.forEach(append::appendFile);
             append.commit();
-        } catch (NoSuchDatabaseException e) {
-            throw SparkExceptionUtil.toUncheckedException(
-                    e, "Unknown table: %s. Database not found in catalog.", sourceTableIdent);
-        } catch (NoSuchTableException e) {
+        }  catch (Exception e) {
             throw SparkExceptionUtil.toUncheckedException(
                     e, "Unknown table: %s. Table not found in catalog.", sourceTableIdent);
         }

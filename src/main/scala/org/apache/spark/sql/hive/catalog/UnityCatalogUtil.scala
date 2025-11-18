@@ -1,7 +1,8 @@
 package org.apache.spark.sql.hive.catalog
 
+import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.catalog.Column
-import org.apache.spark.sql.catalyst.DefinedByConstructorParams
+import org.apache.spark.sql.catalyst.{DefinedByConstructorParams, TableIdentifier}
 import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
@@ -62,6 +63,20 @@ class UnityCatalogUtil(spark:SparkSession) {
     val plan = new LocalRelation(DataTypeUtils.toAttributes(enc.schema), encoded)
     val queryExecution = sparkSession.sessionState.executePlan(plan)
     new Dataset[T](queryExecution, enc)
+  }
+
+  def getTableLocation(tableIdent: TableIdentifier):(String,String)={
+    val catalogName = tableIdent.catalog.getOrElse("spark_catalog")
+    val dbName = tableIdent.database.getOrElse("default")
+    val tableName = tableIdent.table
+    val tableCatalog = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asTableCatalog
+    val table = tableCatalog.loadTable(Identifier.of(Array(dbName), tableName))
+    table match {
+      case sparkTable: SparkTable => (sparkTable.properties().get("format"), sparkTable.properties().get("location"))
+      case v2Table: V2Table => (v2Table.v1Table.provider.getOrElse("parquet"), v2Table.v1Table.storage.locationUri.getOrElse("").toString)
+      case _ => throw new IllegalStateException("only V2 or Iceberg table is required")
+    }
+
   }
 
 }
