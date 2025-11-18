@@ -1,33 +1,17 @@
 package org.apache.iceberg.spark.actions.util;
 
 
+import static org.apache.iceberg.spark.SparkSchemaUtil.schemaForTable;
 import static org.apache.spark.sql.functions.col;
 
 import java.io.IOException;
 import java.io.Serializable;
 import java.net.URI;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.iceberg.AppendFiles;
-import org.apache.iceberg.DataFile;
-import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.HasTableOperations;
-import org.apache.iceberg.ManifestFile;
-import org.apache.iceberg.ManifestFiles;
-import org.apache.iceberg.ManifestWriter;
-import org.apache.iceberg.MetadataTableType;
-import org.apache.iceberg.MetadataTableUtils;
-import org.apache.iceberg.MetricsConfig;
-import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.Table;
-import org.apache.iceberg.TableOperations;
-import org.apache.iceberg.TableProperties;
+import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.data.TableMigrationUtil;
 import org.apache.iceberg.exceptions.ValidationException;
@@ -38,10 +22,8 @@ import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.OutputFile;
 import org.apache.iceberg.mapping.NameMapping;
 import org.apache.iceberg.mapping.NameMappingParser;
-import org.apache.iceberg.relocated.com.google.common.base.Joiner;
-import org.apache.iceberg.relocated.com.google.common.base.MoreObjects;
+import org.apache.iceberg.relocated.com.google.common.base.*;
 import org.apache.iceberg.relocated.com.google.common.base.Objects;
-import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableList;
 import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.relocated.com.google.common.collect.Lists;
@@ -79,6 +61,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
 import org.apache.spark.sql.connector.catalog.Identifier;
 import org.apache.spark.sql.connector.catalog.TableCatalog;
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation;
+import org.apache.spark.sql.hive.catalog.UnityCatalogUtil;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import scala.Function2;
 import scala.Option;
@@ -388,7 +371,7 @@ public class UnitySparkTableUtil {
 
         try {
             PartitionSpec spec =
-                    SparkSchemaUtil.specForTable(spark, sourceTableIdentWithDB.unquotedString());
+                    specForTable(spark, sourceTableIdentWithDB.unquotedString(),catalogName);
 
             if (Objects.equal(spec, PartitionSpec.unpartitioned())) {
                 importUnpartitionedSparkTable(
@@ -407,6 +390,38 @@ public class UnitySparkTableUtil {
             throw SparkExceptionUtil.toUncheckedException(
                     e, "Unable to get partition spec for table: %s", sourceTableIdentWithDB);
         }
+    }
+
+    public static PartitionSpec specForTable(SparkSession spark, String name, String catalogName) throws AnalysisException {
+        List<String> parts = Lists.newArrayList(Splitter.on('.').limit(3).split(name));
+        String db = parts.size() == 1 ? "default" : (String)parts.get(1);
+        String table = (String)parts.get(parts.size() == 1 ? 0 : 2);
+        PartitionSpec spec = identitySpec(schemaForTable(spark, name), (Collection)((new UnityCatalogUtil(spark)).listColumns(catalogName,db, table).collectAsList()));
+        return spec == null ? PartitionSpec.unpartitioned() : spec;
+    }
+
+    private static PartitionSpec identitySpec(Schema schema, Collection<org.apache.spark.sql.catalog.Column> columns) {
+        List<String> names = Lists.newArrayList();
+        for (org.apache.spark.sql.catalog.Column column : columns) {
+            if (column.isPartition()) {
+                names.add(column.name());
+            }
+        }
+
+        return identitySpec(schema, names);
+    }
+
+    private static PartitionSpec identitySpec(Schema schema, List<String> partitionNames) {
+        if (partitionNames == null || partitionNames.isEmpty()) {
+            return null;
+        }
+
+        PartitionSpec.Builder builder = PartitionSpec.builderFor(schema);
+        for (String partitionName : partitionNames) {
+            builder.identity(partitionName);
+        }
+
+        return builder.build();
     }
 
     /**
