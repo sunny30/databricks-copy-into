@@ -145,12 +145,15 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
             LOG.info("Staging a new Iceberg table {}", this.destTableIdent());
             stagedTable = this.stageDestTable();
             icebergTable = stagedTable.table();
+
             LOG.info("Ensuring {} has a valid name mapping", this.destTableIdent());
             this.ensureNameMappingPresent(icebergTable);
             Some<String> backupNamespace = Some.apply(this.backupIdent.namespace()[0]);
-            TableIdentifier v1BackupIdent = new TableIdentifier(this.backupIdent.name(), backupNamespace);
+            Some<String> backupCatalog = Some.apply(this.destCatalog.name()) ;
+            TableIdentifier v1BackupIdent = new TableIdentifier(this.backupIdent.name(), backupNamespace, backupCatalog);
             String stagingLocation = this.getMetadataLocation(icebergTable);
             LOG.info("Generating Iceberg metadata for {} in {}", this.destTableIdent(), stagingLocation);
+            System.out.println(String.format("Generating Iceberg metadata for %s in %s", this.destTableIdent(), stagingLocation)) ;
             SparkTableUtil.importSparkTable(this.spark(), v1BackupIdent, icebergTable, stagingLocation);
             LOG.info("Committing staged changes to {}", this.destTableIdent());
             stagedTable.commitStagedChanges();

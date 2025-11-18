@@ -272,7 +272,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     val table = createTable(ident, schema, partitions, properties)
-    BestEffortStagedTable(ident, table, this)
+    if(properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")){
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCreate(ident, schema, partitions, properties)
+    }else {
+      BestEffortStagedTable(ident, table, this)
+    }
   }
 
   //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {

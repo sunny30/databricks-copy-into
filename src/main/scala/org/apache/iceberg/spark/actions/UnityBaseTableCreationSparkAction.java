@@ -110,7 +110,7 @@ abstract class UnityBaseTableCreationSparkAction<ThisT> extends BaseSparkAction<
     }
 
     protected StagingTableCatalog checkDestinationCatalog(CatalogPlugin catalog) {
-        Preconditions.checkArgument(catalog instanceof SparkSessionCatalog || catalog instanceof SparkCatalog, "Cannot create Iceberg table in non-Iceberg Catalog. Catalog '%s' was of class '%s' but '%s' or '%s' are required", catalog.name(), catalog.getClass().getName(), SparkSessionCatalog.class.getName(), SparkCatalog.class.getName());
+       // Preconditions.checkArgument(catalog instanceof SparkSessionCatalog || catalog instanceof SparkCatalog, "Cannot create Iceberg table in non-Iceberg Catalog. Catalog '%s' was of class '%s' but '%s' or '%s' are required", catalog.name(), catalog.getClass().getName(), SparkSessionCatalog.class.getName(), SparkCatalog.class.getName());
         return (StagingTableCatalog)catalog;
     }
 

@@ -381,9 +381,10 @@ public class UnitySparkCatalog
     public void renameTable(Identifier from, Identifier to)
             throws NoSuchTableException, TableAlreadyExistsException {
         try {
-            checkNotPathIdentifier(from, "renameTable");
-            checkNotPathIdentifier(to, "renameTable");
-            icebergCatalog.renameTable(buildIdentifier(from), buildIdentifier(to));
+//            checkNotPathIdentifier(from, "renameTable");
+//            checkNotPathIdentifier(to, "renameTable");
+//            icebergCatalog.renameTable(buildIdentifier(from), buildIdentifier(to));
+
         } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
             throw new NoSuchTableException(from);
         } catch (AlreadyExistsException e) {

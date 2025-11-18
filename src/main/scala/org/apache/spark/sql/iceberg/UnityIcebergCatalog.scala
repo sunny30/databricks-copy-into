@@ -95,6 +95,10 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
     icebergCatalog.stageReplace(ident, schema, partitions, properties)
   }
 
+  def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
+    icebergCatalog.stageCreate(ident,schema,partitions,properties)
+  }
+
   def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit ={
     icebergCatalog.renameTable(oldIdent, newIdent)
     val oldTableName = oldIdent.asTableIdentifier.table
