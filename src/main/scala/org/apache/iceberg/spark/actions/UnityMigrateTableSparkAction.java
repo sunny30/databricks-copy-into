@@ -10,6 +10,7 @@ import org.apache.iceberg.exceptions.AlreadyExistsException;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.spark.JobGroupInfo;
 import org.apache.iceberg.spark.SparkTableUtil;
+import org.apache.iceberg.spark.actions.util.UnitySparkTableUtil;
 import org.apache.iceberg.spark.source.StagedSparkTable;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.TableIdentifier;
@@ -154,7 +155,7 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
             String stagingLocation = this.getMetadataLocation(icebergTable);
             LOG.info("Generating Iceberg metadata for {} in {}", this.destTableIdent(), stagingLocation);
             System.out.println(String.format("Generating Iceberg metadata for %s in %s", this.destTableIdent(), stagingLocation)) ;
-            SparkTableUtil.importSparkTable(this.spark(), v1BackupIdent, icebergTable, stagingLocation);
+            UnitySparkTableUtil.importSparkTable(this.destCatalog.name(),spark(), v1BackupIdent, icebergTable, stagingLocation);
             LOG.info("Committing staged changes to {}", this.destTableIdent());
             stagedTable.commitStagedChanges();
             threw = false;
