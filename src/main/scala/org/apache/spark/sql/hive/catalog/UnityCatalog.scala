@@ -361,7 +361,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           val icebergCatalog = new UnityIcebergCatalog(externalCatalog, catalogName, options)
           return icebergCatalog.createIcebergTable(ident, schema, partitions, icebergProperties.asJava, tableDesc)
         }
-        externalCatalog.createTable(tableDesc, ignoreIfExists = false)
+        externalCatalog.createTable(tableDesc, ignoreIfExists = true)
         if (tableType == CatalogTableType.VIEW) {
           V2Table(tableDesc)
         } else {

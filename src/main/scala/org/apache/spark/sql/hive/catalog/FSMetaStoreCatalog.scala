@@ -72,7 +72,37 @@ class FSMetaStoreCatalog(
 
 
   override def renameTable(db: String, oldName: String, newName: String): Unit = {
-    println("empty impl")
+    val oldDesc =  FSMetaStoreCatalog.catalog(db).tables(oldName)
+    oldDesc.table = oldDesc.table.copy(identifier = oldDesc.table.identifier.copy(table = newName))
+
+//    if (oldDesc.table.tableType == CatalogTableType.MANAGED) {
+//      assert(oldDesc.table.storage.locationUri.isDefined,
+//        "Managed table should always have table location, as we will assign a default location " +
+//          "to it if it doesn't have one.")
+//      val oldDir = new Path(oldDesc.table.location)
+//      val newDir = new Path(new Path( FSMetaStoreCatalog.catalog(db).db.locationUri), newName)
+//      try {
+//        val fs = oldDir.getFileSystem(hadoopConfig)
+//        fs.rename(oldDir, newDir)
+//      } catch {
+//        case e: IOException =>
+//          throw QueryExecutionErrors.unableToRenameTableAsFailedToRenameDirectoryError(
+//            oldName, newName, oldDir, e)
+//      }
+//      oldDesc.table = oldDesc.table.withNewStorage(locationUri = Some(newDir.toUri))
+//
+//      val newPartitions = oldDesc.partitions.map { case (spec, partition) =>
+//        val storage = partition.storage
+//        val newLocationUri = storage.locationUri.map { uri =>
+//          new Path(uri.toString.replace(oldDir.toString, newDir.toString)).toUri
+//        }
+//        val newPartition = partition.copy(storage = storage.copy(locationUri = newLocationUri))
+//        (spec, newPartition)
+//      }
+//      oldDesc.partitions = newPartitions
+//    }
+    FSMetaStoreCatalog.catalog(db).tables.put(newName, oldDesc)
+    FSMetaStoreCatalog.catalog(db).tables.remove(oldName)
   }
 
 
@@ -170,7 +200,7 @@ class FSMetaStoreCatalog(
       if (!ignoreIfExists) {
         throw new TableAlreadyExistsException(db = db, table = table)
       }
-    } else {
+    } else{
       val needDefaultTableLocation =
         tableDefinition.tableType == CatalogTableType.MANAGED
 

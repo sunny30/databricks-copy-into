@@ -58,7 +58,7 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
 
     @Override
     protected Identifier destTableIdent() {
-        return this.backupIdent;
+        return this.destTableIdent;
     }
 
     @Override
@@ -136,27 +136,27 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
 
 
     private MigrateTable.Result doExecute() {
-        LOG.info("Starting the migration of {} to Iceberg", this.sourceTableIdent());
-        this.renameAndBackupSourceTable();
-        StagedSparkTable stagedTable = null;
-        boolean threw = true;
+        LOG.info("Starting the migration of {} to Iceberg", sourceTableIdent());
 
+        renameAndBackupSourceTable();
+
+        StagedSparkTable stagedTable = null;
         Table icebergTable;
+        boolean threw = true;
         try {
-            LOG.info("Staging a new Iceberg table {}", this.destTableIdent());
-            stagedTable = this.stageDestTable();
+            LOG.info("Staging a new Iceberg table {}", destTableIdent());
+            stagedTable = stageDestTable();
             icebergTable = stagedTable.table();
 
-            LOG.info("Ensuring {} has a valid name mapping", this.destTableIdent());
-            this.ensureNameMappingPresent(icebergTable);
-            Some<String> backupNamespace = Some.apply(this.backupIdent.namespace()[0]);
-            Some<String> backupCatalog = Some.apply(this.destCatalog.name()) ;
-            TableIdentifier v1BackupIdent = new TableIdentifier(this.backupIdent.name(), backupNamespace, backupCatalog);
-            String stagingLocation = this.getMetadataLocation(icebergTable);
-            LOG.info("Generating Iceberg metadata for {} in {}", this.destTableIdent(), stagingLocation);
-            System.out.println(String.format("Generating Iceberg metadata for %s in %s", this.destTableIdent(), stagingLocation)) ;
+            LOG.info("Ensuring {} has a valid name mapping", destTableIdent());
+            ensureNameMappingPresent(icebergTable);
+
+            Some<String> backupNamespace = Some.apply(backupIdent.namespace()[0]);
+            TableIdentifier v1BackupIdent = new TableIdentifier(backupIdent.name(), backupNamespace);
+            String stagingLocation = getMetadataLocation(icebergTable);
+            LOG.info("Generating Iceberg metadata for {} in {}", destTableIdent(), stagingLocation);
             UnitySparkTableUtil.importSparkTable(this.destCatalog.name(),spark(), v1BackupIdent, icebergTable, stagingLocation);
-            LOG.info("Committing staged changes to {}", this.destTableIdent());
+            LOG.info("Committing staged changes to {}", destTableIdent());
             stagedTable.commitStagedChanges();
             threw = false;
         } finally {

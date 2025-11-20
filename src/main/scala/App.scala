@@ -108,6 +108,12 @@ object App {
     spark.sql("insert into cat.lidb.ptbl values (1), (2)")
     spark.sql("select id from cat.lidb.ptbl").show()
     spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl')").show()
+
+    spark.sql("describe formatted cat.lidb.ptbl_BACKUP_").show()
+    spark.sql("select * from cat.lidb.ptbl_BACKUP_").show()
+
+    spark.sql("describe formatted cat.lidb.ptbl").show()
+    spark.sql("select * from cat.lidb.ptbl").show()
 //    spark.sql("create table cat.lidb.tbl(id int, name string) using iceberg")
 //    spark.sql("select * from cat.lidb.tbl").show()
 //
