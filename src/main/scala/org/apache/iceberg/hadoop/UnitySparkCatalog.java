@@ -249,9 +249,10 @@ public class UnitySparkCatalog
                             .withPartitionSpec(Spark3Util.toPartitionSpec(icebergSchema, transforms))
                             .withLocation(properties.get("location"))
                             .withProperties(Spark3Util.rebuildCreateProperties(properties))
-                            .createTransaction();
+                            .replaceTransaction();
             return new StagedSparkTable(transaction);
         } catch (AlreadyExistsException e) {
+            System.out.println("Error from here");
             throw new TableAlreadyExistsException(ident);
         }
     }
