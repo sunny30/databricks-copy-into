@@ -102,18 +102,36 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
 
-    /**Listener test **/
+
+    /**Iceberg migration test starts**/
+
     spark.sql("create database cat.lidb")
-    spark.sql("create table cat.lidb.ptbl(id int) using parquet")
-    spark.sql("insert into cat.lidb.ptbl values (1), (2)")
-    spark.sql("select id from cat.lidb.ptbl").show()
-    spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl')").show()
+     /**UnPartitioned Manage table **/
+//    spark.sql("create table cat.lidb.ptbl(id int) using parquet")
+//    spark.sql("insert into cat.lidb.ptbl values (1), (2)")
+//    spark.sql("select id from cat.lidb.ptbl").show()
+//    spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl')").show()
+//
+//    spark.sql("describe formatted cat.lidb.ptbl_BACKUP_").show()
+//    spark.sql("select * from cat.lidb.ptbl_BACKUP_").show()
+//
+//    spark.sql("describe formatted cat.lidb.ptbl").show()
+//    spark.sql("select * from cat.lidb.ptbl").show()
+    /**UnPartitioned Manage table **/
 
-    spark.sql("describe formatted cat.lidb.ptbl_BACKUP_").show()
-    spark.sql("select * from cat.lidb.ptbl_BACKUP_").show()
+    /**Partitioned table check **/
+    spark.sql("create table cat.lidb.ptbl1(id int, age int) using parquet PARTITIONED BY (age)")
+    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
+    spark.sql("select id from cat.lidb.ptbl1").show()
+    spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl1')").show()
+    spark.sql("describe formatted cat.lidb.ptbl1").show()
+    spark.sql("select * from cat.lidb.ptbl1").show()
 
-    spark.sql("describe formatted cat.lidb.ptbl").show()
-    spark.sql("select * from cat.lidb.ptbl").show()
+    /**Partitioned table check **/
+
+    /**Iceberg migration test ends **/
+    /**Listener test **/
+
 //    spark.sql("create table cat.lidb.tbl(id int, name string) using iceberg")
 //    spark.sql("select * from cat.lidb.tbl").show()
 //

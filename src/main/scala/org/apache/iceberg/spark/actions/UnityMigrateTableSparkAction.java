@@ -69,6 +69,7 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
         properties.put("provider", "iceberg");
         properties.putAll(this.additionalProperties());
         properties.put("migrated", "true");
+        properties.put("external", "true") ;
         properties.putIfAbsent("location", this.sourceTableLocation());
         return properties;
     }

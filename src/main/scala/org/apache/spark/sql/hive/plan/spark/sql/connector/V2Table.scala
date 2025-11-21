@@ -4,7 +4,7 @@ import org.apache.spark.sql.SparkSession
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, CatalogTableType}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TableIdentifierHelper
 import org.apache.spark.sql.connector.catalog.{CatalogV2Implicits, Table, TableCapability, TableCatalog}
 import org.apache.spark.sql.connector.catalog.V1Table.addV2TableProperties
@@ -129,6 +129,8 @@ case class V2Table(v1Table: CatalogTable) extends Table {
     }
 
   }
+
+  //def getTablePartition: Seq[CatalogTablePartition]
 }
 
 object V2Table {
