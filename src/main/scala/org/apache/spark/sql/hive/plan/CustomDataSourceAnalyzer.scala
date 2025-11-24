@@ -204,15 +204,17 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) =>
       println("Inside Unresolved " + u.toString())
+      val catalogName = session.sessionState.catalogManager.currentCatalog.name()
+
       val res = if (multipartIdentifier.size == 3) {
         (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
       } else if (multipartIdentifier.size == 2) {
-        ("spark_catalog", multipartIdentifier(0), multipartIdentifier(1))
+        (catalogName, multipartIdentifier(0), multipartIdentifier(1))
       } else {
-        ("spark_catalog", "default", multipartIdentifier(0))
+        (catalogName, "default", multipartIdentifier(0))
       }
       val sessionCatalog = SparkSession.active.sessionState.catalogManager.catalog(res._1).asTableCatalog
-
+      val plugin = session.sessionState.catalogManager.catalog(res._1)
       if (res._1.equalsIgnoreCase("spark_catalog")) {
         if (SparkSession.active.sessionState.catalog.tableExists(TableIdentifier(res._3, Some(res._2)))) {
           val ct = SparkSession.active.sessionState.catalog.getTableMetadata(TableIdentifier(res._3, Some(res._2)))
@@ -244,33 +246,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 || provider.equalsIgnoreCase("orc")
                 || provider.equalsIgnoreCase("avro")
                 || provider.equalsIgnoreCase("arrow")) {
-                val schemaColName = v2Table.v1Table.dataSchema.map(f => f.name)
-                val partSchemaColNames = v2Table.v1Table.partitionSchema.map(f => f.name)
-                val defaultTableSize = SparkSession.active.sessionState.conf.defaultSizeInBytes
-                val fileCatalog = new CustomCatalogFileIndex(
-                  SparkSession.active,
-                  v2Table.v1Table,
-                  v2Table.v1Table.stats.map(_.sizeInBytes.toLong).getOrElse(defaultTableSize))
-
-
-                //val source = DataSource.lookupDataSource("hive", SparkSession.active.sessionState.conf)
-                //val fileFormat = source.getConstructor().newInstance().asInstanceOf[FileFormat]
-                val ff = if (provider.equalsIgnoreCase("hive")) {
-                  getHiveTableFileFormat(v2Table.v1Table)
-                } else {
-                  getFileFormat(provider)
-                }
-                val relation = LogicalRelation(relation = HadoopFsRelation(
-                  location = fileCatalog,
-                  partitionSchema = v2Table.v1Table.partitionSchema,
-                  dataSchema = v2Table.v1Table.dataSchema,
-                  fileFormat = ff,
-                  options = mapHiveCSVPropertiesToSparkOption(v2Table.v1Table, ff),
-                  bucketSpec = None
-                )(SparkSession.active))
-
-                //   relation.setAnalyzed()
-                relation
+                val ds = DataSourceV2Relation.create(table = v2Table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)), options = v2Table.getTableCaseInsensitiveStringMap)
+               // ListenerUtil.copyPlanTagsIfExists(dd, ds)
+                ds
               } else {
                 val dataSource = DataSource(
                   session,

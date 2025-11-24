@@ -130,7 +130,9 @@ case class V2Table(v1Table: CatalogTable) extends Table {
 
   }
 
-  //def getTablePartition: Seq[CatalogTablePartition]
+//  def getTablePartition: Seq[CatalogTablePartition] = {
+//    getV2CustomTable.asInstanceOf[V2CustomTable].getCatalogTablePartition
+//  }
 }
 
 object V2Table {
