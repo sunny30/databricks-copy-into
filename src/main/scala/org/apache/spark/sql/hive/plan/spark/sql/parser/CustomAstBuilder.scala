@@ -23,7 +23,9 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
   import org.apache.spark.sql.catalyst.parser.ParserUtils._
   import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 
-  override def visitSingleStatement(ctx: SqlBaseParser.SingleStatementContext): LogicalPlan = super.visitSingleStatement(ctx)
+  override def visitSingleStatement(ctx: SqlBaseParser.SingleStatementContext): LogicalPlan = withOrigin(ctx) {
+    visit(ctx.statement).asInstanceOf[LogicalPlan]
+  }
 
 
   override def visitCreateView(ctx: CreateViewContext): LogicalPlan = withOrigin(ctx) {

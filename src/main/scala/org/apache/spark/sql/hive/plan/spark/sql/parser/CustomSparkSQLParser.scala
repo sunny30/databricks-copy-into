@@ -2,6 +2,7 @@ package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import io.delta.sql.parser.DeltaSqlAstBuilder
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, CreateView, LogicalPlan}
 import org.apache.spark.sql.execution.SparkSqlParser
@@ -57,7 +58,7 @@ object CustomSparkSQLParser extends SparkSqlParser{
           case _ =>  ListenerUtil.setSQLText(plan, sqlText)
         }
 
-        plan
+        tranformUnResolvedRelationWithThreePartName(plan)
       case _ => throw new IllegalArgumentException("Invalid SQL")
     }
   }
@@ -70,6 +71,30 @@ object CustomSparkSQLParser extends SparkSqlParser{
 
     SparkSession.active.conf.set("spark.sql.catalog.hive", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     super.parseMultipartIdentifier(sqlText)
+  }
+
+  def tranformUnResolvedRelationWithThreePartName(plan: LogicalPlan): LogicalPlan = {
+    plan.transform {
+      case u: UnresolvedRelation => getThreePartUnResolvedRelation(u)
+      case p: LogicalPlan => p
+    }
+  }
+
+  def getThreePartUnResolvedRelation(u: UnresolvedRelation): UnresolvedRelation ={
+    val sz = u.multipartIdentifier.size
+    var catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    if(catalogName.equalsIgnoreCase("hive") || catalogName.equalsIgnoreCase("default")){
+      catalogName = "spark_catalog"
+    }
+    if(sz == 3){
+      u
+    }else if(sz == 2 ){
+      val mp:Seq[String] = Seq(catalogName,u.multipartIdentifier.head, u.multipartIdentifier.last)
+      u.copy(multipartIdentifier = mp)
+    }else{
+      val mp:Seq[String] = Seq(catalogName,"default", u.multipartIdentifier.head)
+      u.copy(multipartIdentifier = mp)
+    }
   }
 
 
