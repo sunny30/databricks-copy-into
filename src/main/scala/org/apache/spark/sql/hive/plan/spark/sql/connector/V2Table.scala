@@ -11,6 +11,7 @@ import org.apache.spark.sql.connector.catalog.V1Table.addV2TableProperties
 import org.apache.spark.sql.connector.expressions.{LogicalExpressions, Transform}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
+import org.apache.spark.sql.hive.catalog.UnityCatalogUtil
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -130,9 +131,9 @@ case class V2Table(v1Table: CatalogTable) extends Table {
 
   }
 
-//  def getTablePartition: Seq[CatalogTablePartition] = {
-//    getV2CustomTable.asInstanceOf[V2CustomTable].getCatalogTablePartition
-//  }
+  def getTablePartition: Seq[CatalogTablePartition] = {
+    (new UnityCatalogUtil(SparkSession.active)).getCatalogTablePartitions(this)
+  }
 }
 
 object V2Table {

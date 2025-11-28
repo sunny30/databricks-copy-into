@@ -19,7 +19,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.catalog.{CatalogTablePartition, ExternalCatalogUtils}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, ExternalCatalogUtils}
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.util.ThreadUtils
@@ -93,7 +93,33 @@ class UnityCatalogUtil(spark:SparkSession) extends Logging {
 
   }
 
-  def getCatalogTablePartition(v2Table: V2Table):Seq[CatalogTablePartition]= {
+  def getCatalogTablePartitions(tableIdentifier: TableIdentifier):Seq[CatalogTablePartition] = {
+    val dbName = tableIdentifier.database.getOrElse("default")
+    val tableName = tableIdentifier.table
+    val catalogName = tableIdentifier.catalog.getOrElse(spark.sessionState.catalogManager.currentCatalog.name())
+    val tableCatalog = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asTableCatalog
+    val table = tableCatalog.loadTable(Identifier.of(Array(dbName), tableName))
+    table match {
+     // case sparkTable: SparkTable => (sparkTable.properties().get("format"), sparkTable.properties().get("location"))
+      case v2Table: V2Table => getCatalogTablePartitions(v2Table)
+      case _ => throw new IllegalStateException("only V2 or Iceberg table is required")
+    }
+  }
+
+  def getV1CatalogTableFromV2Table(tableIdentifier: TableIdentifier): CatalogTable = {
+    val dbName = tableIdentifier.database.getOrElse("default")
+    val tableName = tableIdentifier.table
+    val catalogName = tableIdentifier.catalog.getOrElse(spark.sessionState.catalogManager.currentCatalog.name())
+    val tableCatalog = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asTableCatalog
+    val table = tableCatalog.loadTable(Identifier.of(Array(dbName), tableName))
+    table match {
+      // case sparkTable: SparkTable => (sparkTable.properties().get("format"), sparkTable.properties().get("location"))
+      case v2Table: V2Table => v2Table.v1Table
+      case _ => throw new IllegalStateException("only V2 or Iceberg table is required")
+    }
+  }
+
+  def getCatalogTablePartitions(v2Table: V2Table):Seq[CatalogTablePartition]= {
 
     val table = v2Table.v1Table
     val root = new Path(table.location)

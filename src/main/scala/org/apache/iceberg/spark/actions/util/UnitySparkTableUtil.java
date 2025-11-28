@@ -147,27 +147,14 @@ public class UnitySparkTableUtil {
     public static List<SparkPartition> getPartitions(
             SparkSession spark, TableIdentifier tableIdent, Map<String, String> partitionFilter) {
         try {
-            SessionCatalog catalog = spark.sessionState().catalog();
-            CatalogTable catalogTable = catalog.getTableMetadata(tableIdent);
 
-            Option<scala.collection.immutable.Map<String, String>> scalaPartitionFilter;
-            if (partitionFilter != null && !partitionFilter.isEmpty()) {
-                Builder<Tuple2<String, String>, scala.collection.immutable.Map<String, String>> builder =
-                        Map$.MODULE$.<String, String>newBuilder();
-                partitionFilter.forEach((key, value) -> builder.$plus$eq(Tuple2.apply(key, value)));
-                scalaPartitionFilter = Option.apply(builder.result());
-            } else {
-                scalaPartitionFilter = Option.empty();
-            }
             Seq<CatalogTablePartition> partitions =
-                    catalog.listPartitions(tableIdent, scalaPartitionFilter).toIndexedSeq();
+                    (new UnityCatalogUtil(spark)).getCatalogTablePartitions(tableIdent).toIndexedSeq();
+            CatalogTable catalogTable = (new UnityCatalogUtil(spark)).getV1CatalogTableFromV2Table(tableIdent) ;
             return JavaConverters.seqAsJavaListConverter(partitions).asJava().stream()
                     .map(catalogPartition -> toSparkPartition(catalogPartition, catalogTable))
                     .collect(Collectors.toList());
-        } catch (NoSuchDatabaseException e) {
-            throw SparkExceptionUtil.toUncheckedException(
-                    e, "Unknown table: %s. Database not found in catalog.", tableIdent);
-        } catch (NoSuchTableException e) {
+        }  catch (Exception e) {
             throw SparkExceptionUtil.toUncheckedException(
                     e, "Unknown table: %s. Table not found in catalog.", tableIdent);
         }
@@ -264,9 +251,6 @@ public class UnitySparkTableUtil {
         Option<URI> locationUri = partition.storage().locationUri();
         Option<String> serde = partition.storage().serde();
 
-        Preconditions.checkArgument(locationUri.nonEmpty(), "Partition URI should be defined");
-        Preconditions.checkArgument(
-                serde.nonEmpty() || table.provider().nonEmpty(), "Partition format should be defined");
 
         String uri = Util.uriToString(locationUri.get());
         String format = serde.nonEmpty() ? serde.get() : table.provider().get();
@@ -378,7 +362,7 @@ public class UnitySparkTableUtil {
                         spark, sourceTableIdentWithDB, targetTable, checkDuplicateFiles);
             } else {
                 List<SparkPartition> sourceTablePartitions =
-                        getPartitions(spark, sourceTableIdent, partitionFilter);
+                        getPartitions(spark, sourceTableIdentWithDB, partitionFilter);
                 if (sourceTablePartitions.isEmpty()) {
                     targetTable.newAppend().commit();
                 } else {
