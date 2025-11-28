@@ -493,6 +493,16 @@ public class UnityHadoopCatalog extends HadoopCatalog
             return this;
         }
 
+        public Catalog.TableBuilder withPartitionSpec(PartitionSpec newSpec) {
+            this.spec = newSpec != null ? newSpec : PartitionSpec.unpartitioned();
+            return this;
+        }
+
+        public Catalog.TableBuilder withSortOrder(SortOrder newSortOrder) {
+            this.sortOrder = newSortOrder != null ? newSortOrder : SortOrder.unsorted();
+            return this;
+        }
+
         private HadoopCatalogTableBuilder(TableIdentifier identifier, Schema schema,Map<String, String> tableProperties ) {
             super(identifier, schema);
             this.identifier = identifier ;

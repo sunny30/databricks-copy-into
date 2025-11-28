@@ -15,11 +15,13 @@ object IcebergApp {
 
     spark.sql("""CREATE TABLE local.db.logs (
                 |    uuid string NOT NULL,
-                |    level string NOT NULL)
-                |USING iceberg""".stripMargin)
+                |    level string NOT NULL,
+                |    age int,
+                |    range int)
+                |USING iceberg partitioned by(age, range)""".stripMargin)
 
     //org.apache.iceberg.spark.source.IcebergSource
-    spark.sql("insert into local.db.logs values('a', 'b')")
+    spark.sql("insert into local.db.logs values('a', 'b',1,2), ('a', 'b',2,2)")
 
    // spark.sql("describe formatted local.db.logs").show()
 
@@ -29,7 +31,7 @@ object IcebergApp {
 
     spark.sql("select * from local.db.logs").show()
 
-    spark.read.table("local.db.logs").show()
+  //  spark.read.table("local.db.logs").show()
 
 //    spark.sql("""create table local.db.logs_orc(
 //      | uuid string NOT NULL,
@@ -37,14 +39,14 @@ object IcebergApp {
 //    | USING orc""".stripMargin)
 //
 //    spark.sql("insert into local.db.logs_orc values('a', 'b')")
-    spark.sql(
-      """create table if not exists logs_orc7(
-        | uuid string NOT NULL,
-        | level string NOT NULL)
-        | USING orc""".stripMargin)
-
-    spark.sql("insert into logs_orc7 values('a', 'b')")
-    spark.sql("CALL local.system.migrate('spark_catalog.default.logs_orc7')")
+//    spark.sql(
+//      """create table if not exists logs_orc7(
+//        | uuid string NOT NULL,
+//        | level string NOT NULL)
+//        | USING orc""".stripMargin)
+//
+//    spark.sql("insert into logs_orc7 values('a', 'b')")
+//    spark.sql("CALL local.system.migrate('spark_catalog.default.logs_orc7')")
   //  df.write.format("iceberg").saveAsTable("local.db.new_logs")
 
   //  spark.sql("select * from local.db.logs").explain(true)
