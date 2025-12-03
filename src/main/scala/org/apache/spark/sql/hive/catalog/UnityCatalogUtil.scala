@@ -6,6 +6,7 @@ import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.RDD_PARALLEL_LISTING_THRESHOLD
+
 import org.apache.spark.sql.catalog.Column
 import org.apache.spark.sql.catalyst.{DefinedByConstructorParams, TableIdentifier}
 import org.apache.spark.sql.{Dataset, SparkSession}
