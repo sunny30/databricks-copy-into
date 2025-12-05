@@ -127,6 +127,7 @@ public class UnitySparkCatalog
      */
     protected Catalog buildIcebergCatalog(String name, CaseInsensitiveStringMap options) {
         Configuration conf = SparkUtil.hadoopConfCatalogOverrides(SparkSession.active(), name);
+        this.catalogName = name ;
         Map<String, String> optionsMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         optionsMap.putAll(options.asCaseSensitiveMap());
         optionsMap.put(CatalogProperties.APP_ID, SparkSession.active().sparkContext().applicationId());
@@ -1003,11 +1004,12 @@ public class UnitySparkCatalog
     public Procedure loadProcedure(Identifier ident) {
         String[] namespace = ident.namespace();
         String name = ident.name();
+        TableCatalog tc = (TableCatalog) SparkSession.active().sessionState().catalogManager().catalog(this.catalogName);
         if (name.toLowerCase().equalsIgnoreCase("migrate")) {
             return UnityMigrateTableProcedure.builder().build() ;
         } else {
             SparkProcedures.ProcedureBuilder builder = SparkProcedures.newBuilder(name);
-            return builder.build();
+            return builder.withTableCatalog(tc).build();
         }
     }
 

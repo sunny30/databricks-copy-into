@@ -128,15 +128,21 @@ object App {
     /**UnPartitioned Manage table **/
 
     /**Partitioned table check **/
-//    spark.sql("create table cat.lidb.ptbl1(id int, age int) using iceberg PARTITIONED BY (age)")
-//    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
-//    spark.sql("select * from cat.lidb.ptbl1").show()
-    spark.sql("create table cat.lidb.ptbl1(id int, age int) using parquet PARTITIONED BY (age)")
+    spark.sql("create table cat.lidb.ptbl1(id int, age int) using iceberg PARTITIONED BY (age)")
     spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
     spark.sql("select * from cat.lidb.ptbl1").show()
-    spark.sql("CALL catalog_name.system.migrate('cat.lidb.ptbl1')").show()
-    spark.sql("describe formatted cat.lidb.ptbl1").show()
-    spark.sql("select * from cat.lidb.ptbl1").show()
+//    spark.sql("create table cat.lidb.ptbl1(id int, age int) using parquet PARTITIONED BY (age)")
+//    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
+//    spark.sql("select * from cat.lidb.ptbl1").show()
+//    spark.sql("CALL cat.system.migrate('cat.lidb.ptbl1')").show()
+//    spark.sql("describe formatted cat.lidb.ptbl1").show()
+//    spark.sql("select * from cat.lidb.ptbl1").show()
+//    spark.sql("insert into cat.lidb.ptbl1 values (3, 33), (4,34)")
+    //Not working
+   // spark.sql("CALL cat.system.create_changelog_view(table => 'cat.lidb.ptbl1',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
+   // spark.sql("use catalog cat")
+   // spark.sql("use namespace lidb")
+    spark.sql("CALL cat.system.ancestors_of('lidb.ptbl1')").show()
 
     /**Partitioned table check **/
 
