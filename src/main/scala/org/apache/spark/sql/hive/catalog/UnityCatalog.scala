@@ -232,6 +232,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         }
         properties
 
+      case Array(db,table) =>
+        val augmentedProperties = externalCatalog.getDatabase(db).properties ++ Map("db_location" -> externalCatalog.getDatabase(db).locationUri.toString)
+        augmentedProperties.asJava
+
       case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
   }

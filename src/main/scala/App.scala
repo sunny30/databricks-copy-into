@@ -131,6 +131,12 @@ object App {
     spark.sql("create table cat.lidb.ptbl1(id int, age int) using iceberg PARTITIONED BY (age)")
     spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
     spark.sql("select * from cat.lidb.ptbl1").show()
+    spark.sql("select * from cat.lidb.ptbl1.history").show()
+    spark.sql("select * from cat.lidb.ptbl1.snapshots").show()
+    spark.sql("select * from cat.lidb.ptbl1.entries").show()
+    spark.sql("select * from cat.lidb.ptbl1.files").show()
+    spark.sql("select * from cat.lidb.ptbl1.position_deletes").show()
+    spark.sql("select * from cat.lidb.ptbl1.changes").show()
 //    spark.sql("create table cat.lidb.ptbl1(id int, age int) using parquet PARTITIONED BY (age)")
 //    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
 //    spark.sql("select * from cat.lidb.ptbl1").show()
@@ -139,10 +145,11 @@ object App {
 //    spark.sql("select * from cat.lidb.ptbl1").show()
 //    spark.sql("insert into cat.lidb.ptbl1 values (3, 33), (4,34)")
     //Not working
-   // spark.sql("CALL cat.system.create_changelog_view(table => 'cat.lidb.ptbl1',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
+   //    spark.sql("CALL cat.system.create_changelog_view(table => 'lidb.ptbl1',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
    // spark.sql("use catalog cat")
    // spark.sql("use namespace lidb")
-    spark.sql("CALL cat.system.ancestors_of('lidb.ptbl1')").show()
+    //working procedure call
+    //spark.sql("CALL cat.system.ancestors_of('lidb.ptbl1')").show()
 
     /**Partitioned table check **/
 

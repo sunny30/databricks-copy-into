@@ -86,7 +86,7 @@ object CustomSparkSQLParser extends SparkSqlParser{
     if(catalogName.equalsIgnoreCase("hive") || catalogName.equalsIgnoreCase("default")){
       catalogName = "spark_catalog"
     }
-    if(sz == 3){
+    if(sz >= 3){
       u
     }else if(sz == 2 ){
       val mp:Seq[String] = Seq(catalogName,u.multipartIdentifier.head, u.multipartIdentifier.last)
