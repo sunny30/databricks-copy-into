@@ -30,6 +30,7 @@ object IcebergApp {
   //  df.show()
 
     spark.sql("select * from local.db.logs").show()
+    spark.sql("CALL local.system.create_changelog_view(table => 'db.logs',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
 
   //  spark.read.table("local.db.logs").show()
 

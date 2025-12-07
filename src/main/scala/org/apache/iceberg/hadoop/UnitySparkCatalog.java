@@ -48,6 +48,7 @@ import org.apache.iceberg.util.Pair;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SnapshotUtil;
 import org.apache.iceberg.view.UpdateViewProperties;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NamespaceAlreadyExistsException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException;
@@ -833,7 +834,7 @@ public class UnitySparkCatalog
             org.apache.iceberg.Table table = icebergCatalog.loadTable(buildIdentifier(ident));
             return new SparkTable(table, !cacheEnabled);
 
-        } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
+        } catch (Exception e) {
             if (ident.namespace().length == 0) {
                 throw e;
             }
