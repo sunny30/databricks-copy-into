@@ -29,6 +29,7 @@ import org.apache.iceberg.hadoop.HadoopTableOperations;
 import org.apache.iceberg.hadoop.Util;
 import org.apache.iceberg.io.CloseableGroup;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.relocated.com.google.common.base.Joiner;
 import org.apache.iceberg.relocated.com.google.common.base.MoreObjects;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -124,6 +125,19 @@ public class UnityHadoopCatalog extends HadoopCatalog
     public UnityHadoopCatalog(Configuration conf, String warehouseLocation) {
         setConf(conf);
         initialize("hadoop", ImmutableMap.of(CatalogProperties.WAREHOUSE_LOCATION, warehouseLocation));
+    }
+
+
+    public Table registerTable(TableIdentifier identifier, String metadataFileLocation) {
+        Preconditions.checkArgument(identifier != null && this.isValidIdentifier(identifier), "Invalid identifier: %s", identifier);
+        Preconditions.checkArgument(metadataFileLocation != null && !metadataFileLocation.isEmpty(), "Cannot register an empty metadata file location as a table");
+
+        TableOperations ops = this.newTableOps(identifier);
+        InputFile metadataFile = ops.io().newInputFile(metadataFileLocation);
+        TableMetadata metadata = TableMetadataParser.read(ops.io(), metadataFile);
+        ops.commit((TableMetadata)null, metadata);
+        return new BaseTable(ops, fullTableName(this.name(), identifier), this.metricsReporter());
+
     }
 
     @Override

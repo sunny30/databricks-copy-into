@@ -1,6 +1,8 @@
 package org.apache.spark.sql.hive.catalog
 
 import org.apache.hadoop.fs.Path
+import org.apache.iceberg.catalog.Catalog
+import org.apache.iceberg.spark.source.HasIcebergCatalog
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStatistics, CatalogTable, CatalogTableType, CatalogUtils, ExternalCatalog}
@@ -31,7 +33,7 @@ import scala.collection.convert.ImplicitConversions.`map AsScala`
 
 class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExtension
   with SupportsNamespaces with ProcedureCatalog
-  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog {
+  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog with HasIcebergCatalog {
 
   private var catalogName: String = null
 
@@ -281,6 +283,24 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     }else {
       BestEffortStagedTable(ident, table, this)
     }
+  }
+
+  override def registerTableInMetastore(table: CatalogTable): Unit = {
+    val dbPath = getDBPath(table.database)
+    val dbStringPath = if (dbPath.toString.endsWith("/")) {
+      dbPath.toString
+    } else {
+      dbPath.toString + "/"
+    }
+    var location = table.storage.locationUri
+    location = location match {
+      case None =>
+        Some(CatalogUtils.stringToURI(dbStringPath + table.identifier.table))
+      case Some(v) => Some(v)
+
+    }
+    val newtable = table.copy(storage = table.storage.copy(locationUri = location))
+    externalCatalog.createTable(newtable, false)
   }
 
   //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
@@ -541,7 +561,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     new UnityIcebergCatalog(externalCatalog, catalogName, options).loadProcedure(identifier)
   }
 
-
+  override def icebergCatalog(): Catalog = {
+    new UnityIcebergCatalog(externalCatalog, catalogName, options)
+  }
 }
 
 
@@ -568,6 +590,7 @@ case class BestEffortStagedTable(
     case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
     case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
   }
+
 
 
 }

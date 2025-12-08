@@ -157,6 +157,10 @@ public class UnitySparkCatalog
         }
     }
 
+    public org.apache.iceberg.Table registerTable(TableIdentifier identifier, String metadataFileLocation){
+        return icebergCatalog.registerTable(identifier,metadataFileLocation);
+    }
+
 
 
 

@@ -2,22 +2,24 @@ package org.apache.spark.sql.iceberg
 
 import org.apache.iceberg.hadoop.UnitySparkCatalog
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.{DataFrame, SparkSession}
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, ExternalCatalog}
-import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, Table, TableChange}
+import org.apache.iceberg
+import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, ExternalCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, Table, TableChange, TableSchemaChangeCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.commands.TableCreationModes
 import org.apache.spark.sql.delta.metering.DeltaLogging
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.iceberg.spark.SparkCatalog
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelper
 import org.apache.spark.sql.connector.iceberg.catalog.Procedure
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
+import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
 
 import java.util
 import java.util.regex.Pattern
-class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: CaseInsensitiveStringMap) extends DeltaLogging{
+class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: CaseInsensitiveStringMap) extends DeltaLogging with Catalog{
 
   lazy val icebergCatalog = {
     val ct = new UnitySparkCatalog()
@@ -127,10 +129,37 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
     icebergCatalog.loadProcedure(identifier)
   }
 
+  override def listTables(namespace: Namespace): util.List[TableIdentifier] = ???
 
+  override def dropTable(tableIdentifier: TableIdentifier, b: Boolean): Boolean = ???
 
+  override def renameTable(tableIdentifier: TableIdentifier, tableIdentifier1: TableIdentifier): Unit = ???
 
+  override def loadTable(tableIdentifier: TableIdentifier): iceberg.Table = ???
 
+  override def registerTable(tableIdentifier: TableIdentifier, metadataFileLocation:String): org.apache.iceberg.Table={
+    val databaseName = tableIdentifier.namespace().level(0) ;
+    val tableName = tableIdentifier.name()
+    if(!plugin.tableExists(databaseName, tableName)) {
+      val ct = getMetastoreTable(databaseName,tableName)
+      SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].registerTableInMetastore(ct)
+      icebergCatalog.registerTable(tableIdentifier,metadataFileLocation)
+    }else{
+      throw new AnalysisException("Table already exists")
+    }
+  }
 
+  private def getMetastoreTable(databaseName:String, tableName:String):CatalogTable={
 
+    val storage: CatalogStorageFormat = CatalogStorageFormat(None, None, None, None, false, Map.empty[String,String])
+    val ct = CatalogTable(
+      identifier = org.apache.spark.sql.catalyst.TableIdentifier(tableName, Some(databaseName), Some(catalogName)),
+      CatalogTableType.MANAGED,
+      storage =  storage,
+      schema = StructType.apply(Seq.empty[StructField]),
+      provider = Some("iceberg"),
+    )
+    //SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].registerTableInMetastore(ct)
+    ct
+  }
 }

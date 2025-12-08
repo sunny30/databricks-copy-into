@@ -113,7 +113,9 @@ object App {
 
     /**Iceberg migration test starts**/
 
-    spark.sql("create database cat.lidb")
+    spark.sql("create database if not exists cat.lidb")
+
+
      /**UnPartitioned Manage table **/
 //    spark.sql("create table cat.lidb.ptbl(id int) using parquet")
 //    spark.sql("insert into cat.lidb.ptbl values (1), (2)")
@@ -126,10 +128,13 @@ object App {
 //    spark.sql("describe formatted cat.lidb.ptbl").show()
 //    spark.sql("select * from cat.lidb.ptbl").show()
     /**UnPartitioned Manage table **/
+//    spark.sql("create table cat.lidb.ptbl2(id int, age int) using iceberg  PARTITIONED BY (age) location '/tmp/ice'")
+//    spark.sql("insert into cat.lidb.ptbl2 values (1, 33), (2,34)")
+//    spark.read.table("cat.lidb.ptbl2").show()
 
     /**Partitioned table check **/
-    spark.sql("create table cat.lidb.ptbl1(id int, age int) using iceberg PARTITIONED BY (age)")
-    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
+ //   spark.sql("create table cat.lidb.ptbl1(id int, age int) using iceberg PARTITIONED BY (age)")
+//    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
 //    spark.sql("select * from cat.lidb.ptbl1").show()
 //    spark.sql("select * from cat.lidb.ptbl1.history").show()
 //    spark.sql("select * from cat.lidb.ptbl1.snapshots").show()
@@ -145,12 +150,20 @@ object App {
 //    spark.sql("select * from cat.lidb.ptbl1").show()
 //    spark.sql("insert into cat.lidb.ptbl1 values (3, 33), (4,34)")
     //Not working
-    spark.sql("CALL cat.system.create_changelog_view(table => 'lidb.ptbl1',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
+
    // spark.sql("use catalog cat")
    // spark.sql("use namespace lidb")
     //working procedure call
     //spark.sql("CALL cat.system.ancestors_of('lidb.ptbl1')").show()
-
+    //spark.sql("CALL cat.system.create_changelog_view(table => 'lidb.ptbl1',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
+    spark.sql(
+      """
+        |CALL cat.system.register_table(
+        |  table => 'lidb.tbl',
+        |  metadata_file => '/tmp/ice/metadata/v2.metadata.json'
+        |)
+        |""".stripMargin)
+    spark.sql("select * from cat.lidb.tbl").show()
     /**Partitioned table check **/
 
     /**Iceberg migration test ends **/

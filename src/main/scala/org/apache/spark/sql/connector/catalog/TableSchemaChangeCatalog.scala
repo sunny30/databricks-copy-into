@@ -2,7 +2,7 @@ package org.apache.spark.sql.connector.catalog;
 
 import org.apache.iceberg.types.Types
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
-import org.apache.spark.sql.catalyst.catalog.CatalogStatistics
+import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable}
 import org.apache.spark.sql.types.StructType;
 
 trait TableSchemaChangeCatalog extends CatalogPlugin {
@@ -27,6 +27,10 @@ trait TableSchemaChangeCatalog extends CatalogPlugin {
                    db: String,
                    table: String
                    ): Option[CatalogStatistics]
+
+  def registerTableInMetastore(
+                              table:CatalogTable
+                              ):Unit
 
 
 }
