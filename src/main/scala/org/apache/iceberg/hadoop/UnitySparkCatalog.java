@@ -14,6 +14,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import org.apache.iceberg.hadoop.UnityHadoopCatalog;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.*;
 import org.apache.iceberg.catalog.Catalog;
@@ -22,7 +24,6 @@ import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.catalog.ViewCatalog;
 import org.apache.iceberg.exceptions.AlreadyExistsException;
-import org.apache.iceberg.exceptions.CommitFailedException;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.iceberg.hadoop.HadoopTables;
@@ -37,6 +38,8 @@ import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.relocated.com.google.common.collect.Sets;
 import org.apache.iceberg.spark.*;
 import org.apache.iceberg.spark.actions.SparkActions;
+import org.apache.iceberg.spark.procedures.SparkProcedures;
+import org.apache.iceberg.spark.procedures.UnityMigrateTableProcedure;
 import org.apache.iceberg.spark.source.SparkChangelogTable;
 import org.apache.iceberg.spark.source.SparkTable;
 import org.apache.iceberg.spark.source.SparkView;
@@ -45,6 +48,7 @@ import org.apache.iceberg.util.Pair;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.SnapshotUtil;
 import org.apache.iceberg.view.UpdateViewProperties;
+import org.apache.spark.sql.AnalysisException;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.NamespaceAlreadyExistsException;
 import org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException;
@@ -64,6 +68,7 @@ import org.apache.spark.sql.connector.catalog.TableChange.SetProperty;
 import org.apache.spark.sql.connector.catalog.View;
 import org.apache.spark.sql.connector.catalog.ViewChange;
 import org.apache.spark.sql.connector.expressions.Transform;
+import org.apache.spark.sql.connector.iceberg.catalog.Procedure;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 
@@ -123,6 +128,7 @@ public class UnitySparkCatalog
      */
     protected Catalog buildIcebergCatalog(String name, CaseInsensitiveStringMap options) {
         Configuration conf = SparkUtil.hadoopConfCatalogOverrides(SparkSession.active(), name);
+        this.catalogName = name ;
         Map<String, String> optionsMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         optionsMap.putAll(options.asCaseSensitiveMap());
         optionsMap.put(CatalogProperties.APP_ID, SparkSession.active().sparkContext().applicationId());
@@ -149,6 +155,10 @@ public class UnitySparkCatalog
         } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
            throw e ;
         }
+    }
+
+    public org.apache.iceberg.Table registerTable(TableIdentifier identifier, String metadataFileLocation){
+        return icebergCatalog.registerTable(identifier,metadataFileLocation);
     }
 
 
@@ -248,6 +258,7 @@ public class UnitySparkCatalog
                             .createTransaction();
             return new StagedSparkTable(transaction);
         } catch (AlreadyExistsException e) {
+            System.out.println("Error from here");
             throw new TableAlreadyExistsException(ident);
         }
     }
@@ -377,9 +388,10 @@ public class UnitySparkCatalog
     public void renameTable(Identifier from, Identifier to)
             throws NoSuchTableException, TableAlreadyExistsException {
         try {
-            checkNotPathIdentifier(from, "renameTable");
-            checkNotPathIdentifier(to, "renameTable");
-            icebergCatalog.renameTable(buildIdentifier(from), buildIdentifier(to));
+//            checkNotPathIdentifier(from, "renameTable");
+//            checkNotPathIdentifier(to, "renameTable");
+//            icebergCatalog.renameTable(buildIdentifier(from), buildIdentifier(to));
+
         } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
             throw new NoSuchTableException(from);
         } catch (AlreadyExistsException e) {
@@ -826,7 +838,7 @@ public class UnitySparkCatalog
             org.apache.iceberg.Table table = icebergCatalog.loadTable(buildIdentifier(ident));
             return new SparkTable(table, !cacheEnabled);
 
-        } catch (org.apache.iceberg.exceptions.NoSuchTableException e) {
+        } catch (Exception e) {
             if (ident.namespace().length == 0) {
                 throw e;
             }
@@ -992,6 +1004,18 @@ public class UnitySparkCatalog
 
     public Catalog icebergCatalog() {
         return icebergCatalog;
+    }
+
+    public Procedure loadProcedure(Identifier ident) {
+        String[] namespace = ident.namespace();
+        String name = ident.name();
+        TableCatalog tc = (TableCatalog) SparkSession.active().sessionState().catalogManager().catalog(this.catalogName);
+        if (name.toLowerCase().equalsIgnoreCase("migrate")) {
+            return UnityMigrateTableProcedure.builder().build() ;
+        } else {
+            SparkProcedures.ProcedureBuilder builder = SparkProcedures.newBuilder(name);
+            return builder.withTableCatalog(tc).build();
+        }
     }
 
 

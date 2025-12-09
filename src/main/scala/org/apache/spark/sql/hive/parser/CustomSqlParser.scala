@@ -5,6 +5,7 @@ import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
+import org.apache.spark.sql.execution.command.SetCatalogCommand
 import org.apache.spark.sql.hive.plan.{CopyIntoFromFilesCommand, CopyIntoFromLocationCommand, CopyIntoFromSelectClauseCommand, CreateRowSecFunction, GenerateDeltaLogCommand, GrantRowFunc, RefreshCatalogEntity}
 
 class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCustomSqlParser(parserInterface = parserInterface) {
@@ -29,6 +30,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   val SCHEMA = Keyword("SCHEMA")
   val EXTERNAL = Keyword("EXTERNAL")
   val IN = Keyword("IN")
+  val USE = Keyword("USE")
   def FORMATOPTIONS:Parser[String] = "format_options"
   def COPYOPTIONS:Parser[String] = "copy_options"
   def openParen: Parser[String] = "("
@@ -87,7 +89,7 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
   override def parse(input: String): LogicalPlan = super.parse(input)
 
   override protected def start: Parser[LogicalPlan] = rule1 | rule2 | copy_into_location_rule3 | copy_into_location_rule2 | row_level_rule1 |
-    copy_into_location_rule1 | row_level_rule2 | refresh_catalog_schema | refresh_catalog_table
+    copy_into_location_rule1 | row_level_rule2 | refresh_catalog_schema | refresh_catalog_table | use_catalog
 
 
   def isValidCharacterInsideQuote(c: Char): Boolean = {
@@ -346,5 +348,10 @@ class CustomSqlParser(val parserInterface: ParserInterface) extends AbstractCust
         formatOptions = Option.apply(formatOptions.getOrElse(Seq.empty[(String, String)]).toMap),
         Option.apply(copyOptions.getOrElse(Seq.empty[(String, String)]).toMap),
       )
+  }
+
+
+  def use_catalog = USE ~ CATALOG ~ sqlIdentifier ^^ {
+    case _ ~ _ ~ catalog_name => SetCatalogCommand(catalog_name)
   }
 }

@@ -1,6 +1,8 @@
 package org.apache.spark.sql.hive.catalog
 
 import org.apache.hadoop.fs.Path
+import org.apache.iceberg.catalog.Catalog
+import org.apache.iceberg.spark.source.HasIcebergCatalog
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStatistics, CatalogTable, CatalogTableType, CatalogUtils, ExternalCatalog}
@@ -10,6 +12,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.IdentifierHelpe
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
 import org.apache.spark.sql.connector.catalog.{CatalogExtension, CatalogPlugin, CatalogV2Util, Identifier, NamespaceChange, StagedTable, StagingTableCatalog, SupportsNamespaces, SupportsWrite, Table, TableCapability, TableCatalog, TableChange, TableSchemaChangeCatalog, V1Table}
 import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.iceberg.catalog.{Procedure, ProcedureCatalog}
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, Write, WriteBuilder}
 import org.apache.spark.sql.delta.{DeltaErrors, UnityDeltaCatalog}
 import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
@@ -29,8 +32,8 @@ import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapCo
 import scala.collection.convert.ImplicitConversions.`map AsScala`
 
 class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExtension
-  with SupportsNamespaces
-  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog {
+  with SupportsNamespaces with ProcedureCatalog
+  with StagingTableCatalog with DeltaLogging with SQLConfHelper with TableSchemaChangeCatalog with HasIcebergCatalog {
 
   private var catalogName: String = null
 
@@ -231,6 +234,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         }
         properties
 
+//      case Array(db,table) =>
+//        val augmentedProperties = externalCatalog.getDatabase(db).properties ++ Map("db_location" -> externalCatalog.getDatabase(db).locationUri.toString)
+//        augmentedProperties.asJava
+
       case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
   }
@@ -271,7 +278,29 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     val table = createTable(ident, schema, partitions, properties)
-    BestEffortStagedTable(ident, table, this)
+    if(properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")){
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+    }else {
+      BestEffortStagedTable(ident, table, this)
+    }
+  }
+
+  override def registerTableInMetastore(table: CatalogTable): Unit = {
+    val dbPath = getDBPath(table.database)
+    val dbStringPath = if (dbPath.toString.endsWith("/")) {
+      dbPath.toString
+    } else {
+      dbPath.toString + "/"
+    }
+    var location = table.storage.locationUri
+    location = location match {
+      case None =>
+        Some(CatalogUtils.stringToURI(dbStringPath + table.identifier.table))
+      case Some(v) => Some(v)
+
+    }
+    val newtable = table.copy(storage = table.storage.copy(locationUri = location))
+    externalCatalog.createTable(newtable, false)
   }
 
   //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
@@ -356,7 +385,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           val icebergCatalog = new UnityIcebergCatalog(externalCatalog, catalogName, options)
           return icebergCatalog.createIcebergTable(ident, schema, partitions, icebergProperties.asJava, tableDesc)
         }
-        externalCatalog.createTable(tableDesc, ignoreIfExists = false)
+        externalCatalog.createTable(tableDesc, ignoreIfExists = true)
         if (tableType == CatalogTableType.VIEW) {
           V2Table(tableDesc)
         } else {
@@ -528,7 +557,13 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     dbPath.toUri
   }
 
+  def loadProcedure(identifier: Identifier): Procedure = {
+    new UnityIcebergCatalog(externalCatalog, catalogName, options).loadProcedure(identifier)
+  }
 
+  override def icebergCatalog(): Catalog = {
+    new UnityIcebergCatalog(externalCatalog, catalogName, options)
+  }
 }
 
 
@@ -555,4 +590,7 @@ case class BestEffortStagedTable(
     case supportsWrite: SupportsWrite => supportsWrite.newWriteBuilder(info)
     case _ => throw DeltaErrors.unsupportedWriteStagedTable(name)
   }
+
+
+
 }

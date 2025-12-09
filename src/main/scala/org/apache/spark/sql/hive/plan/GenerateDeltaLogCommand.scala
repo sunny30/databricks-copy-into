@@ -203,4 +203,13 @@ case class RefreshCatalogEntity(entityName: String) extends LeafRunnableCommand 
 
 }
 
+case class SetCatalogCommand(catalogName: String) extends LeafRunnableCommand {
+  override def output: Seq[Attribute] = Seq.empty
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    sparkSession.sessionState.catalogManager.setCurrentCatalog(catalogName)
+    Seq.empty
+  }
+}
+
 

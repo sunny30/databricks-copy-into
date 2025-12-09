@@ -4,13 +4,14 @@ import org.apache.spark.sql.SparkSession
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, CatalogTableType}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TableIdentifierHelper
 import org.apache.spark.sql.connector.catalog.{CatalogV2Implicits, Table, TableCapability, TableCatalog}
 import org.apache.spark.sql.connector.catalog.V1Table.addV2TableProperties
 import org.apache.spark.sql.connector.expressions.{LogicalExpressions, Transform}
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
+import org.apache.spark.sql.hive.catalog.UnityCatalogUtil
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -128,6 +129,10 @@ case class V2Table(v1Table: CatalogTable) extends Table {
       tblProps
     }
 
+  }
+
+  def getTablePartition: Seq[CatalogTablePartition] = {
+    (new UnityCatalogUtil(SparkSession.active)).getCatalogTablePartitions(this)
   }
 }
 

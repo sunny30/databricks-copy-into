@@ -2,7 +2,7 @@ package org.apache.spark.sql.hive.plan.spark.sql.connector
 
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition}
 import org.apache.spark.sql.connector.catalog.{SupportsRead, Table, TableCapability, TableProvider}
 import org.apache.spark.sql.connector.read.ScanBuilder
 import org.apache.spark.sql.execution.datasources.FileFormat
@@ -26,6 +26,7 @@ case class V2CustomTable(name: String,
                          sparkSession: SparkSession,
                          options: CaseInsensitiveStringMap,
                          catalogTable: CatalogTable) extends SupportsRead with Table{
+
   override def newScanBuilder(options: CaseInsensitiveStringMap): ScanBuilder = {
     val provider = if(catalogTable.provider.get.equalsIgnoreCase("hive")) {
       catalogTable.storage.properties("fileformat").toLowerCase

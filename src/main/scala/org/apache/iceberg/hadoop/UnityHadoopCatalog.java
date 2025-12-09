@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.calcite.runtime.Unit;
 import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -25,8 +24,12 @@ import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.*;
+import org.apache.iceberg.hadoop.HadoopCatalog;
+import org.apache.iceberg.hadoop.HadoopTableOperations;
+import org.apache.iceberg.hadoop.Util;
 import org.apache.iceberg.io.CloseableGroup;
 import org.apache.iceberg.io.FileIO;
+import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.relocated.com.google.common.base.Joiner;
 import org.apache.iceberg.relocated.com.google.common.base.MoreObjects;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -122,6 +125,19 @@ public class UnityHadoopCatalog extends HadoopCatalog
     public UnityHadoopCatalog(Configuration conf, String warehouseLocation) {
         setConf(conf);
         initialize("hadoop", ImmutableMap.of(CatalogProperties.WAREHOUSE_LOCATION, warehouseLocation));
+    }
+
+
+    public Table registerTable(TableIdentifier identifier, String metadataFileLocation) {
+        Preconditions.checkArgument(identifier != null && this.isValidIdentifier(identifier), "Invalid identifier: %s", identifier);
+        Preconditions.checkArgument(metadataFileLocation != null && !metadataFileLocation.isEmpty(), "Cannot register an empty metadata file location as a table");
+
+        TableOperations ops = this.newTableOps(identifier);
+        InputFile metadataFile = ops.io().newInputFile(metadataFileLocation);
+        TableMetadata metadata = TableMetadataParser.read(ops.io(), metadataFile);
+        ops.commit((TableMetadata)null, metadata);
+        return new BaseTable(ops, fullTableName(this.name(), identifier), this.metricsReporter());
+
     }
 
     @Override
@@ -488,6 +504,16 @@ public class UnityHadoopCatalog extends HadoopCatalog
                 this.tableProperties.putAll(properties);
             }
 
+            return this;
+        }
+
+        public Catalog.TableBuilder withPartitionSpec(PartitionSpec newSpec) {
+            this.spec = newSpec != null ? newSpec : PartitionSpec.unpartitioned();
+            return this;
+        }
+
+        public Catalog.TableBuilder withSortOrder(SortOrder newSortOrder) {
+            this.sortOrder = newSortOrder != null ? newSortOrder : SortOrder.unsorted();
             return this;
         }
 
