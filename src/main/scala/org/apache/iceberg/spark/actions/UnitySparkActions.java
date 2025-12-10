@@ -13,9 +13,21 @@ public class UnitySparkActions implements ActionsProvider {
 
     private SparkSession spark;
 
+    private String catalogName ;
+
 
     public static UnitySparkActions get() {
-        return new UnitySparkActions(actions) ;
+
+        UnitySparkActions unitySparkActions =  new UnitySparkActions(actions) ;
+        unitySparkActions.catalogName = unitySparkActions.spark.sessionState().catalogManager().currentCatalog().name() ;
+        return unitySparkActions ;
+    }
+
+    public static UnitySparkActions get(String catalogName) {
+
+        UnitySparkActions unitySparkActions = new UnitySparkActions(actions) ;
+        unitySparkActions.catalogName = catalogName ;
+        return unitySparkActions ;
     }
 
     public static UnitySparkActions get(SparkActions actions) {
@@ -32,9 +44,9 @@ public class UnitySparkActions implements ActionsProvider {
       //  this.actions = actions;
     }
 
-    public SnapshotTable snapshotTable(String sourceTableIdent) {
-        return actions.snapshotTable(sourceTableIdent) ;
-    }
+//    public SnapshotTable snapshotTable(String sourceTableIdent) {
+//        return actions.snapshotTable(sourceTableIdent) ;
+//    }
 
     public UnityMigrateTableSparkAction migrateTable(String tableIdent) {
         String ctx = "migrate target";
@@ -42,6 +54,13 @@ public class UnitySparkActions implements ActionsProvider {
         Spark3Util.CatalogAndIdentifier catalogAndIdent = Spark3Util.catalogAndIdentifier(ctx, this.spark, tableIdent, defaultCatalog);
         return new UnityMigrateTableSparkAction(this.spark, catalogAndIdent.catalog(), catalogAndIdent.identifier());
 
+    }
+
+    public UnitySnapShotTableSparkAction snapshotTable(String tableIdent) {
+        String ctx = "snapshot source";
+        CatalogPlugin defaultCatalog = this.spark.sessionState().catalogManager().catalog(catalogName);
+        Spark3Util.CatalogAndIdentifier catalogAndIdent = Spark3Util.catalogAndIdentifier(ctx, this.spark, tableIdent, defaultCatalog);
+        return new UnitySnapShotTableSparkAction(this.spark, catalogAndIdent.catalog(), catalogAndIdent.identifier());
     }
 
     public DeleteOrphanFiles deleteOrphanFiles(Table table) {
