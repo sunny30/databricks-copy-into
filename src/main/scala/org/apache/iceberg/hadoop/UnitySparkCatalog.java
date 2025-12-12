@@ -40,6 +40,7 @@ import org.apache.iceberg.spark.*;
 import org.apache.iceberg.spark.actions.SparkActions;
 import org.apache.iceberg.spark.procedures.SparkProcedures;
 import org.apache.iceberg.spark.procedures.UnityMigrateTableProcedure;
+import org.apache.iceberg.spark.procedures.UnitySnapShotTableProcedure;
 import org.apache.iceberg.spark.source.SparkChangelogTable;
 import org.apache.iceberg.spark.source.SparkTable;
 import org.apache.iceberg.spark.source.SparkView;
@@ -1011,7 +1012,9 @@ public class UnitySparkCatalog
         String name = ident.name();
         TableCatalog tc = (TableCatalog) SparkSession.active().sessionState().catalogManager().catalog(this.catalogName);
         if (name.toLowerCase().equalsIgnoreCase("migrate")) {
-            return UnityMigrateTableProcedure.builder().build() ;
+            return UnityMigrateTableProcedure.builder().withTableCatalog(tc).build() ;
+        }else if(name.equalsIgnoreCase("snapshot")){
+            return UnitySnapShotTableProcedure.builder().withTableCatalog(tc).build() ;
         } else {
             SparkProcedures.ProcedureBuilder builder = SparkProcedures.newBuilder(name);
             return builder.withTableCatalog(tc).build();

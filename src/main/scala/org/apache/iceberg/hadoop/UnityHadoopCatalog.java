@@ -550,6 +550,38 @@ public class UnityHadoopCatalog extends HadoopCatalog
             }
         }
 
+        @Override
+        public Transaction createOrReplaceTransaction() {
+            return  newReplaceTableTransaction(true);
+        }
+
+        @Override
+        public Transaction replaceTransaction() {
+            return newReplaceTableTransaction(false);
+        }
+
+
+        private Transaction newReplaceTableTransaction(boolean orCreate) {
+            String baseLocation = this.location != null ? this.location : defaultWarehouseLocation(this.identifier) ;
+            TableOperations ops = newTableOps(this.identifier,baseLocation);
+            if (!orCreate && ops.current() == null) {
+                throw new NoSuchTableException("Table does not exist: %s", new Object[]{this.identifier});
+            } else {
+                this.tableProperties.putAll(this.tableOverrideProperties());
+                TableMetadata metadata;
+               // String baseLocation;
+                if (ops.current() != null) {
+                   // baseLocation = this.location != null ? this.location : ops.current().location();
+                    metadata = ops.current().buildReplacement(this.schema, this.spec, this.sortOrder, baseLocation, this.tableProperties);
+                } else {
+               //     baseLocation = this.location != null ? this.location : BaseMetastoreCatalog.this.defaultWarehouseLocation(this.identifier);
+                    metadata = TableMetadata.newTableMetadata(this.schema, this.spec, this.sortOrder, baseLocation, this.tableProperties);
+                }
+
+                return orCreate ? Transactions.createOrReplaceTableTransaction(this.identifier.toString(), ops, metadata) : Transactions.replaceTableTransaction(this.identifier.toString(), ops, metadata);
+            }
+        }
+
         private Map<String, String> tableDefaultProperties() {
             Map<String, String> tableDefaultProperties = PropertyUtil.propertiesWithPrefix(UnityHadoopCatalog.this.properties(), "table-default.");
           //  BaseMetastoreCatalog.LOG.info("Table properties set at catalog level through catalog properties: {}", tableDefaultProperties);
