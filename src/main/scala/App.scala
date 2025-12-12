@@ -137,26 +137,29 @@ object App {
 
     spark.sql("create table cat.lidb1.ptbl2(id int, age int) using parquet PARTITIONED BY (age)")
     spark.sql("insert into cat.lidb1.ptbl2 values (1, 33), (2,34)")
-//    spark.sql(
-//      """
-//        |CALL catalog_name.system.snapshot(
-//        |    source_table => 'cat.lidb1.ptbl2',
-//        |    table => 'cat.lidb1.itbl',
-//        |    location => '/tmp/itbl',
-//        |    properties => map('owner', 'data_team')
-//        |)
-//        |""".stripMargin)
     spark.sql(
-            """
-              |CALL catalog_name.system.snapshot(
-              |    source_table => 'cat.lidb1.ptbl2',
-              |    table => 'cat.lidb1.itbl',
-              |    properties => map('owner', 'data_team')
-              |)
-              |""".stripMargin)
+      """
+        |CALL cat.system.snapshot(
+        |    source_table => 'lidb1.ptbl2',
+        |    table => 'cat.lidb1.itbl',
+        |    location => '/tmp/itbl',
+        |    properties => map('owner', 'data_team')
+        |)
+        |""".stripMargin)
+//    spark.sql(
+//            """
+//              |CALL catalog_name.system.snapshot(
+//              |    source_table => 'cat.lidb1.ptbl2',
+//              |    table => 'cat.lidb1.itbl',
+//              |    properties => map('owner', 'data_team')
+//              |)
+//              |""".stripMargin)
 
     spark.sql("describe formatted cat.lidb1.itbl").show()
     spark.read.table("cat.lidb1.itbl").show()
+    spark.sql("CALL cat.system.migrate('cat.lidb1.ptbl2')").show()
+    spark.read.table("cat.lidb1.ptbl2").show()
+
 //    spark.sql("insert into cat.lidb.ptbl1 values (1, 33), (2,34)")
 //    spark.sql("select * from cat.lidb.ptbl1").show()
 //    spark.sql("select * from cat.lidb.ptbl1.history").show()
