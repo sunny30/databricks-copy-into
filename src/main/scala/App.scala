@@ -140,6 +140,8 @@ object App {
     val df = spark.read.table("cat.lidb1.ptbl2")
     df.write.format("iceberg").saveAsTable("cat.lidb1.itbl2")
     spark.read.table("cat.lidb1.itbl2").show()
+    spark.sql("insert into cat.lidb1.itbl2 values(8,2)")
+    spark.sql("ALTER TABLE cat.lidb1.itbl2 CREATE BRANCH `test-branch` RETAIN 7 DAYS WITH SNAPSHOT RETENTION 2 SNAPSHOTS")
 //    spark.sql(
 //      """
 //        |CALL cat.system.snapshot(
