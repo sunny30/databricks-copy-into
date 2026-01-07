@@ -11,6 +11,7 @@ import org.apache.spark.sql.execution.datasources.v2.ExtendedDataSourceV2Strateg
 import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFuncIn, FiboIter, ModelFunc}
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
+import org.apache.spark.sql.hive.plan.spark.sql.execution.IcebergStrategy
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.{CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, RowLevelFilter}
@@ -40,6 +41,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectOptimizerRule(ExternalCatalogWrite)
     extensions.injectPlannerStrategy(_ => CustomStrategy)
     extensions.injectPlannerStrategy { spark => ExtendedDataSourceV2Strategy(spark) }
+    extensions.injectPlannerStrategy { spark => IcebergStrategy(spark) }
     extensions.injectFunction(CustomAdd.fd)
     extensions.injectFunction(Fibo.fd)
     extensions.injectFunction(ModelFunc.fd)
