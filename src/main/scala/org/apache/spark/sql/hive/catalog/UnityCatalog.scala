@@ -381,7 +381,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       try {
 
         if (provider.equalsIgnoreCase("iceberg")) {
-          val icebergProperties = (properties.asScala.toMap ++ Map(TableCatalog.PROP_LOCATION -> location.get))
+          var icebergProperties = (properties.asScala.toMap ++ Map(TableCatalog.PROP_LOCATION -> location.get))
+          if(isExternal){
+            icebergProperties = icebergProperties ++  Map(TableCatalog.PROP_EXTERNAL -> "true")
+          }
           val icebergCatalog = new UnityIcebergCatalog(externalCatalog, catalogName, options)
           return icebergCatalog.createIcebergTable(ident, schema, partitions, icebergProperties.asJava, tableDesc)
         }

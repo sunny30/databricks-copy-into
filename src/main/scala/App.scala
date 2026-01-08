@@ -142,6 +142,11 @@ object App {
     spark.read.table("cat.lidb1.itbl2").show()
     spark.sql("insert into cat.lidb1.itbl2 values(8,2)")
     spark.sql("ALTER TABLE cat.lidb1.itbl2 CREATE BRANCH `test-branch` RETAIN 7 DAYS WITH SNAPSHOT RETENTION 2 SNAPSHOTS")
+    spark.sql("create table cat.lidb1.itbl4(id int, age int) using iceberg location '/tmp/itbl'")
+    spark.sql("insert into cat.lidb1.itbl4 values (1, 33), (2,34)")
+    spark.sql("describe formatted cat.lidb1.itbl4").show
+    spark.sql("select * from cat.lidb1.itbl4").show
+
 //    spark.sql(
 //      """
 //        |CALL cat.system.snapshot(
