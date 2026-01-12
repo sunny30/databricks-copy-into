@@ -21,6 +21,7 @@ import org.apache.iceberg.relocated.com.google.common.collect.ImmutableMap;
 import org.apache.iceberg.spark.Spark3Util;
 import org.apache.iceberg.spark.SparkTableUtil;
 import org.apache.iceberg.spark.SparkTableUtil.SparkPartition;
+import org.apache.iceberg.spark.actions.util.UnitySparkTableUtil;
 import org.apache.iceberg.util.LocationUtil;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -86,7 +87,7 @@ class UnityAddFilesProcedure extends BaseProcedure {
 
         Identifier tableIdent = input.ident(TABLE_PARAM);
 
-        CatalogPlugin sessionCat = spark().sessionState().catalogManager().v2SessionCatalog();
+        CatalogPlugin sessionCat = spark().sessionState().catalogManager().catalog(tableCatalog().name());
         Identifier sourceIdent = input.ident(SOURCE_TABLE_PARAM, sessionCat);
 
         Map<String, String> partitionFilter =
@@ -190,7 +191,8 @@ class UnityAddFilesProcedure extends BaseProcedure {
             boolean checkDuplicateFiles) {
         String stagingLocation = getMetadataLocation(table);
         TableIdentifier sourceTableIdentifier = Spark3Util.toV1TableIdentifier(sourceIdent);
-        SparkTableUtil.importSparkTable(
+        UnitySparkTableUtil.importSparkTable(
+                tableCatalog().name(),
                 spark(),
                 sourceTableIdentifier,
                 table,
