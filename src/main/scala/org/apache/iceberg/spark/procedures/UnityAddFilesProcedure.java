@@ -35,7 +35,7 @@ import org.apache.spark.sql.types.Metadata;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 
-class UnityAddFilesProcedure extends BaseProcedure {
+public class UnityAddFilesProcedure extends BaseProcedure {
 
     private static final ProcedureParameter TABLE_PARAM =
             ProcedureParameter.required("table", DataTypes.StringType);
