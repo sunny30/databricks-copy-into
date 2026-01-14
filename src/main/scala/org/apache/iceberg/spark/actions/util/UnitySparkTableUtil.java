@@ -254,7 +254,7 @@ public class UnitySparkTableUtil {
 
 
         String uri = Util.uriToString(locationUri.get());
-        String format = serde.nonEmpty() ? serde.get() : table.provider().get();
+        String format = table.provider().get();
 
         Map<String, String> partitionSpec =
                 JavaConverters.mapAsJavaMapConverter(partition.spec()).asJava();
