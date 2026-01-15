@@ -247,6 +247,14 @@ public class UnitySparkTableUtil {
                 mapping);
     }
 
+    private static String getTableProvider(CatalogTable table){
+        String format = table.provider().get();
+        if(format.equalsIgnoreCase("hive")){
+            format = table.storage().properties().get("fileformat").get() ;
+        }
+        return format ;
+    }
+
     private static SparkPartition toSparkPartition(
             CatalogTablePartition partition, CatalogTable table) {
         Option<URI> locationUri = partition.storage().locationUri();
@@ -254,7 +262,7 @@ public class UnitySparkTableUtil {
 
 
         String uri = Util.uriToString(locationUri.get());
-        String format = serde.nonEmpty() ? serde.get() : table.provider().get();
+        String format = getTableProvider(table) ;
 
         Map<String, String> partitionSpec =
                 JavaConverters.mapAsJavaMapConverter(partition.spec()).asJava();
