@@ -103,15 +103,20 @@ object App {
     ).toDF("id", "name")
 
     /*metadata location management test*/
-    spark.sql("create database if not exists cat.htbl")
-    spark.sql("create table cat.htbl.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
-    spark.sql("insert into cat.htbl.itbl values (1, 33), (2,34)")
-    spark.sql("select * from cat.htbl.itbl").show()
+    spark.sql("create database if not exists cat.mstbl")
+    spark.sql("create table cat.mstbl.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
+    spark.sql("create table cat.mstbl.itbl1(id int, age int) using iceberg  PARTITIONED BY (age) location '/tmp/ice1'")
+    spark.sql("insert into cat.mstbl.itbl values (1, 33), (2,34)")
+    spark.sql("insert into cat.mstbl.itbl1 values (1, 33), (2,34)")
+    val df = spark.sql("select * from cat.mstbl.itbl")
+    spark.sql("select * from cat.mstbl.itbl1").show()
+    df.write.format("iceberg").saveAsTable("cat.mstbl.itbl2")
+    spark.sql("select * from cat.mstbl.itbl2").show()
 
 
-    spark.sql("create table cat.htbl.dtbl(id int, age int) using delta  PARTITIONED BY (age)")
-    spark.sql("insert into cat.htbl.dtbl values (1, 33), (2,34)")
-    spark.sql("select * from cat.htbl.dtbl").show()
+//    spark.sql("create table cat.htbl.dtbl(id int, age int) using delta  PARTITIONED BY (age)")
+//    spark.sql("insert into cat.htbl.dtbl values (1, 33), (2,34)")
+//    spark.sql("select * from cat.htbl.dtbl").show()
 
     /* */
 

@@ -297,17 +297,25 @@ public class UnityHadoopCatalog extends HadoopCatalog
 
     @Override
     protected String defaultWarehouseLocation(TableIdentifier tableIdentifier) {
-        String tableName = tableIdentifier.name();
-        StringBuilder sb = new StringBuilder();
-        try {
-            sb.append(getDBPath(tableIdentifier));
-        } catch (org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException e) {
-            throw new RuntimeException(e);
-        }
-        sb.append("/");
-        sb.append(tableName);
+        org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog asTableCatalog = (org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog) SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName);
+        String location = asTableCatalog.getTableLocation(tableIdentifier.namespace().level(0), tableIdentifier.name());
+        if (location == null) {
+            System.out.println("got the location in hadoop catalog from MS");
+            return location;
+        } else {
 
-        return sb.toString();
+            String tableName = tableIdentifier.name();
+            StringBuilder sb = new StringBuilder();
+            try {
+                sb.append(getDBPath(tableIdentifier));
+            } catch (org.apache.spark.sql.catalyst.analysis.NoSuchNamespaceException e) {
+                throw new RuntimeException(e);
+            }
+            sb.append("/");
+            sb.append(tableName);
+
+            return sb.toString();
+        }
     }
 
     @Override
