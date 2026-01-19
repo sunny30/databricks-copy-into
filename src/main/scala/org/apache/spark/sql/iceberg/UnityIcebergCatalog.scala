@@ -19,6 +19,7 @@ import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
 
 import java.util
 import java.util.regex.Pattern
+import scala.collection.JavaConverters._
 class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: CaseInsensitiveStringMap) extends DeltaLogging with Catalog{
 
   lazy val icebergCatalog = {
@@ -40,10 +41,11 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
     try {
       val tblFromMetastore = plugin.getTable(catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
       val metastoreLocation = tblFromMetastore.storage.locationUri.getOrElse(tblFromMetastore.location).toString
-      allTableProperties.put(TableCatalog.PROP_LOCATION, metastoreLocation)
+      val icebergTableProperties: java.util.Map[String, String]  = (allTableProperties.asScala.toMap ++ Map(TableCatalog.PROP_LOCATION-> metastoreLocation)).asJava
+      //allTableProperties.put(TableCatalog.PROP_LOCATION, metastoreLocation)
       val icebergCatalog = new UnitySparkCatalog()
       val initializedCatalog = icebergCatalog.initialize(catalogName, catalogOptions(catalogName, SQLConf.get))
-      val icebergTable = icebergCatalog.createTable(ident, schema, partitions, allTableProperties)
+      val icebergTable = icebergCatalog.createTable(ident, schema, partitions, icebergTableProperties)
       icebergTable
     }catch {
       case e:Exception =>
