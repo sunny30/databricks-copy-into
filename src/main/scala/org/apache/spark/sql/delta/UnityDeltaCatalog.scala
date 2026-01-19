@@ -46,93 +46,66 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
                         sourceQuery: Option[DataFrame],
                         operation: TableCreationModes.CreationMode,
                         location: String,
-                        isExternal : Boolean
+                        isExternal: Boolean
                       ): Table = recordFrameProfile(
-    "DeltaCatalog", "createDeltaTable"){
+    "DeltaCatalog", "createDeltaTable") {
 
-  val tableProperties = allTableProperties.asScala.filterKeys {
-    case TableCatalog.PROP_LOCATION => false
-    case TableCatalog.PROP_PROVIDER => false
-    case TableCatalog.PROP_COMMENT => false
-    case TableCatalog.PROP_OWNER => false
-    case TableCatalog.PROP_EXTERNAL => false
-    case "path" => false
-    case "option.path" => false
-    case _ => true
-  }.toMap
-  val (partitionColumns, maybeBucketSpec, maybeClusterBySpec) = convertTransforms(partitions)
-  validateClusterBySpec(maybeClusterBySpec, schema)
-  var newSchema = schema
-  var newPartitionColumns = partitionColumns
-  var newBucketSpec = maybeBucketSpec
-  val conf = SparkSession.active.sessionState.conf
-  allTableProperties.asScala
-    .get(DeltaConfigs.DATA_SKIPPING_STATS_COLUMNS.key)
-    .foreach(StatisticsCollection.validateDeltaStatsColumns(schema, partitionColumns, _))
-  val isByPath = isPathIdentifier(ident)
-  if (isByPath && !conf.getConf(DeltaSQLConf.DELTA_LEGACY_ALLOW_AMBIGUOUS_PATHS)
-    && allTableProperties.containsKey("location")
-    // The location property can be qualified and different from the path in the identifier, so
-    // we check `endsWith` here.
-    && Option(allTableProperties.get("location")).exists(!_.endsWith(ident.name()))
-  ) {
-    throw DeltaErrors.ambiguousPathsInCreateTableException(
-      ident.name(), allTableProperties.get("location"))
-  }
+    val tableProperties = allTableProperties.asScala.filterKeys {
+      case TableCatalog.PROP_LOCATION => false
+      case TableCatalog.PROP_PROVIDER => false
+      case TableCatalog.PROP_COMMENT => false
+      case TableCatalog.PROP_OWNER => false
+      case TableCatalog.PROP_EXTERNAL => false
+      case "path" => false
+      case "option.path" => false
+      case _ => true
+    }.toMap
+    val (partitionColumns, maybeBucketSpec, maybeClusterBySpec) = convertTransforms(partitions)
+    validateClusterBySpec(maybeClusterBySpec, schema)
+    var newSchema = schema
+    var newPartitionColumns = partitionColumns
+    var newBucketSpec = maybeBucketSpec
+    val conf = SparkSession.active.sessionState.conf
+    allTableProperties.asScala
+      .get(DeltaConfigs.DATA_SKIPPING_STATS_COLUMNS.key)
+      .foreach(StatisticsCollection.validateDeltaStatsColumns(schema, partitionColumns, _))
+    val isByPath = isPathIdentifier(ident)
+    if (isByPath && !conf.getConf(DeltaSQLConf.DELTA_LEGACY_ALLOW_AMBIGUOUS_PATHS)
+      && allTableProperties.containsKey("location")
+      // The location property can be qualified and different from the path in the identifier, so
+      // we check `endsWith` here.
+      && Option(allTableProperties.get("location")).exists(!_.endsWith(ident.name()))
+    ) {
+      throw DeltaErrors.ambiguousPathsInCreateTableException(
+        ident.name(), allTableProperties.get("location"))
+    }
 
-  val id = {
-    TableIdentifier(ident.name(), ident.namespace().lastOption)
-  }
-  var locUriOpt = new Path(location).toUri
-  val existingTableOpt = getExistingTableIfExists(id)
-  val loc  = locUriOpt
-  val storage = DataSource.buildStorageFormatFromOptions(writeOptions)
-    .copy(locationUri = Option(loc))
-  val tableType =
-    if (isExternal) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED
-  val commentOpt = Option(allTableProperties.get("comment"))
+    val id = {
+      TableIdentifier(ident.name(), ident.namespace().lastOption)
+    }
+    var locUriOpt = new Path(location).toUri
+    val existingTableOpt = getExistingTableIfExists(id)
+    val loc = locUriOpt
+    val storage = DataSource.buildStorageFormatFromOptions(writeOptions)
+      .copy(locationUri = Option(loc))
+    val tableType =
+      if (isExternal) CatalogTableType.EXTERNAL else CatalogTableType.MANAGED
+    val commentOpt = Option(allTableProperties.get("comment"))
 
 
-  var tableDesc = new CatalogTable(
-    identifier = id,
-    tableType = tableType,
-    storage = storage,
-    schema = newSchema,
-    provider = Some(DeltaSourceUtils.ALT_NAME),
-    partitionColumnNames = newPartitionColumns,
-    bucketSpec = newBucketSpec,
-    properties = tableProperties,
-    comment = commentOpt
-  )
-
-  val withDb =
-    verifyTableAndSolidify(
-      tableDesc,
-      None,
-      maybeClusterBySpec
+    var tableDesc = new CatalogTable(
+      identifier = id,
+      tableType = tableType,
+      storage = storage,
+      schema = newSchema,
+      provider = Some(DeltaSourceUtils.ALT_NAME),
+      partitionColumnNames = newPartitionColumns,
+      bucketSpec = newBucketSpec,
+      properties = tableProperties,
+      comment = commentOpt
     )
 
-  val writer = sourceQuery.map { df =>
-    WriteIntoDelta(
-      DeltaLog.forTable(SparkSession.active, new Path(loc)),
-      operation.mode,
-      new DeltaOptions(withDb.storage.properties, SparkSession.active.sessionState.conf),
-      withDb.partitionColumnNames,
-      withDb.properties ++ commentOpt.map("comment" -> _),
-      df,
-      Some(tableDesc),
-      schemaInCatalog = if (newSchema != schema) Some(newSchema) else None)
-  }
-
-    UnityCreateDeltaTableCommand(
-    withDb,
-    existingTableOpt,
-    operation.mode,
-    writer,
-    operation,
-    tableByPath = isByPath).run(SparkSession.active)
-
-    if(tableType == CatalogTableType.EXTERNAL){
+    if (tableType == CatalogTableType.EXTERNAL) {
       val tableLocation = tableDesc.storage.locationUri.get.toString
       import io.delta.tables._
       val deltaTable = DeltaTable.forPath(tableLocation)
@@ -143,16 +116,51 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
         tableDesc.copy(schema = deltaTable.toDF.schema)
       }
       plugin.createTable(tableDefinition = persistedTable, true)
-    }else{
+    } else {
       plugin.createTable(tableDefinition = tableDesc, true)
       //loadTable(ident)
     }
+    //just to make sure if there is any specific changes with respect to ocation management
+    val tblFromMetastore = plugin.getTable(tableDesc.identifier.database.getOrElse("default"), tableDesc.identifier.table)
 
-    loadTable(ident)
+    try {
+      val withDb =
+        verifyTableAndSolidify(
+          tblFromMetastore,
+          None,
+          maybeClusterBySpec
+        )
+
+      val writer = sourceQuery.map { df =>
+        WriteIntoDelta(
+          DeltaLog.forTable(SparkSession.active, new Path(loc)),
+          operation.mode,
+          new DeltaOptions(withDb.storage.properties, SparkSession.active.sessionState.conf),
+          withDb.partitionColumnNames,
+          withDb.properties ++ commentOpt.map("comment" -> _),
+          df,
+          Some(tableDesc),
+          schemaInCatalog = if (newSchema != schema) Some(newSchema) else None)
+      }
+
+      UnityCreateDeltaTableCommand(
+        withDb,
+        existingTableOpt,
+        operation.mode,
+        writer,
+        operation,
+        tableByPath = isByPath).run(SparkSession.active)
 
 
+      loadTable(ident)
+    }catch {
+      case e:Exception =>
+        plugin.dropTable(ident.namespace().lastOption.getOrElse("default"), ident.name(), true, false)
+        throw e
+    }
 
-}
+
+  }
 
   protected def isPathIdentifier(tableIdentifier: TableIdentifier): Boolean = {
     isPathIdentifier(Identifier.of(tableIdentifier.database.toArray, tableIdentifier.table))
@@ -165,7 +173,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     if (isPathIdentifier(table)) return None
     val tableExists = plugin.tableExists(table.database.getOrElse("default"), table.table)
     if (tableExists) {
-      val oldTable = plugin.getTable(table.database.getOrElse("default"),table.table)
+      val oldTable = plugin.getTable(table.database.getOrElse("default"), table.table)
       if (oldTable.tableType == CatalogTableType.VIEW) {
         throw DeltaErrors.cannotWriteIntoView(table)
       }
@@ -232,7 +240,6 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
   private def supportSQLOnFile: Boolean = SparkSession.active.sessionState.conf.runSQLonFile
 
 
-
   def validateClusterBySpec(
                              maybeClusterBySpec: Option[ClusterBySpec], schema: StructType): Unit = {
     maybeClusterBySpec.foreach { clusterBy =>
@@ -282,14 +289,14 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     (identityCols.toSeq, bucketSpec, clusterBySpec)
   }
 
-  def createDeltaTable(table: CatalogTable):Unit={
+  def createDeltaTable(table: CatalogTable): Unit = {
     UnityCreateDeltaTableCommand(
       table,
       existingTableOpt = None,
       mode = TableCreationModes.Create.mode,
       query = None
     ).run(SparkSession.active)
-    plugin.createTable(table,true)
+    plugin.createTable(table, true)
   }
 
   def loadTable(ident: Identifier): Table = {
@@ -346,9 +353,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
   }
 
 
-
-
-   def alterTable(ident: Identifier, changes: Seq[TableChange]): Table =  {
+  def alterTable(ident: Identifier, changes: Seq[TableChange]): Table = {
     // We group the table changes by their type, since Delta applies each in a separate action.
     // We also must define an artificial type for SetLocation, since data source V2 considers
     // location just another property but it's special in catalog tables.
@@ -528,7 +533,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
         syncIdentity = syncIdentity).run(spark)
     }
 
-   loadTable(ident)
+    loadTable(ident)
   }
 
 }
