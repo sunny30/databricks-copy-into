@@ -5,7 +5,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.iceberg
 import org.apache.spark.sql.{AnalysisException, DataFrame, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable, CatalogTableType, ExternalCatalog}
-import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, Table, TableChange, TableSchemaChangeCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, StagedTable, Table, TableCatalog, TableChange, TableSchemaChangeCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.commands.TableCreationModes
 import org.apache.spark.sql.delta.metering.DeltaLogging
@@ -19,6 +19,7 @@ import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
 
 import java.util
 import java.util.regex.Pattern
+import scala.collection.JavaConverters._
 class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: CaseInsensitiveStringMap) extends DeltaLogging with Catalog{
 
   lazy val icebergCatalog = {
@@ -36,12 +37,21 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
                         ): Table ={
     val ct = new SparkCatalog()
 
-    val icebergCatalog = new UnitySparkCatalog()
-    val initializedCatalog = icebergCatalog.initialize(catalogName, catalogOptions(catalogName, SQLConf.get))
-    val icebergTable = icebergCatalog.createTable(ident, schema,partitions,allTableProperties)
-
     plugin.createTable(catalogTable, true)
-    icebergTable
+    try {
+      val tblFromMetastore = plugin.getTable(catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
+      val metastoreLocation = tblFromMetastore.storage.locationUri.getOrElse(tblFromMetastore.location).toString
+      val icebergTableProperties: java.util.Map[String, String]  = (allTableProperties.asScala.toMap ++ Map(TableCatalog.PROP_LOCATION-> metastoreLocation)).asJava
+      //allTableProperties.put(TableCatalog.PROP_LOCATION, metastoreLocation)
+      val icebergCatalog = new UnitySparkCatalog()
+      val initializedCatalog = icebergCatalog.initialize(catalogName, catalogOptions(catalogName, SQLConf.get))
+      val icebergTable = icebergCatalog.createTable(ident, schema, partitions, icebergTableProperties)
+      icebergTable
+    }catch {
+      case e:Exception =>
+        plugin.dropTable(catalogTable.database, catalogTable.identifier.table,true,false)
+        throw e
+    }
 
   }
 

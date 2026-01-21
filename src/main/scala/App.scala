@@ -102,6 +102,24 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
 
+    /*metadata location management test*/
+    spark.sql("create database if not exists cat.mstbl")
+    spark.sql("create table cat.mstbl.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
+    spark.sql("create table cat.mstbl.itbl1(id int, age int) using iceberg  PARTITIONED BY (age) location '/tmp/ice1'")
+    spark.sql("insert into cat.mstbl.itbl values (1, 33), (2,34)")
+    spark.sql("insert into cat.mstbl.itbl1 values (1, 33), (2,34)")
+    val df = spark.sql("select * from cat.mstbl.itbl")
+    spark.sql("select * from cat.mstbl.itbl1").show()
+    df.write.format("iceberg").saveAsTable("cat.mstbl.itbl2")
+    spark.sql("select * from cat.mstbl.itbl2").show()
+
+
+//    spark.sql("create table cat.htbl.dtbl(id int, age int) using delta  PARTITIONED BY (age)")
+//    spark.sql("insert into cat.htbl.dtbl values (1, 33), (2,34)")
+//    spark.sql("select * from cat.htbl.dtbl").show()
+
+    /* */
+
     /**current catalog test **/
 //    spark.sql("use catalog cat")
 //    spark.sql("create database cat.cudb")
@@ -113,7 +131,7 @@ object App {
 
     /**Iceberg migration test starts**/
 
-    spark.sql("create database if not exists cat.lidb2")
+  //  spark.sql("create database if not exists cat.lidb2")
 
 
      /**UnPartitioned Manage table **/
@@ -135,27 +153,27 @@ object App {
     /**Partitioned table check **/
   //  spark.sql("create table cat.lidb.ptbl1(id int, age int) using iceberg PARTITIONED BY (age)")
 
-    spark.sql("create table cat.lidb2.ptbl2(id int, age int) using parquet PARTITIONED BY (age)")
-    spark.sql("insert into cat.lidb2.ptbl2 values (1, 33), (2,34)")
+//    spark.sql("create table cat.lidb2.ptbl2(id int, age int) using parquet PARTITIONED BY (age)")
+//    spark.sql("insert into cat.lidb2.ptbl2 values (1, 33), (2,34)")
   //  val df = spark.read.table("cat.lidb1.ptbl2")
   //  df.write.format("iceberg").saveAsTable("cat.lidb1.itbl2")
   //  spark.read.table("cat.lidb1.itbl2").show()
   //  spark.sql("insert into cat.lidb1.itbl2 values(8,2)")
   //  spark.sql("ALTER TABLE cat.lidb1.itbl2 CREATE BRANCH `test-branch` RETAIN 7 DAYS WITH SNAPSHOT RETENTION 2 SNAPSHOTS")
-    spark.sql("create table cat.lidb2.itbl4(id int, age int) using iceberg PARTITIONED BY (age) location '/tmp/itbl3'")
+  //  spark.sql("create table cat.lidb2.itbl4(id int, age int) using iceberg PARTITIONED BY (age) location '/tmp/itbl3'")
 //    spark.sql("insert into cat.lidb1.itbl4 values (1, 33), (2,34)")
 //    spark.sql("describe formatted cat.lidb1.itbl4").show
 //    spark.sql("select * from cat.lidb1.itbl4").show
-    spark.sql(
-      """
-        |call cat.system.add_files(
-        |table => 'cat.lidb2.itbl4',
-        |source_table => 'cat.lidb2.ptbl2'
-        |)
-        |""".stripMargin)
-
-    spark.sql("insert into cat.lidb2.itbl4 values (3,35)")
-    spark.read.table("cat.lidb2.itbl4").show()
+//    spark.sql(
+//      """
+//        |call cat.system.add_files(
+//        |table => 'cat.lidb2.itbl4',
+//        |source_table => 'cat.lidb2.ptbl2'
+//        |)
+//        |""".stripMargin)
+//
+//    spark.sql("insert into cat.lidb2.itbl4 values (3,35)")
+//    spark.read.table("cat.lidb2.itbl4").show()
 
 //    spark.sql(
 //      """
