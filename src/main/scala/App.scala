@@ -112,6 +112,8 @@ object App {
     spark.sql("select * from cat.mstbl.itbl1").show()
     df.write.format("iceberg").saveAsTable("cat.mstbl.itbl2")
     spark.sql("select * from cat.mstbl.itbl2").show()
+    df.write.mode(SaveMode.Append).insertInto("cat.mstbl.itbl2")
+    spark.sql("select * from cat.mstbl.itbl2").show()
 
 
 //    spark.sql("create table cat.htbl.dtbl(id int, age int) using delta  PARTITIONED BY (age)")

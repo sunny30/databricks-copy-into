@@ -71,6 +71,11 @@ case class NonDefaultCatalogCreateViewCommand(
     if(!exists){
       externalCatalog.createTable(prepareTable(sparkSession, plan),false)
     }
+
+    if(replace){
+      externalCatalog.dropTable(dbName, tableName,true, false)
+      externalCatalog.createTable(prepareTable(sparkSession, plan),false)
+    }
     Seq.empty[Row]
   }
 
