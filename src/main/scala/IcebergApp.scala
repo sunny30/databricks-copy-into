@@ -21,7 +21,10 @@ object IcebergApp {
                 |USING iceberg partitioned by(age, range)""".stripMargin)
 
     //org.apache.iceberg.spark.source.IcebergSource
+    spark.sql("alter table local.db.logs add partition field bucket(2,age) as new_p")
     spark.sql("insert into local.db.logs values('a', 'b',1,2), ('a', 'b',2,2)")
+
+    spark.sql("alter table local.db.logs add partition field bucket(2,level) as new_p1")
 
    // spark.sql("describe formatted local.db.logs").show()
 
@@ -31,6 +34,15 @@ object IcebergApp {
 
     spark.sql("select * from local.db.logs").show()
     spark.sql("CALL local.system.create_changelog_view(table => 'db.logs',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
+
+    spark.sql(
+      """CREATE TABLE local.db.logs1 (
+        |    uuid string NOT NULL,
+        |    level string NOT NULL,
+        |    age int,
+        |    range int)
+        |USING iceberg partitioned by (bucket(16,level))""".stripMargin)
+    spark.sql("insert into local.db.logs1 values('a', 'b',1,2), ('a1', 'b1',2,2)")
 
   //  spark.read.table("local.db.logs").show()
 

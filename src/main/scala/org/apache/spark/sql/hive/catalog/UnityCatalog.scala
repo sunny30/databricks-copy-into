@@ -2,6 +2,8 @@ package org.apache.spark.sql.hive.catalog
 
 import org.apache.hadoop.fs.Path
 import org.apache.iceberg.catalog.Catalog
+import org.apache.iceberg.spark.SparkFunctionCatalog
+import org.apache.iceberg.spark.functions.SparkFunctions
 import org.apache.iceberg.spark.source.HasIcebergCatalog
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
@@ -522,10 +524,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
 
-  override def loadFunction(ident: Identifier): UnboundFunction = ???
+  override def loadFunction(ident: Identifier): UnboundFunction = (new SparkFunctionCatalog()).loadFunction(ident)
 
 
-  override def listFunctions(namespace: Array[String]): Array[Identifier] = ???
+  override def listFunctions(namespace: Array[String]): Array[Identifier] =  (new SparkFunctionCatalog()).listFunctions(namespace)
 
   override def stageReplace(
                              ident: Identifier,
