@@ -2,6 +2,8 @@ package org.apache.spark.sql.hive.catalog
 
 import org.apache.hadoop.fs.Path
 import org.apache.iceberg.catalog.Catalog
+import org.apache.iceberg.spark.{Spark3Util, SparkFunctionCatalog, SparkSchemaUtil}
+import org.apache.iceberg.spark.functions.SparkFunctions
 import org.apache.iceberg.spark.source.HasIcebergCatalog
 import org.apache.spark.sql.catalyst.{SQLConfHelper, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis.NoSuchTableException
@@ -353,7 +355,14 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       )
 
     } else {
-      val (partitionColumns, maybeBucketSpec) = partitions.toSeq.convertTransforms
+      val (partitionColumns, maybeBucketSpec) =
+        if (provider.equalsIgnoreCase("iceberg")) {
+          val icebergSchema = SparkSchemaUtil.convert(schema)
+          val ps = Spark3Util.toPartitionSpec(icebergSchema, partitions)
+          (ps.fields().asScala.map(p => p.name()), None)
+        } else {
+          partitions.toSeq.convertTransforms
+        }
 
       val tableProperties = properties.asScala
       val inputLocation = Option(properties.get(TableCatalog.PROP_LOCATION))
@@ -522,10 +531,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
 
-  override def loadFunction(ident: Identifier): UnboundFunction = ???
+  override def loadFunction(ident: Identifier): UnboundFunction = (new SparkFunctionCatalog()).loadFunction(ident)
 
 
-  override def listFunctions(namespace: Array[String]): Array[Identifier] = ???
+  override def listFunctions(namespace: Array[String]): Array[Identifier] =  (new SparkFunctionCatalog()).listFunctions(namespace)
 
   override def stageReplace(
                              ident: Identifier,

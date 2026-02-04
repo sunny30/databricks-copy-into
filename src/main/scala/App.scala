@@ -103,20 +103,58 @@ object App {
     ).toDF("id", "name")
 
     /*metadata location management test*/
-    spark.sql("create database if not exists cat.mstbl")
-    spark.sql("create table cat.mstbl.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
-    spark.sql("create table cat.mstbl.itbl1(id int, age int) using iceberg  PARTITIONED BY (age) location '/tmp/ice1'")
-    spark.sql("insert into cat.mstbl.itbl values (1, 33), (2,34)")
-    spark.sql("insert into cat.mstbl.itbl1 values (1, 33), (2,34)")
-    val df = spark.sql("select * from cat.mstbl.itbl")
-    spark.sql("select * from cat.mstbl.itbl1").show()
-    df.write.format("iceberg").saveAsTable("cat.mstbl.itbl2")
-    spark.sql("select * from cat.mstbl.itbl2").show()
-    df.write.mode(SaveMode.Append).insertInto("cat.mstbl.itbl2")
-    spark.sql("select * from cat.mstbl.itbl2").show()
+//    spark.sql("create database if not exists cat.mstbl")
+//    spark.sql("create table cat.mstbl.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
+//    spark.sql("create table cat.mstbl.itbl1(id int, age int) using iceberg  PARTITIONED BY (age) location '/tmp/ice1'")
+//    spark.sql("insert into cat.mstbl.itbl values (1, 33), (2,34)")
+//    spark.sql("insert into cat.mstbl.itbl1 values (1, 33), (2,34)")
+//    val df = spark.sql("select * from cat.mstbl.itbl")
+//    spark.sql("select * from cat.mstbl.itbl1").show()
+//    df.write.format("iceberg").saveAsTable("cat.mstbl.itbl2")
+//    spark.sql("select * from cat.mstbl.itbl2").show()
+//    df.write.mode(SaveMode.Append).insertInto("cat.mstbl.itbl2")
+//    spark.sql("select * from cat.mstbl.itbl2").show()
 
 
-//    spark.sql("create table cat.htbl.dtbl(id int, age int) using delta  PARTITIONED BY (age)")
+    spark.sql("""create database if not exists cat.icebdb""")
+    spark.sql(
+      """CREATE TABLE cat.icebdb.icetbl (
+      id BIGINT,
+      data STRING,
+      state STRING,
+      ts TIMESTAMP
+    ) using iceberg partitioned by (state)""")
+
+    spark.sql("""alter table cat.icebdb.icetbl add partition field year(ts)""")
+
+    spark.sql(
+      """
+    INSERT INTO cat.icebdb.icetbl VALUES
+      (101, 'x', 'CA', timestamp'2025-01-03 00:00:00'),
+      (102, 'y', 'CA', timestamp'2025-01-03 01:00:00'),
+      (103, 'z', 'WA', timestamp'2025-01-04 00:00:00')
+    """)
+
+    spark.sql("""select * from cat.icebdb.icetbl""").show()
+    spark.sql("SELECT state, COUNT(*) c FROM cat.icebdb.icetbl GROUP BY state ORDER BY state").show()
+
+    spark.sql(
+      """CREATE TABLE cat.icebdb.icetbl1 (
+        |    uuid string NOT NULL,
+        |    level string NOT NULL,
+        |    age int,
+        |    range int)
+        |USING iceberg partitioned by (bucket(16,level))""".stripMargin)
+
+    spark.sql("insert into cat.icebdb.icetbl1 values('a', 'b',1,2), ('a1', 'b1',2,2)")
+    spark.sql("""select * from cat.icebdb.icetbl1""").show()
+
+
+
+
+
+
+    //    spark.sql("create table cat.htbl.dtbl(id int, age int) using delta  PARTITIONED BY (age)")
 //    spark.sql("insert into cat.htbl.dtbl values (1, 33), (2,34)")
 //    spark.sql("select * from cat.htbl.dtbl").show()
 
@@ -761,6 +799,7 @@ object App {
     //    spark.sql("create view cat.tdb3.v1(id, id1) as select * from cat.tdb3.tbl")
     //    spark.sql("select * from cat.tdb3.v1").show()
     //
+
     //   spark.sql("""create function row_func for table cat.tdb3.tbl where 'id>2' """)
     //   spark.sql("grant row_level row_func for user userX")
     //
