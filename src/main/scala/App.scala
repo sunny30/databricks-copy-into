@@ -101,6 +101,43 @@ object App {
       (11, "Yes"),
       (12, "papa")
     ).toDF("id", "name")
+    spark.sql("""create database if not exists cat.deltadb""")
+//    df5.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
+//
+//    df4.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
+//
+//    spark.read.table("cat.deltadb.tbl").show()
+
+    import spark.implicits._
+
+    // 1. Define your data as a Sequence of Tuples
+    val data = Seq(
+      (101, "A", "2025-01-15"),
+      (102, "B", "2025-01-20"),
+      (103, "C", "2025-01-25")
+    )
+
+    val data1 = Seq(
+      (102, "A", "2025-01-15"),
+      (103, "B", "2025-01-20"),
+      (104, "C", "2025-01-25")
+    )
+
+    // 2. Convert to DataFrame and name the columns
+    val replaceData1 = data1.toDF("id", "status", "start_date")
+    val replaceData = data.toDF("id", "status", "start_date")
+
+    replaceData1.write
+      .format("delta")
+      .mode("overwrite")
+      .saveAsTable("cat.deltadb.tbl2")
+    // 3. Perform the selective overwrite
+    replaceData.write
+      .format("delta")
+      .mode("overwrite")
+      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+      .saveAsTable("cat.deltadb.tbl2")
+
 
     /*metadata location management test*/
 //    spark.sql("create database if not exists cat.mstbl")
@@ -116,39 +153,39 @@ object App {
 //    spark.sql("select * from cat.mstbl.itbl2").show()
 
 
-    spark.sql("""create database if not exists cat.icebdb""")
-    spark.sql(
-      """CREATE TABLE cat.icebdb.icetbl (
-      id BIGINT,
-      data STRING,
-      state STRING,
-      ts TIMESTAMP
-    ) using iceberg partitioned by (state)""")
-
-    spark.sql("""alter table cat.icebdb.icetbl add partition field year(ts)""")
-
-    spark.sql(
-      """
-    INSERT INTO cat.icebdb.icetbl VALUES
-      (101, 'x', 'CA', timestamp'2025-01-03 00:00:00'),
-      (102, 'y', 'CA', timestamp'2025-01-03 01:00:00'),
-      (103, 'z', 'WA', timestamp'2025-01-04 00:00:00')
-    """)
-
-    spark.sql("""select * from cat.icebdb.icetbl""").show()
-    spark.sql("SELECT state, COUNT(*) c FROM cat.icebdb.icetbl GROUP BY state ORDER BY state").show()
-
-    spark.sql(
-      """CREATE TABLE cat.icebdb.icetbl1 (
-        |    uuid string NOT NULL,
-        |    level string NOT NULL,
-        |    age int,
-        |    range int)
-        |USING iceberg partitioned by (bucket(16,level))""".stripMargin)
-
-    spark.sql("insert into cat.icebdb.icetbl1 values('a', 'b',1,2), ('a1', 'b1',2,2)")
-    spark.sql("""select * from cat.icebdb.icetbl1""").show()
-
+//    spark.sql("""create database if not exists cat.icebdb""")
+//    spark.sql(
+//      """CREATE TABLE cat.icebdb.icetbl (
+//      id BIGINT,
+//      data STRING,
+//      state STRING,
+//      ts TIMESTAMP
+//    ) using iceberg partitioned by (state)""")
+//
+//    spark.sql("""alter table cat.icebdb.icetbl add partition field year(ts)""")
+//
+//    spark.sql(
+//      """
+//    INSERT INTO cat.icebdb.icetbl VALUES
+//      (101, 'x', 'CA', timestamp'2025-01-03 00:00:00'),
+//      (102, 'y', 'CA', timestamp'2025-01-03 01:00:00'),
+//      (103, 'z', 'WA', timestamp'2025-01-04 00:00:00')
+//    """)
+//
+//    spark.sql("""select * from cat.icebdb.icetbl""").show()
+//    spark.sql("SELECT state, COUNT(*) c FROM cat.icebdb.icetbl GROUP BY state ORDER BY state").show()
+//
+//    spark.sql(
+//      """CREATE TABLE cat.icebdb.icetbl1 (
+//        |    uuid string NOT NULL,
+//        |    level string NOT NULL,
+//        |    age int,
+//        |    range int)
+//        |USING iceberg partitioned by (bucket(16,level))""".stripMargin)
+//
+//    spark.sql("insert into cat.icebdb.icetbl1 values('a', 'b',1,2), ('a1', 'b1',2,2)")
+//    spark.sql("""select * from cat.icebdb.icetbl1""").show()
+//
 
 
 

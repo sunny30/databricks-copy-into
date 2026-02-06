@@ -698,6 +698,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case overwriteByExpression@OverwriteByExpression(table: DataSourceV2Relation, deleteExpr, query, writeOptions, isByName, _, analyzedQuery) =>
             //  val overwriteByExpressionPl = overwriteByExpression.copy(analyzedQuery = Some(query))
+            println("Inside Overwrite by Expression")
             table.table match {
               case v2Table: V2Table =>
                 val catalogName = v2Table.v1Table.identifier.catalog.getOrElse("hive")

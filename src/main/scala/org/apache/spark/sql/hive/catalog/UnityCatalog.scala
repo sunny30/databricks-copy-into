@@ -20,6 +20,7 @@ import org.apache.spark.sql.delta.{DeltaErrors, UnityDeltaCatalog}
 import org.apache.spark.sql.delta.catalog.{DeltaCatalog, DeltaTableV2}
 import org.apache.spark.sql.delta.commands.TableCreationModes
 import org.apache.spark.sql.delta.metering.DeltaLogging
+import org.apache.spark.sql.delta.sources.DeltaSourceUtils
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.types.StructType
@@ -311,6 +312,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     println("Inside stageCreateOrReplace")
+    if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
+      new StagedDeltaTableV2(
+        ident,
+        schema,
+        partitions,
+        properties,
+        TableCreationModes.CreateOrReplace
+      )
+    }
     dropTable(ident)
     val table = createTable(ident, schema, partitions, properties)
     BestEffortStagedTable(ident, table, this)

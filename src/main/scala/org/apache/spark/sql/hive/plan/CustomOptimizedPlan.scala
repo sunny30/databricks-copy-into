@@ -99,7 +99,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 
       case rtas@ReplaceTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
       _, _, _) =>
-        println("Inside RTAS")
+        println("****Inside RTAS****")
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
         val qe = spark.sessionState.executePlan(query, CommandExecutionMode.NON_ROOT)
         val dynamicPartitonPruningExists = qe.optimizedPlan.exists(pl => pl.expressions.exists(e => e.containsAnyPattern(DYNAMIC_PRUNING_SUBQUERY)))
@@ -116,6 +116,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         /**Delta External we have to see later**/
         if (providerValue.equalsIgnoreCase("delta")) {
           if (catalog.asTableCatalog.tableExists(ident)) {
+            println("Calling RTAS drop table plan")
             catalog.asTableCatalog.dropTable(ident)
           }
           println("Inside delta or custom datasource plan block")
@@ -157,7 +158,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 
       case ctas@CreateTableAsSelect(ResolvedIdentifier(catalog, ident), parts, query, tableSpec: TableSpec,
       _, _, _) =>
-        println("Inside CTAS")
+        println("****Inside CTAS****")
 
         var properties = CatalogV2Util.convertTableProperties(tableSpec)
        // val projectPlan = EliminateSubqueryAliases(query)
