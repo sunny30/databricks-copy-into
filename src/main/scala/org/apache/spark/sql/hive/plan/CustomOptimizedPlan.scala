@@ -115,10 +115,10 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         val providerValue = getActualProvider(catalog,ident,tableSpec)
         /**Delta External we have to see later**/
         if (providerValue.equalsIgnoreCase("delta")) {
-          if (catalog.asTableCatalog.tableExists(ident)) {
-            println("Calling RTAS drop table plan")
-            catalog.asTableCatalog.dropTable(ident)
-          }
+//          if (catalog.asTableCatalog.tableExists(ident)) {
+//            println("Calling RTAS drop table plan")
+//            catalog.asTableCatalog.dropTable(ident)
+//          }
           println("Inside delta or custom datasource plan block")
           rtas.copy(query = writePlan)
 

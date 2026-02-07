@@ -541,6 +541,54 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     loadTable(ident)
   }
 
+  def stageCreate(
+                   ident: Identifier,
+                   schema: StructType,
+                   partitions: Array[Transform],
+                   properties: util.Map[String, String]): StagedTable =
+    recordFrameProfile("DeltaCatalog", "stageCreate") {
+
+      new StagedDeltaTableV2(
+        ident,
+        schema,
+        partitions,
+        properties,
+        TableCreationModes.Create
+      )
+    }
+
+  def stageReplace(
+                    ident: Identifier,
+                    schema: StructType,
+                    partitions: Array[Transform],
+                    properties: util.Map[String, String]): StagedTable =
+    recordFrameProfile("DeltaCatalog", "stageReplace") {
+
+      new StagedDeltaTableV2(
+        ident,
+        schema,
+        partitions,
+        properties,
+        TableCreationModes.Replace
+      )
+    }
+
+  def stageCreateOrReplace(
+                            ident: Identifier,
+                            schema: StructType,
+                            partitions: Array[Transform],
+                            properties: util.Map[String, String]): StagedTable=
+    recordFrameProfile("DeltaCatalog", "stageCreateOrReplace"){
+
+    new StagedDeltaTableV2(
+      ident,
+      schema,
+      partitions,
+      properties,
+      TableCreationModes.CreateOrReplace
+    )
+  }
+
   private class StagedDeltaTableV2(
                                     ident: Identifier,
                                     override val schema: StructType,

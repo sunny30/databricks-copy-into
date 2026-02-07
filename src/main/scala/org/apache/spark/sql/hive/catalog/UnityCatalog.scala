@@ -279,14 +279,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   override def defaultNamespace(): Array[String] = super.defaultNamespace()
 
-  override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    val table = createTable(ident, schema, partitions, properties)
-    if(properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")){
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
-    }else {
-      BestEffortStagedTable(ident, table, this)
-    }
-  }
+
 
   override def registerTableInMetastore(table: CatalogTable): Unit = {
     val dbPath = getDBPath(table.database)
@@ -306,25 +299,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     externalCatalog.createTable(newtable, false)
   }
 
-  //  override def stageReplace(ident: Identifier, columns: Array[Column], partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-  //    (new DeltaCatalog).stageCreate(ident = ident, columns,partitions = partitions, properties = properties)
-  //  }
 
-  override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
-    println("Inside stageCreateOrReplace")
-    if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new StagedDeltaTableV2(
-        ident,
-        schema,
-        partitions,
-        properties,
-        TableCreationModes.CreateOrReplace
-      )
-    }
-    dropTable(ident)
-    val table = createTable(ident, schema, partitions, properties)
-    BestEffortStagedTable(ident, table, this)
-  }
+
+
 
 
   override def createTable(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): Table = {
@@ -551,8 +528,40 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
-    println("Inside stage replace")
-    (new DeltaCatalog).stageReplace(ident = ident, schema = schema, partitions = partitions, properties = properties)
+    if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
+      new UnityDeltaCatalog(externalCatalog).stageReplace(ident, schema, partitions, properties)
+    } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageReplace(ident, schema, partitions, properties)
+    } else {
+      dropTable(ident)
+      val table = createTable(ident, schema, partitions, properties)
+      BestEffortStagedTable(ident, table, this)
+    }
+  }
+
+  override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    println("Inside stageCreateOrReplace")
+    if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
+      new UnityDeltaCatalog(externalCatalog).stageCreateOrReplace(ident, schema, partitions, properties)
+    } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+    } else {
+      dropTable(ident)
+      val table = createTable(ident, schema, partitions, properties)
+      BestEffortStagedTable(ident, table, this)
+    }
+  }
+
+  override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+
+    if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+    } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("delta")) {
+      new UnityDeltaCatalog(externalCatalog).stageCreate(ident, schema, partitions, properties)
+    } else {
+      val table = createTable(ident, schema, partitions, properties)
+      BestEffortStagedTable(ident, table, this)
+    }
   }
 
   override def name(): String = catalogName
