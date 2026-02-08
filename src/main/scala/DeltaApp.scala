@@ -63,13 +63,23 @@ object DeltaApp {
     replaceData1.write
       .format("delta")
       .mode("overwrite")
-      .saveAsTable("tbl2")
-    // 3. Perform the selective overwrite
+      .saveAsTable("tbl3")
+
+
     replaceData.write
-      .format("delta")
-      .mode("overwrite")
-      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
-      .saveAsTable("tbl2")
+          .format("delta")
+          .mode("overwrite")
+         // .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+          .saveAsTable("tbl3")
+
+    spark.sql("describe history tbl3").show()
+    spark.sql("describe detail tbl3").show()
+    // 3. Perform the selective overwrite
+//    replaceData.write
+//      .format("delta")
+//      .mode("overwrite")
+//      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+//      .saveAsTable("tbl2")
 
     val dfw2 = replaceData.write
       .format("delta")

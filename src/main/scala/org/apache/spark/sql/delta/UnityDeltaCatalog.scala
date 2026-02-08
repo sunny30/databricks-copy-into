@@ -39,6 +39,11 @@ import java.util.Locale
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable
 
+
+
+import scala.collection.JavaConverters._
+import scala.collection.mutable
+
 class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
 
 
@@ -545,7 +550,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
                    ident: Identifier,
                    schema: StructType,
                    partitions: Array[Transform],
-                   properties: util.Map[String, String]): StagedTable =
+                   properties: java.util.Map[String, String]): StagedTable =
     recordFrameProfile("DeltaCatalog", "stageCreate") {
 
       new StagedDeltaTableV2(
@@ -561,7 +566,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
                     ident: Identifier,
                     schema: StructType,
                     partitions: Array[Transform],
-                    properties: util.Map[String, String]): StagedTable =
+                    properties: java.util.Map[String, String]): StagedTable =
     recordFrameProfile("DeltaCatalog", "stageReplace") {
 
       new StagedDeltaTableV2(
@@ -577,7 +582,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
                             ident: Identifier,
                             schema: StructType,
                             partitions: Array[Transform],
-                            properties: util.Map[String, String]): StagedTable=
+                            properties: java.util.Map[String, String]): StagedTable=
     recordFrameProfile("DeltaCatalog", "stageCreateOrReplace"){
 
     new StagedDeltaTableV2(
@@ -593,7 +598,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
                                     ident: Identifier,
                                     override val schema: StructType,
                                     val partitions: Array[Transform],
-                                    override val properties: util.Map[String, String],
+                                    override val properties: java.util.Map[String, String],
                                     operation: TableCreationModes.CreationMode
                                   ) extends StagedTable with SupportsWrite {
 
@@ -605,13 +610,13 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     override def commitStagedChanges(): Unit = recordFrameProfile(
       "DeltaCatalog", "commitStagedChanges") {
       val conf = SparkSession.active.sessionState.conf
-      val props = new util.HashMap[String, String]()
+      val props = new java.util.HashMap[String, String]()
       // Options passed in through the SQL API will show up both with an "option." prefix and
       // without in Spark 3.1, so we need to remove those from the properties
       val optionsThroughProperties = properties.asScala.collect {
         case (k, _) if k.startsWith("option.") => k.stripPrefix("option.")
       }.toSet
-      val sqlWriteOptions = new util.HashMap[String, String]()
+      val sqlWriteOptions = new java.util.HashMap[String, String]()
       properties.asScala.foreach { case (k, v) =>
         if (!k.startsWith("option.") && !optionsThroughProperties.contains(k)) {
           // Do not add to properties
@@ -657,7 +662,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
 
     override def abortStagedChanges(): Unit = {}
 
-    override def capabilities(): util.Set[TableCapability] = {
+    override def capabilities(): java.util.Set[TableCapability] = {
       Set(V1_BATCH_WRITE).asJava
     }
 
