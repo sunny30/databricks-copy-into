@@ -176,8 +176,19 @@ object App {
       .option("replaceWhere", "category = 'Technology'")
       .saveAsTable("cat.deltadb1.dtbl4")
 
+//    val initialData = Seq(
+//      (1, "Technology", 500, "2024-01-01"),
+//      (2, "Furniture", 300, "2024-01-01"),
+//      (3, "Office", 100, "2024-01-01")
+//    ).toDF("id", "category", "amount", "date")
+
+    initialData.write.format("delta").mode("append").saveAsTable("cat.deltadb1.dtbl4")
+
+
 
     spark.read.table("cat.deltadb1.dtbl4").show()
+
+
 
 
 
