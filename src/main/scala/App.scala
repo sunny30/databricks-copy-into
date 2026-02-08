@@ -101,7 +101,7 @@ object App {
       (11, "Yes"),
       (12, "papa")
     ).toDF("id", "name")
-    spark.sql("""create database if not exists cat.deltadb""")
+    spark.sql("""create database if not exists cat.deltadb1""")
 //    df5.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
 //
 //    df4.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
@@ -130,13 +130,19 @@ object App {
     replaceData1.write
       .format("delta")
       .mode("overwrite")
-      .saveAsTable("cat.deltadb.tbl2")
+      .saveAsTable("cat.deltadb1.dtbl2")
     // 3. Perform the selective overwrite
+//    replaceData.write
+//      .format("delta")
+//      .mode("overwrite")
+//      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+//      .saveAsTable("cat.deltadb.tbl2")
+
     replaceData.write
       .format("delta")
       .mode("overwrite")
-      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
-      .saveAsTable("cat.deltadb.tbl2")
+    //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+      .saveAsTable("cat.deltadb1.dtbl2")
 
 
     /*metadata location management test*/

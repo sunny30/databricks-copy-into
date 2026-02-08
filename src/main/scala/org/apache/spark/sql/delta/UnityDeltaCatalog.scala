@@ -30,21 +30,18 @@ import org.apache.spark.sql.connector.write.{LogicalWriteInfo, V1Write, WriteBui
 import scala.collection.JavaConverters._
 import org.apache.spark.sql.delta.skipping.clustering.temp.{ClusterByTransform => TempClusterByTransform}
 import org.apache.spark.sql.sources.InsertableRelation
-
 import org.apache.spark.sql.connector.catalog.TableCapability._
 
+import java.net.URI
 import java.sql.Timestamp
 import java.util
 import java.util.Locale
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable
-
-
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
+class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends DeltaLogging {
 
 
   def createDeltaTable(
@@ -594,6 +591,23 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     )
   }
 
+
+  def getExpectedLocationOfTable(ident:TableIdentifier,  properties: java.util.Map[String, String]):(String, Boolean)={
+    properties.asScala.get("path") match {
+      case Some(res) => (res, true)
+      case None =>
+        val tablePath = (new Path(getDBPath(ident.database.getOrElse("default")).toString, ident.table)).toString
+        (tablePath, false)
+    }
+  }
+
+  def getDBPath(db: String): URI = {
+    val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
+    val catalogPath = new Path(warehousePath, catalogName + ".cat")
+    val dbPath = new Path(catalogPath, db + ".db")
+    dbPath.toUri
+  }
+
   private class StagedDeltaTableV2(
                                     ident: Identifier,
                                     override val schema: StructType,
@@ -642,8 +656,12 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
       val id = {
         TableIdentifier(ident.name(), ident.namespace().lastOption)
       }
-      val ct = getExistingTableIfExists(id).get
-      val (locString, isExternal) = (ct.storage.locationUri.get.toString, ct.tableType == CatalogTableType.EXTERNAL)
+      val oct = getExistingTableIfExists(id)
+      val (locString, isExternal) = oct match {
+        case Some(ct) =>  (ct.storage.locationUri.get.toString, ct.tableType == CatalogTableType.EXTERNAL)
+        case None => getExpectedLocationOfTable(id, properties)
+      }
+
 
       createDeltaTable(
         ident,

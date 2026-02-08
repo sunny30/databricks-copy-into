@@ -145,7 +145,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
     if (catalogTable.provider.isDefined) {
       if (catalogTable.provider.get.equalsIgnoreCase("delta")) {
-        return (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
+        return (new UnityDeltaCatalog(externalCatalog,catalogName)).alterTable(ident, changes)
       }
       else if (catalogTable.provider.get.equalsIgnoreCase("iceberg")) {
         return (new UnityIcebergCatalog(externalCatalog, catalogName, options)).alterTable(ident, changes: _*)
@@ -169,7 +169,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       loadTable(ident)
     }
     table match {
-      case deltaTableV2: DeltaTableV2 => (new UnityDeltaCatalog(externalCatalog)).alterTable(ident, changes)
+      case deltaTableV2: DeltaTableV2 => (new UnityDeltaCatalog(externalCatalog, catalogName)).alterTable(ident, changes)
       case _ => try {
         externalCatalog.alterTable(
           catalogTable.copy(
@@ -329,7 +329,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val provider = getProvider(properties)
 
     if (provider.equalsIgnoreCase("delta")) {
-      new UnityDeltaCatalog(externalCatalog).createDeltaTable(
+      new UnityDeltaCatalog(externalCatalog,catalogName).createDeltaTable(
         ident,
         schema,
         partitions,
@@ -483,7 +483,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       tt.provider match {
         case Some(value) => if(value.equalsIgnoreCase("delta")){
-          new UnityDeltaCatalog(externalCatalog).loadTable(ident, timestamp)
+          new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(ident, timestamp)
         }else if(value.equalsIgnoreCase("iceberg")){
           new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident, timestamp)
         }else{
@@ -507,7 +507,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       tt.provider match {
         case Some(value) => if (value.equalsIgnoreCase("delta")) {
-          new UnityDeltaCatalog(externalCatalog).loadTable(ident, version)
+          new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(ident, version)
         } else if (value.equalsIgnoreCase("iceberg")) {
           new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident, version)
         } else {
@@ -529,7 +529,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
     if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new UnityDeltaCatalog(externalCatalog).stageReplace(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageReplace(ident, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
       (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageReplace(ident, schema, partitions, properties)
     } else {
@@ -542,7 +542,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
     println("Inside stageCreateOrReplace")
     if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new UnityDeltaCatalog(externalCatalog).stageCreateOrReplace(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreateOrReplace(ident, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
       (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
     } else {
@@ -558,7 +558,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
       (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("delta")) {
-      new UnityDeltaCatalog(externalCatalog).stageCreate(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreate(ident, schema, partitions, properties)
     } else {
      // val table = createTable(ident, schema, partitions, properties)
       BestEffortStagedTable(ident, table, this)
