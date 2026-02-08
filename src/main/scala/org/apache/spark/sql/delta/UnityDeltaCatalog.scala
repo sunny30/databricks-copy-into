@@ -162,7 +162,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends De
       loadTable(ident)
     }catch {
       case e:Exception =>
-        plugin.dropTable(ident.namespace().lastOption.getOrElse("default"), ident.name(), true, false)
+       // plugin.dropTable(ident.namespace().lastOption.getOrElse("default"), ident.name(), true, false)
         throw e
     }
 

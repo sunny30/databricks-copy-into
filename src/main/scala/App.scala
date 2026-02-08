@@ -144,6 +144,42 @@ object App {
     //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
       .saveAsTable("cat.deltadb1.dtbl2")
 
+    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
+    replaceData.write
+      .format("delta")
+      .mode("overwrite")
+      .partitionBy("status")
+
+      //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+      .saveAsTable("cat.deltadb1.dtbl3")
+
+
+    val initialData = Seq(
+      (1, "Technology", 500, "2024-01-01"),
+      (2, "Furniture", 300, "2024-01-01"),
+      (3, "Office", 100, "2024-01-01")
+    ).toDF("id", "category", "amount", "date")
+
+    initialData.write.format("delta").mode("overwrite").saveAsTable("cat.deltadb1.dtbl4")
+
+    // 3. Generate replaceData (The "New" Record for Technology)
+    // Note: We are doubling the amount for ID 1
+    val replaceData2 = Seq(
+      (1, "Technology", 1000, "2024-01-01")
+    ).toDF("id", "category", "amount", "date")
+
+    // 4. Perform Selective Overwrite
+    replaceData2.write
+      .format("delta")
+      .mode("overwrite")
+      .option("replaceWhere", "category = 'Technology'")
+      .saveAsTable("cat.deltadb1.dtbl4")
+
+
+    spark.read.table("cat.deltadb1.dtbl4").show()
+
+
 
     /*metadata location management test*/
 //    spark.sql("create database if not exists cat.mstbl")
