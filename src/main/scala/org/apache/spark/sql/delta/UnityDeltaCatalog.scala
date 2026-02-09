@@ -115,10 +115,11 @@ class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends De
     if (tableType == CatalogTableType.EXTERNAL) {
       val tableLocation = tableDesc.storage.locationUri.get.toString
       import io.delta.tables._
-      val deltaTable = DeltaTable.forPath(tableLocation)
+
       val persistedTable = if (tableDesc.schema.nonEmpty) {
         tableDesc
       } else {
+        val deltaTable = DeltaTable.forPath(tableLocation)
         println(s"the schema of projected table: ${deltaTable.toDF.schema.prettyJson}")
         tableDesc.copy(schema = deltaTable.toDF.schema)
       }

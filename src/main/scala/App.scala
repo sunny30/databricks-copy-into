@@ -127,19 +127,61 @@ object App {
     val replaceData1 = data1.toDF("id", "status", "start_date")
     val replaceData = data.toDF("id", "status", "start_date")
 
+    replaceData.writeTo("cat.deltadb1.dtbl1")
+      .using("delta")
+      .tableProperty("path", "/tmp/delta")
+      .create()
+
+
     replaceData1.write
+      .format("delta")
+      .mode("overwrite")
+      .saveAsTable("cat.deltadb1.dtbl1")
+
+    spark.sql("select * from cat.deltadb1.dtbl1").show()
+
+    spark.sql("describe history cat.deltadb1.dtbl1").show()
+
+    replaceData1.writeTo("cat.deltadb1.itbl1")
+      .using("iceberg")
+      .tableProperty("path", "/tmp/ice")
+      .createOrReplace()
+
+    replaceData.write
       .format("iceberg")
-      .mode("error")
-      .saveAsTable("cat.deltadb1.itbl2")
+      .mode("overwrite")
+      .saveAsTable("cat.deltadb1.itbl1")
+
+
+    spark.sql("select * from cat.deltadb1.itbl1.history").show()
+
+    spark.sql("select * from cat.deltadb1.itbl1").show()
+
+
 
 
     replaceData1.write
       .format("iceberg")
-      .mode("error")
       .saveAsTable("cat.deltadb1.itbl2")
 
     spark.sql("select * from cat.deltadb1.itbl2.history").show()
 
+    spark.sql("select * from cat.deltadb1.itbl2").show()
+
+    replaceData1.write
+      .format("iceberg")
+      .mode("overwrite")
+      .saveAsTable("cat.deltadb1.itbl3")
+
+
+//    replaceData1.write
+//      .format("iceberg")
+//      .mode("error")
+//      .saveAsTable("cat.deltadb1.itbl2")
+
+    spark.sql("select * from cat.deltadb1.itbl3.history").show()
+
+    spark.sql("select * from cat.deltadb1.itbl3").show()
     replaceData.write
       .format("iceberg")
       .mode("overwrite")

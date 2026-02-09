@@ -556,7 +556,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
    // val table = createTable(ident, schema, partitions, properties)
     if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
-      val table = createTable(ident, schema, partitions, properties)
+    //  val table = createTable(ident, schema, partitions, properties)
       (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("delta")) {
       new UnityDeltaCatalog(externalCatalog,catalogName).stageCreate(ident, schema, partitions, properties)

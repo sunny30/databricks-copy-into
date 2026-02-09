@@ -3,10 +3,10 @@ package org.apache.spark.sql.hive.catalog
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path, PathFilter}
 import org.apache.hadoop.mapred.{FileInputFormat, JobConf}
+import org.apache.iceberg.spark.{Spark3Util, SparkSchemaUtil}
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.RDD_PARALLEL_LISTING_THRESHOLD
-
 import org.apache.spark.sql.catalog.Column
 import org.apache.spark.sql.catalyst.{DefinedByConstructorParams, TableIdentifier}
 import org.apache.spark.sql.{Dataset, SparkSession}
@@ -14,14 +14,16 @@ import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.plans.logical.LocalRelation
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
-import org.apache.spark.sql.connector.catalog.Identifier
+import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog}
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, ExternalCatalogUtils}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, CatalogTableType, CatalogUtils, ExternalCatalogUtils}
+import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.command.PartitionStatistics
+import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.util.ThreadUtils
 
@@ -29,6 +31,12 @@ import scala.collection.parallel.ForkJoinTaskSupport
 import scala.collection.parallel.immutable.ParVector
 import scala.concurrent.duration.MILLISECONDS
 import scala.reflect.runtime.universe.TypeTag
+import _root_.java.util
+import _root_.java.net.URI
+import scala.collection.JavaConverters._
+
+
+
 
 
 class UnityCatalogUtil(spark:SparkSession) extends Logging {
@@ -210,6 +218,103 @@ class UnityCatalogUtil(spark:SparkSession) extends Logging {
         Seq.empty
       }
     }
+  }
+
+  private def getTablePathFromProperties(properties: util.Map[String, String]):Option[String] = {
+    if(properties.containsKey(TableCatalog.PROP_LOCATION)){
+      Option(properties.get(TableCatalog.PROP_LOCATION))
+    }else if(properties.containsKey("path")){
+      Option(properties.get("path"))
+    }else{
+      None
+    }
+  }
+
+  def getCatalogForMetaStore(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String],catalogName:String):CatalogTable={
+
+    import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TransformHelper
+    var isExternal = false
+    var location = getTablePathFromProperties(properties)
+
+    var dbPath = getDBPath(ident.namespace.apply(0),catalogName)
+    val dbStringPath = if (dbPath.toString.endsWith("/")) {
+      dbPath.toString
+    } else {
+      dbPath.toString + "/"
+    }
+    location = location match {
+      case None =>
+        Some(dbStringPath + ident.name)
+      case _ =>
+        isExternal = true
+        location
+    }
+    isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
+    val locationUri = location.map(CatalogUtils.stringToURI)
+
+    val provider = getProvider(properties)
+
+    val (partitionColumns, maybeBucketSpec) =
+      if (provider.equalsIgnoreCase("iceberg")) {
+        val icebergSchema = SparkSchemaUtil.convert(schema)
+        val ps = Spark3Util.toPartitionSpec(icebergSchema, partitions)
+        (ps.fields().asScala.map(p => p.name()), None)
+      } else {
+        partitions.toSeq.convertTransforms
+      }
+
+    val tableProperties = properties.asScala
+
+    val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
+      .copy(locationUri = location.map(CatalogUtils.stringToURI))
+    isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
+    val tableType = if (isExternal) {
+      CatalogTableType.EXTERNAL
+    } else {
+      CatalogTableType.MANAGED
+    }
+
+    val tableDesc = CatalogTable(
+      identifier = ident.asTableIdentifier,
+      tableType = tableType,
+      storage = storage,
+      schema = schema,
+      provider = Some(provider),
+      partitionColumnNames = partitionColumns,
+      bucketSpec = maybeBucketSpec,
+      properties = tableProperties.toMap,
+      tracksPartitionsInCatalog = SQLConf.get.manageFilesourcePartitions,
+      comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
+
+    tableDesc
+
+  }
+
+  def getDBPath(db: String,catalogName:String): URI = {
+    val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
+    val catalogPath = new Path(warehousePath, catalogName + ".cat")
+    val dbPath = new Path(catalogPath, db + ".db")
+    dbPath.toUri
+  }
+
+  private def getProvider(properties: util.Map[String, String]): String = {
+    val hiveStoredAsKey = "hive.stored-as"
+    val provider = properties.asScala.get(TableCatalog.PROP_PROVIDER) match {
+      case Some(value) => value
+      case None =>
+        if (properties.containsKey(hiveStoredAsKey)) {
+          properties.asScala.get(hiveStoredAsKey).get
+        } else {
+          SQLConf.get.defaultDataSourceName
+        }
+    }
+    provider
+  }
+
+  private def toOptions(properties: Map[String, String]): Map[String, String] = {
+    properties.filterKeys(_.startsWith(TableCatalog.OPTION_PREFIX)).map {
+      case (key, value) => key.drop(TableCatalog.OPTION_PREFIX.length) -> value
+    }.toMap
   }
 
 }
