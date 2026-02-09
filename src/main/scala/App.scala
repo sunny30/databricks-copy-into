@@ -128,9 +128,29 @@ object App {
     val replaceData = data.toDF("id", "status", "start_date")
 
     replaceData1.write
-      .format("delta")
+      .format("iceberg")
+      .mode("error")
+      .saveAsTable("cat.deltadb1.itbl2")
+
+
+    replaceData1.write
+      .format("iceberg")
+      .mode("error")
+      .saveAsTable("cat.deltadb1.itbl2")
+
+    spark.sql("select * from cat.deltadb1.itbl2.history").show()
+
+    replaceData.write
+      .format("iceberg")
       .mode("overwrite")
-      .saveAsTable("cat.deltadb1.dtbl2")
+      .saveAsTable("cat.deltadb1.itbl2")
+
+    spark.sql("select * from cat.deltadb1.itbl2.history").show()
+
+//    replaceData1.write
+//      .format("delta")
+//      .mode("overwrite")
+//      .saveAsTable("cat.deltadb1.dtbl2")
     // 3. Perform the selective overwrite
 //    replaceData.write
 //      .format("delta")
@@ -138,49 +158,49 @@ object App {
 //      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
 //      .saveAsTable("cat.deltadb.tbl2")
 
-    replaceData.write
-      .format("delta")
-      .mode("overwrite")
-    //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
-      .saveAsTable("cat.deltadb1.dtbl2")
+//    replaceData.write
+//      .format("delta")
+//      .mode("overwrite")
+//    //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+//      .saveAsTable("cat.deltadb1.dtbl2")
 
-    replaceData.write
-      .format("delta")
-      .mode("error")
+//    replaceData.write
+//      .format("delta")
+//      .mode("error")
+//      //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+//      .saveAsTable("cat.deltadb1.dtbl2")
+
+  //  spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+
+//    replaceData.write
+//      .format("delta")
+//      .mode("overwrite")
+//      .partitionBy("status")
+
       //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
-      .saveAsTable("cat.deltadb1.dtbl2")
-
-    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
-
-    replaceData.write
-      .format("delta")
-      .mode("overwrite")
-      .partitionBy("status")
-
-      //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
-      .saveAsTable("cat.deltadb1.dtbl3")
+   //   .saveAsTable("cat.deltadb1.dtbl3")
 
 
-    val initialData = Seq(
-      (1, "Technology", 500, "2024-01-01"),
-      (2, "Furniture", 300, "2024-01-01"),
-      (3, "Office", 100, "2024-01-01")
-    ).toDF("id", "category", "amount", "date")
-
-    initialData.write.format("delta").mode("overwrite").saveAsTable("cat.deltadb1.dtbl4")
+  //  val initialData = Seq(
+//      (1, "Technology", 500, "2024-01-01"),
+//      (2, "Furniture", 300, "2024-01-01"),
+//      (3, "Office", 100, "2024-01-01")
+//    ).toDF("id", "category", "amount", "date")
+//
+//    initialData.write.format("delta").mode("overwrite").saveAsTable("cat.deltadb1.dtbl4")
 
     // 3. Generate replaceData (The "New" Record for Technology)
     // Note: We are doubling the amount for ID 1
-    val replaceData2 = Seq(
-      (1, "Technology", 1000, "2024-01-01")
-    ).toDF("id", "category", "amount", "date")
-
-    // 4. Perform Selective Overwrite
-    replaceData2.write
-      .format("delta")
-      .mode("overwrite")
-      .option("replaceWhere", "category = 'Technology'")
-      .saveAsTable("cat.deltadb1.dtbl4")
+//    val replaceData2 = Seq(
+//      (1, "Technology", 1000, "2024-01-01")
+//    ).toDF("id", "category", "amount", "date")
+//
+//    // 4. Perform Selective Overwrite
+//    replaceData2.write
+//      .format("delta")
+//      .mode("overwrite")
+//      .option("replaceWhere", "category = 'Technology'")
+//      .saveAsTable("cat.deltadb1.dtbl4")
 
 //    val initialData = Seq(
 //      (1, "Technology", 500, "2024-01-01"),
@@ -188,11 +208,11 @@ object App {
 //      (3, "Office", 100, "2024-01-01")
 //    ).toDF("id", "category", "amount", "date")
 
-    initialData.write.format("delta").mode("append").saveAsTable("cat.deltadb1.dtbl4")
+  //  initialData.write.format("delta").mode("append").saveAsTable("cat.deltadb1.dtbl4")
 
 
 
-    spark.read.table("cat.deltadb1.dtbl4").show()
+ //   spark.read.table("cat.deltadb1.dtbl4").show()
 
 
 
@@ -856,23 +876,23 @@ object App {
     //  cbpl
 
 
-    // spark.sql("create database lsdb2")
-    //spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
-    val df2 = Seq(
-      "John",
-      "Sunny",
-      "Xiaoyu",
-      "Shashi",
-      "Bharath",
-      "Vivek"
-    ).toDF("col1")
+//     spark.sql("create database lsdb2")
+//    spark.sql("set spark.sql.parquet.compression.codec=lz4raw")
+//    val df2 = Seq(
+//      "John",
+//      "Sunny",
+//      "Xiaoyu",
+//      "Shashi",
+//      "Bharath",
+//      "Vivek"
+//    ).toDF("col1")
 
 
-    val df1 = Seq(
-      (1, 2),
-      (2, 3),
-      (3, 4)
-    ).toDF("id", "id1")
+//    val df1 = Seq(
+//      (1, 2),
+//      (2, 3),
+//      (3, 4)
+//    ).toDF("id", "id1")
 
     //    spark.sql("create database cat.tdb3")
     //    df1.write.saveAsTable("cat.tdb3.tbl")

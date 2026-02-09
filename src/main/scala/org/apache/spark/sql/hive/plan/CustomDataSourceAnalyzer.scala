@@ -899,6 +899,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       catalog.asTableCatalog.loadTable(identifier) match {
         case v2Table: V2Table => v2Table.v1Table.provider.get
         case deltaTableV2: DeltaTableV2 => deltaTableV2.v1Table.provider.get
+        case sparkTable: SparkTable => "iceberg"
       }
     } else {
       val properties = convertTableProperties(tableSpec)
