@@ -108,6 +108,7 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
   }
 
   def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
+
     icebergCatalog.stageCreate(ident,schema,partitions,properties)
   }
 

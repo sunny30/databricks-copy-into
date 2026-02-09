@@ -63,14 +63,14 @@ object DeltaApp {
     replaceData1.write
       .format("delta")
       .mode("overwrite")
-      .saveAsTable("tbl4")
+      .saveAsTable("tbl5")
 
 
     replaceData.write
           .format("delta")
-          .mode("overwrite")
+          .mode("error")
          // .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
-          .saveAsTable("tbl4")
+          .saveAsTable("tbl5")
 
     // 3. Perform the selective overwrite
 //    replaceData.write
@@ -79,7 +79,7 @@ object DeltaApp {
 //      .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
 //      .saveAsTable("tbl2")
 
-    spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
+   // spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
 //    replaceData.write
 //      .option("overwriteSchema", "true")

@@ -144,6 +144,12 @@ object App {
     //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
       .saveAsTable("cat.deltadb1.dtbl2")
 
+    replaceData.write
+      .format("delta")
+      .mode("error")
+      //  .option("replaceWhere", "start_date >= '2025-01-01' AND start_date <= '2025-01-31'")
+      .saveAsTable("cat.deltadb1.dtbl2")
+
     spark.conf.set("spark.sql.sources.partitionOverwriteMode", "dynamic")
 
     replaceData.write
