@@ -594,7 +594,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends De
 
 
   def getExpectedLocationOfTable(ident:TableIdentifier,  properties: java.util.Map[String, String]):(String, Boolean)={
-    properties.asScala.get("path") match {
+    properties.asScala.get("location") match {
       case Some(res) => (res, true)
       case None =>
         val tablePath = (new Path(getDBPath(ident.database.getOrElse("default")).toString, ident.table)).toString
