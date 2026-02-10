@@ -105,19 +105,19 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
                     schema: StructType,
                     partitions: Array[Transform],
                     properties: util.Map[String, String]): StagedTable = {
-    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName)
+    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
     plugin.createTable(ct, true)
     icebergCatalog.stageReplace(ident, schema, partitions, properties)
   }
 
   def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
-    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName)
+    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
     plugin.createTable(ct, true)
     icebergCatalog.stageCreate(ident,schema,partitions,properties)
   }
 
   def stageCrateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
-    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName)
+    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
     plugin.createTable(ct, true)
     icebergCatalog.stageCreateOrReplace(ident,schema,partitions,properties)
   }

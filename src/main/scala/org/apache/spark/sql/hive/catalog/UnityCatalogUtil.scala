@@ -20,7 +20,7 @@ import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.Resolver
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, CatalogTableType, CatalogUtils, ExternalCatalogUtils}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, CatalogTableType, CatalogUtils, ExternalCatalog, ExternalCatalogUtils}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.command.PartitionStatistics
 import org.apache.spark.sql.execution.datasources.DataSource
@@ -230,71 +230,82 @@ class UnityCatalogUtil(spark:SparkSession) extends Logging {
     }
   }
 
-  def getCatalogForMetaStore(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String],catalogName:String):CatalogTable={
+  def getCatalogForMetaStore(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String],catalogName:String,externalCatalog:ExternalCatalog):CatalogTable={
+
 
     import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TransformHelper
-    var isExternal = false
-    var location = getTablePathFromProperties(properties)
+    val tid = ident.asTableIdentifier
+    if(externalCatalog.tableExists(tid.database.getOrElse("default"),tid.table)){
+      externalCatalog.getTable(tid.database.getOrElse("default"),tid.table)
+    }else {
+      var isExternal = false
+      var location = getTablePathFromProperties(properties)
 
-    var dbPath = getDBPath(ident.namespace.apply(0),catalogName)
-    val dbStringPath = if (dbPath.toString.endsWith("/")) {
-      dbPath.toString
-    } else {
-      dbPath.toString + "/"
-    }
-    location = location match {
-      case None =>
-        Some(dbStringPath + ident.name)
-      case _ =>
-        isExternal = true
-        location
-    }
-    isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
-    val locationUri = location.map(CatalogUtils.stringToURI)
-
-    val provider = getProvider(properties)
-
-    val (partitionColumns, maybeBucketSpec) =
-      if (provider.equalsIgnoreCase("iceberg")) {
-        val icebergSchema = SparkSchemaUtil.convert(schema)
-        val ps = Spark3Util.toPartitionSpec(icebergSchema, partitions)
-        (ps.fields().asScala.map(p => p.name()), None)
+      var dbPath = getDBPath(ident.namespace.apply(0), catalogName)
+      val dbStringPath = if (dbPath.toString.endsWith("/")) {
+        dbPath.toString
       } else {
-        partitions.toSeq.convertTransforms
+        dbPath.toString + "/"
+      }
+      location = location match {
+        case None =>
+          Some(dbStringPath + ident.name)
+        case _ =>
+          isExternal = true
+          location
+      }
+      isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
+      val locationUri = location.map(CatalogUtils.stringToURI)
+
+      val provider = getProvider(properties)
+
+      val (partitionColumns, maybeBucketSpec) =
+        if (provider.equalsIgnoreCase("iceberg")) {
+          val icebergSchema = SparkSchemaUtil.convert(schema)
+          val ps = Spark3Util.toPartitionSpec(icebergSchema, partitions)
+          (ps.fields().asScala.map(p => p.name()), None)
+        } else {
+          partitions.toSeq.convertTransforms
+        }
+
+      val tableProperties = properties.asScala
+
+      val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
+        .copy(locationUri = location.map(CatalogUtils.stringToURI))
+      isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
+      val tableType = if (isExternal) {
+        CatalogTableType.EXTERNAL
+      } else {
+        CatalogTableType.MANAGED
       }
 
-    val tableProperties = properties.asScala
+      val tableDesc = CatalogTable(
+        identifier = ident.asTableIdentifier,
+        tableType = tableType,
+        storage = storage,
+        schema = schema,
+        provider = Some(provider),
+        partitionColumnNames = partitionColumns,
+        bucketSpec = maybeBucketSpec,
+        properties = tableProperties.toMap,
+        tracksPartitionsInCatalog = SQLConf.get.manageFilesourcePartitions,
+        comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
 
-    val storage = DataSource.buildStorageFormatFromOptions(toOptions(tableProperties.toMap))
-      .copy(locationUri = location.map(CatalogUtils.stringToURI))
-    isExternal = isExternal || properties.containsKey(TableCatalog.PROP_EXTERNAL)
-    val tableType = if (isExternal) {
-      CatalogTableType.EXTERNAL
-    } else {
-      CatalogTableType.MANAGED
+
+      tableDesc
     }
-
-    val tableDesc = CatalogTable(
-      identifier = ident.asTableIdentifier,
-      tableType = tableType,
-      storage = storage,
-      schema = schema,
-      provider = Some(provider),
-      partitionColumnNames = partitionColumns,
-      bucketSpec = maybeBucketSpec,
-      properties = tableProperties.toMap,
-      tracksPartitionsInCatalog = SQLConf.get.manageFilesourcePartitions,
-      comment = Option(properties.get(TableCatalog.PROP_COMMENT)))
-
-    tableDesc
 
   }
 
-  def getDBPath(db: String,catalogName:String): URI = {
-    val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
-    val catalogPath = new Path(warehousePath, catalogName + ".cat")
-    val dbPath = new Path(catalogPath, db + ".db")
-    dbPath.toUri
+  def getDBPath(db: String,catalogName:String,externalCatalog:ExternalCatalog): URI = {
+    if(externalCatalog.databaseExists(db)){
+      externalCatalog.getDatabase(db).locationUri
+    }else {
+      val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
+      val catalogPath = new Path(warehousePath, catalogName + ".cat")
+      val dbPath = new Path(catalogPath, db + ".db")
+      dbPath.toUri
+    }
   }
 
   private def getProvider(properties: util.Map[String, String]): String = {
