@@ -299,7 +299,7 @@ public class UnityHadoopCatalog extends HadoopCatalog
     protected String defaultWarehouseLocation(TableIdentifier tableIdentifier) {
         org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog asTableCatalog = (org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog) SparkSession.getActiveSession().get().sessionState().catalogManager().catalog(this.catalogName);
         String location = asTableCatalog.getTableLocation(tableIdentifier.namespace().level(0), tableIdentifier.name());
-        if (location == null) {
+        if (location != null) {
             System.out.println("got the location in hadoop catalog from MS");
             return location;
         } else {

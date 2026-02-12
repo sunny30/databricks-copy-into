@@ -16,6 +16,7 @@ import org.apache.spark.sql.connector.iceberg.catalog.Procedure
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
+import org.apache.spark.sql.hive.catalog.UnityCatalogUtil
 
 import java.util
 import java.util.regex.Pattern
@@ -104,14 +105,20 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
                     schema: StructType,
                     partitions: Array[Transform],
                     properties: util.Map[String, String]): StagedTable = {
+    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
+    plugin.createTable(ct, true)
     icebergCatalog.stageReplace(ident, schema, partitions, properties)
   }
 
   def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
+    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
+    plugin.createTable(ct, true)
     icebergCatalog.stageCreate(ident,schema,partitions,properties)
   }
 
   def stageCrateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
+    val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
+    plugin.createTable(ct, true)
     icebergCatalog.stageCreateOrReplace(ident,schema,partitions,properties)
   }
 

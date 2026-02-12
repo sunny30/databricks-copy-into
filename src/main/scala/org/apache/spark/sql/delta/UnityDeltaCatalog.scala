@@ -25,16 +25,23 @@ import org.apache.spark.sql.execution.datasources.{DataSource, PartitioningUtils
 import org.apache.spark.sql.types.{StructField, StructType}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.TransformHelper
+import org.apache.spark.sql.connector.write.{LogicalWriteInfo, V1Write, WriteBuilder}
 
 import scala.collection.JavaConverters._
 import org.apache.spark.sql.delta.skipping.clustering.temp.{ClusterByTransform => TempClusterByTransform}
+import org.apache.spark.sql.sources.InsertableRelation
+import org.apache.spark.sql.connector.catalog.TableCapability._
 
+import java.net.URI
 import java.sql.Timestamp
 import java.util
+import java.util.Locale
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable
+import scala.collection.JavaConverters._
+import scala.collection.mutable
 
-class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
+class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends DeltaLogging {
 
 
   def createDeltaTable(
@@ -108,10 +115,11 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     if (tableType == CatalogTableType.EXTERNAL) {
       val tableLocation = tableDesc.storage.locationUri.get.toString
       import io.delta.tables._
-      val deltaTable = DeltaTable.forPath(tableLocation)
+
       val persistedTable = if (tableDesc.schema.nonEmpty) {
         tableDesc
       } else {
+        val deltaTable = DeltaTable.forPath(tableLocation)
         println(s"the schema of projected table: ${deltaTable.toDF.schema.prettyJson}")
         tableDesc.copy(schema = deltaTable.toDF.schema)
       }
@@ -155,7 +163,7 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
       loadTable(ident)
     }catch {
       case e:Exception =>
-        plugin.dropTable(ident.namespace().lastOption.getOrElse("default"), ident.name(), true, false)
+       // plugin.dropTable(ident.namespace().lastOption.getOrElse("default"), ident.name(), true, false)
         throw e
     }
 
@@ -534,6 +542,168 @@ class UnityDeltaCatalog(plugin: ExternalCatalog) extends DeltaLogging {
     }
 
     loadTable(ident)
+  }
+
+  def stageCreate(
+                   ident: Identifier,
+                   schema: StructType,
+                   partitions: Array[Transform],
+                   properties: java.util.Map[String, String]): StagedTable =
+    recordFrameProfile("DeltaCatalog", "stageCreate") {
+
+      new StagedDeltaTableV2(
+        ident,
+        schema,
+        partitions,
+        properties,
+        TableCreationModes.Create
+      )
+    }
+
+  def stageReplace(
+                    ident: Identifier,
+                    schema: StructType,
+                    partitions: Array[Transform],
+                    properties: java.util.Map[String, String]): StagedTable =
+    recordFrameProfile("DeltaCatalog", "stageReplace") {
+
+      new StagedDeltaTableV2(
+        ident,
+        schema,
+        partitions,
+        properties,
+        TableCreationModes.Replace
+      )
+    }
+
+  def stageCreateOrReplace(
+                            ident: Identifier,
+                            schema: StructType,
+                            partitions: Array[Transform],
+                            properties: java.util.Map[String, String]): StagedTable=
+    recordFrameProfile("DeltaCatalog", "stageCreateOrReplace"){
+
+    new StagedDeltaTableV2(
+      ident,
+      schema,
+      partitions,
+      properties,
+      TableCreationModes.CreateOrReplace
+    )
+  }
+
+
+  def getExpectedLocationOfTable(ident:TableIdentifier,  properties: java.util.Map[String, String]):(String, Boolean)={
+    properties.asScala.get("location") match {
+      case Some(res) => (res, true)
+      case None =>
+        val tablePath = (new Path(getDBPath(ident.database.getOrElse("default")).toString, ident.table)).toString
+        (tablePath, false)
+    }
+  }
+
+  def getDBPath(db: String): URI = {
+    val warehousePath = SparkSession.active.sharedState.conf.get("spark.sql.warehouse.dir")
+    val catalogPath = new Path(warehousePath, catalogName + ".cat")
+    val dbPath = new Path(catalogPath, db + ".db")
+    dbPath.toUri
+  }
+
+  private class StagedDeltaTableV2(
+                                    ident: Identifier,
+                                    override val schema: StructType,
+                                    val partitions: Array[Transform],
+                                    override val properties: java.util.Map[String, String],
+                                    operation: TableCreationModes.CreationMode
+                                  ) extends StagedTable with SupportsWrite {
+
+    private var asSelectQuery: Option[DataFrame] = None
+    private var writeOptions: Map[String, String] = Map.empty
+
+    override def partitioning(): Array[Transform] = partitions
+
+    override def commitStagedChanges(): Unit = recordFrameProfile(
+      "DeltaCatalog", "commitStagedChanges") {
+      val conf = SparkSession.active.sessionState.conf
+      val props = new java.util.HashMap[String, String]()
+      // Options passed in through the SQL API will show up both with an "option." prefix and
+      // without in Spark 3.1, so we need to remove those from the properties
+      val optionsThroughProperties = properties.asScala.collect {
+        case (k, _) if k.startsWith("option.") => k.stripPrefix("option.")
+      }.toSet
+      val sqlWriteOptions = new java.util.HashMap[String, String]()
+      properties.asScala.foreach { case (k, v) =>
+        if (!k.startsWith("option.") && !optionsThroughProperties.contains(k)) {
+          // Do not add to properties
+          props.put(k, v)
+        } else if (optionsThroughProperties.contains(k)) {
+          sqlWriteOptions.put(k, v)
+        }
+      }
+      if (writeOptions.isEmpty && !sqlWriteOptions.isEmpty) {
+        writeOptions = sqlWriteOptions.asScala.toMap
+      }
+      if (SparkSession.active.sessionState.conf.getConf(DeltaSQLConf.DELTA_LEGACY_STORE_WRITER_OPTIONS_AS_PROPS)) {
+        // Legacy behavior
+        writeOptions.foreach { case (k, v) => props.put(k, v) }
+      } else {
+        writeOptions.foreach { case (k, v) =>
+          // Continue putting in Delta prefixed options to avoid breaking workloads
+          if (k.toLowerCase(Locale.ROOT).startsWith("delta.")) {
+            props.put(k, v)
+          }
+        }
+      }
+      val id = {
+        TableIdentifier(ident.name(), ident.namespace().lastOption)
+      }
+      val oct = getExistingTableIfExists(id)
+      val (locString, isExternal) = oct match {
+        case Some(ct) =>  (ct.storage.locationUri.get.toString, ct.tableType == CatalogTableType.EXTERNAL)
+        case None => getExpectedLocationOfTable(id, properties)
+      }
+
+
+      createDeltaTable(
+        ident,
+        schema,
+        partitions,
+        props,
+        writeOptions,
+        asSelectQuery,
+        operation,
+        locString,
+        isExternal
+      )
+    }
+
+    override def name(): String = ident.name()
+
+    override def abortStagedChanges(): Unit = {}
+
+    override def capabilities(): java.util.Set[TableCapability] = {
+      Set(V1_BATCH_WRITE).asJava
+    }
+
+    override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = {
+      writeOptions = info.options.asCaseSensitiveMap().asScala.toMap
+      new DeltaV1WriteBuilder
+    }
+
+    /*
+     * WriteBuilder for creating a Delta table.
+     */
+    private class DeltaV1WriteBuilder extends WriteBuilder {
+      override def build(): V1Write = new V1Write {
+        override def toInsertableRelation(): InsertableRelation = {
+          new InsertableRelation {
+            override def insert(data: DataFrame, overwrite: Boolean): Unit = {
+              asSelectQuery = Option(data)
+            }
+          }
+        }
+      }
+    }
   }
 
 }

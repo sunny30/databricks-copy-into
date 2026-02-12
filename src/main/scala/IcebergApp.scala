@@ -21,10 +21,37 @@ object IcebergApp {
                 |USING iceberg partitioned by(age, range)""".stripMargin)
 
     //org.apache.iceberg.spark.source.IcebergSource
+    import spark.implicits._
     spark.sql("alter table local.db.logs add partition field bucket(2,age) as new_p")
     spark.sql("insert into local.db.logs values('a', 'b',1,2), ('a', 'b',2,2)")
 
     spark.sql("alter table local.db.logs add partition field bucket(2,level) as new_p1")
+
+      val initialData = Seq(
+          (1, "Technology", 500, "2024-01-01"),
+          (2, "Furniture", 300, "2024-01-01"),
+          (3, "Office", 100, "2024-01-01")
+        ).toDF("id", "category", "amount", "date")
+
+        initialData.write.format("iceberg").mode("overwrite").saveAsTable("local.db.logs1")
+
+
+
+        val replaceData2 = Seq(
+          (1, "Technology", 1000, "2024-01-01")
+        ).toDF("id", "category", "amount", "date")
+
+        // 4. Perform Selective Overwrite
+        replaceData2.write
+          .format("iceberg")
+          .mode("overwrite")
+          .option("replaceWhere", "category = 'Technology'")
+          .saveAsTable("local.db.logs1")
+
+
+    spark.read.table("local.db.logs1").show()
+    spark.sql("select * from local.db.logs1.history").show()
+
 
    // spark.sql("describe formatted local.db.logs").show()
 
@@ -32,17 +59,17 @@ object IcebergApp {
 
   //  df.show()
 
-    spark.sql("select * from local.db.logs").show()
-    spark.sql("CALL local.system.create_changelog_view(table => 'db.logs',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
-
-    spark.sql(
-      """CREATE TABLE local.db.logs1 (
-        |    uuid string NOT NULL,
-        |    level string NOT NULL,
-        |    age int,
-        |    range int)
-        |USING iceberg partitioned by (bucket(16,level))""".stripMargin)
-    spark.sql("insert into local.db.logs1 values('a', 'b',1,2), ('a1', 'b1',2,2)")
+//    spark.sql("select * from local.db.logs").show()
+//    spark.sql("CALL local.system.create_changelog_view(table => 'db.logs',options => map('start-snapshot-id','1','end-snapshot-id', '2'))")
+//
+//    spark.sql(
+//      """CREATE TABLE local.db.logs1 (
+//        |    uuid string NOT NULL,
+//        |    level string NOT NULL,
+//        |    age int,
+//        |    range int)
+//        |USING iceberg partitioned by (bucket(16,level))""".stripMargin)
+//    spark.sql("insert into local.db.logs1 values('a', 'b',1,2), ('a1', 'b1',2,2)")
 
   //  spark.read.table("local.db.logs").show()
 
