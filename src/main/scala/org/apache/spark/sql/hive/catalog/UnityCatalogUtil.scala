@@ -241,7 +241,7 @@ class UnityCatalogUtil(spark:SparkSession) extends Logging {
       var isExternal = false
       var location = getTablePathFromProperties(properties)
 
-      var dbPath = getDBPath(ident.namespace.apply(0), catalogName)
+      var dbPath = getDBPath(ident.namespace.apply(0), catalogName,externalCatalog)
       val dbStringPath = if (dbPath.toString.endsWith("/")) {
         dbPath.toString
       } else {
