@@ -573,6 +573,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case d: DataSourceV2Relation =>
         println("this is DataSourceV2" + d.toString())
         if (d.table.isInstanceOf[DeltaTableV2]) {
+          println("Inside DataSourceV2 for DeltaTable")
           DeltaRelation.fromV2Relation(d.table.asInstanceOf[DeltaTableV2], d, d.options)
 
         } else {
@@ -624,6 +625,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           println("got you")
         }
         p match {
+
+          case deltaRelation: LogicalRelation =>
+            println("Inside Logical Relation " + p.toString())
+            deltaRelation
+
+
 
           case d: DeserializeToObject =>
             if (!d.resolved) {
