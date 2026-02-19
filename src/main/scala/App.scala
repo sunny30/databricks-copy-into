@@ -102,6 +102,8 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
     spark.sql("""create database if not exists cat.deltadb1""")
+
+    DeltaTable.forName(spark,"").toDF
 //    df5.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
 //
 //    df4.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
@@ -127,20 +129,20 @@ object App {
     val replaceData1 = data1.toDF("id", "status", "start_date")
     val replaceData = data.toDF("id", "status", "start_date")
 
-    replaceData.writeTo("cat.deltadb1.dtbl1")
-      .using("delta")
-      .tableProperty("path", "/tmp/delta")
-      .create()
-
-
-    replaceData1.write
-      .format("delta")
-      .mode("overwrite")
-      .saveAsTable("cat.deltadb1.dtbl1")
-
-    spark.sql("select * from cat.deltadb1.dtbl1").show()
-
-    spark.sql("describe history cat.deltadb1.dtbl1").show()
+//    replaceData.writeTo("cat.deltadb1.dtbl1")
+//      .using("delta")
+//      .tableProperty("path", "/tmp/delta")
+//      .create()
+//
+//
+//    replaceData1.write
+//      .format("delta")
+//      .mode("overwrite")
+//      .saveAsTable("cat.deltadb1.dtbl1")
+//
+//    spark.sql("select * from cat.deltadb1.dtbl1").show()
+//
+//    spark.sql("describe history cat.deltadb1.dtbl1").show()
 
     replaceData1.writeTo("cat.deltadb1.itbl1")
       .using("iceberg")
@@ -173,6 +175,11 @@ object App {
       .mode("overwrite")
       .saveAsTable("cat.deltadb1.itbl3")
 
+    replaceData.write
+      .format("iceberg")
+      .mode("overwrite")
+      .saveAsTable("cat.deltadb1.itbl3")
+
 
 //    replaceData1.write
 //      .format("iceberg")
@@ -182,12 +189,12 @@ object App {
     spark.sql("select * from cat.deltadb1.itbl3.history").show()
 
     spark.sql("select * from cat.deltadb1.itbl3").show()
-    replaceData.write
-      .format("iceberg")
-      .mode("overwrite")
-      .saveAsTable("cat.deltadb1.itbl2")
+//    replaceData.write
+//      .format("iceberg")
+//      .mode("overwrite")
+//      .saveAsTable("cat.deltadb1.itbl2")
 
-    spark.sql("select * from cat.deltadb1.itbl2.history").show()
+   // spark.sql("select * from cat.deltadb1.itbl2.history").show()
 
 //    replaceData1.write
 //      .format("delta")
