@@ -101,11 +101,13 @@ object App {
       (11, "Yes"),
       (12, "papa")
     ).toDF("id", "name")
-    spark.sql("""create database if not exists cat.idb3""")
+    spark.sql("""create database if not exists cat.idb4""")
 
-    spark.sql("create table cat.idb3.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
+    spark.sql("create table cat.idb4.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 
-    spark.sql("describe formatted cat.idb3.itbl").show()
+   spark.read.table(" cat.idb4.ptbl").show()
+
+    spark.sql("select * from cat.idb4.ptbl").show()
 
 
     // DeltaTable.forName(spark,"").toDF

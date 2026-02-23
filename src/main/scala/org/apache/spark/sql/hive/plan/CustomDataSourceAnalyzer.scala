@@ -33,7 +33,7 @@ import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
 import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
-import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
@@ -579,11 +579,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         } else {
           if (d.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
             d.setTagValue(TreeNodeTag[String]("centrify-resolver"), "resolved")
-            apply(d)
+            if(!d.table.isInstanceOf[V2CustomTable]) {
+              apply(d)
+            }else{
+              d
+            }
           }else{
-            d
+            getSecureDataSource(d)
           }
-          getSecureDataSource(d)
+
 
         }
 
@@ -731,6 +735,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
           case _ =>
+          //  p
             val pl = ResolveReferences(p)
             pl.resolved
             //  pl.setAnalyzed()
@@ -978,7 +983,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     plan match {
       case ds@DataSourceV2Relation(table, output, catalog, identifier, options) => getSecurePlanFromDataSourceV2(ds,table)
       case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr,catalogTable.get)
-      case _ => _
+      case _ => plan
 
     }
   }
@@ -1000,6 +1005,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
   def getCatalogTableDetails(table:Table):(String,String,String)={
     val ct = table match {
+      case v2CustomTable: V2CustomTable =>
+        v2CustomTable.catalogTable
+
       case v2Table: V2Table =>  v2Table.v1Table
        // (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
       case deltaTableV2: DeltaTableV2 if deltaTableV2.catalogTable.isDefined => deltaTableV2.catalogTable.get
@@ -1011,6 +1019,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
        }else{
          null //bad code needs to be fixed.
        }
+      case _ =>
+        val multiPartName = table.name().split("\\.").toArray
+        if (multiPartName.length == 3) {
+          val plugin = SparkSession.active.sessionState.catalogManager.catalog(multiPartName(0))
+          plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(multiPartName(1), multiPartName(2))
+        } else {
+          null //bad code needs to be fixed.
+        }
 
 
     }
@@ -1027,9 +1043,17 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     ct
   }
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan:LogicalPlan):LogicalPlan={
-    val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
-    val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
-    Project(secureAttributes,leafPlan)
+
+    if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
+      val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
+      val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
+      leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
+      val analyzed = session.sessionState.analyzer.execute(Project(secureAttributes, leafPlan))
+      //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
+      analyzed
+    }else{
+      leafPlan
+    }
   }
 
 
