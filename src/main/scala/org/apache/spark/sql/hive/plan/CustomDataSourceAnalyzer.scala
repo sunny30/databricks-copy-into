@@ -17,7 +17,7 @@ import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.{convertTableProperties, withDefaultOwnership}
-import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, TableCatalog}
+import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, Table, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
@@ -626,9 +626,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
         p match {
 
-          case deltaRelation: LogicalRelation =>
+          case lr:@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + p.toString())
-            deltaRelation
+            lr
 
 
 
@@ -971,6 +971,40 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val properties = convertTableProperties(tableSpec)
       properties
     }
+  }
+
+//  def getSecureDataSource(plan:LogicalPlan):LogicalPlan ={
+//    plan match {
+//      case DataSourceV2Relation(table, output, catalog, identifier, options) =>
+//      case LogicalRelation(relation, output, catalogTable, isStreaming) =>
+//
+//    }
+//  }
+
+
+  def getCatalogTableDetails(table:Table):(String,String,String)={
+    val ct = table match {
+      case v2Table: V2Table =>  v2Table.v1Table
+       // (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
+      case deltaTableV2: DeltaTableV2 if deltaTableV2.catalogTable.isDefined => deltaTableV2.catalogTable.get
+     // case sparkTable: SparkTable => sparkTable.name()
+    }
+
+    (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
+
+  }
+
+
+
+  def getSecureTableFrom(catalogName:String, db:String,table:String):CatalogTable={
+    val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+    val ct = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(db, table)
+    ct
+  }
+  def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan:LogicalPlan):LogicalPlan={
+    val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
+    val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
+    Project(secureAttributes,leafPlan)
   }
 
 

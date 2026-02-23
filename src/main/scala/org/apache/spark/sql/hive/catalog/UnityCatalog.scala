@@ -23,6 +23,7 @@ import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.sources.DeltaSourceUtils
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
+import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
@@ -44,7 +45,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   var options: CaseInsensitiveStringMap = null
 
-  lazy val externalCatalog: ExternalCatalog = if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")) {
+  lazy val externalCatalog: ExternalSecureCatalog = if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")) {
     new FSMetaStoreCatalog(
       catalogName,
       sparkConf = SparkSession.active.sharedState.conf,
@@ -468,6 +469,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         }
       }
     }
+  }
+
+  override def loadSecureTable(db: String, table: String): CatalogTable = {
+    externalCatalog.getSecureTable(db, table)
   }
 
   override def loadTable(ident: Identifier, timestamp: Long): Table = {

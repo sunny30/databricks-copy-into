@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.escapePathName
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog.{STATISTICS_COL_STATS_PREFIX, STATISTICS_NUM_ROWS, STATISTICS_PREFIX, STATISTICS_TOTAL_SIZE}
 import org.apache.spark.sql.hive.HiveUtils
+import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
 import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
@@ -46,7 +47,7 @@ class HMSCatalog(
                   sparkConf: SparkConf,
                   hadoopConfig: Configuration = new Configuration,
                   sparkSession: SparkSession = SparkSession.active
-                ) extends ExternalCatalog {
+                ) extends ExternalSecureCatalog {
 
   lazy val msClient = getMSC(client)
 
@@ -427,6 +428,16 @@ class HMSCatalog(
       convertHiveTableToCatalogTable(new org.apache.hadoop.hive.ql.metadata.Table(ht))
     }catch {
       case ex:NoSuchObjectException => null
+      case e: Exception => throw e
+    }
+  }
+
+  override def getSecureTable(db: String, table: String): CatalogTable = {
+    try {
+      val ht = msClient.getTable(catalogName, db, table)
+      convertHiveTableToCatalogTable(new org.apache.hadoop.hive.ql.metadata.Table(ht))
+    } catch {
+      case ex: NoSuchObjectException => null
       case e: Exception => throw e
     }
   }
