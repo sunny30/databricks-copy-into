@@ -626,7 +626,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
         p match {
 
-          case lr:@LogicalRelation(relation, output, catalogTable, isStreaming) =>
+          case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + p.toString())
             lr
 
@@ -973,13 +973,28 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
-//  def getSecureDataSource(plan:LogicalPlan):LogicalPlan ={
-//    plan match {
-//      case DataSourceV2Relation(table, output, catalog, identifier, options) =>
-//      case LogicalRelation(relation, output, catalogTable, isStreaming) =>
-//
-//    }
-//  }
+  def getSecureDataSource(plan:LogicalPlan):LogicalPlan ={
+    plan match {
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) => getSecurePlanFromDataSourceV2(ds,table)
+      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr,catalogTable.get)
+      case _ => _
+
+    }
+  }
+  //covers Iceberg and V2Table
+  def getSecurePlanFromDataSourceV2(ds:DataSourceV2Relation, table:Table):LogicalPlan={
+    val ( catalogName, dbName, tableName) = getCatalogTableDetails(table)
+    val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+    getSecureLeafPlan(secureTable,ds)
+  }
+
+  def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
+    val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"),table.identifier.database.getOrElse("default"), table.identifier.table)
+    val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+    getSecureLeafPlan(secureTable, ds)
+  }
+
+
 
 
   def getCatalogTableDetails(table:Table):(String,String,String)={
@@ -987,7 +1002,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case v2Table: V2Table =>  v2Table.v1Table
        // (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
       case deltaTableV2: DeltaTableV2 if deltaTableV2.catalogTable.isDefined => deltaTableV2.catalogTable.get
-     // case sparkTable: SparkTable => sparkTable.name()
+     case sparkTable: SparkTable =>
+       val multiPartName = sparkTable.name().split("\\.").toArray
+       if(multiPartName.length==3){
+         val plugin = SparkSession.active.sessionState.catalogManager.catalog(multiPartName(0))
+         plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(multiPartName(1), multiPartName(2))
+       }else{
+         null //bad code needs to be fixed.
+       }
+
+
     }
 
     (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)

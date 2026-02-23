@@ -101,9 +101,14 @@ object App {
       (11, "Yes"),
       (12, "papa")
     ).toDF("id", "name")
-    spark.sql("""create database if not exists cat.deltadb2""")
+    spark.sql("""create database if not exists cat.idb3""")
 
-   // DeltaTable.forName(spark,"").toDF
+    spark.sql("create table cat.idb3.itbl(id int, age int) using iceberg  PARTITIONED BY (age)")
+
+    spark.sql("describe formatted cat.idb3.itbl").show()
+
+
+    // DeltaTable.forName(spark,"").toDF
 //    df5.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
 //
 //    df4.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
@@ -126,15 +131,15 @@ object App {
     )
 
     // 2. Convert to DataFrame and name the columns
-    val replaceData1 = data1.toDF("id", "status", "start_date")
-    val replaceData = data.toDF("id", "status", "start_date")
-
-    replaceData.writeTo("cat.deltadb2.dtbl1")
-      .using("delta")
-      .tableProperty("path", "/tmp/delta1")
-      .create()
-
-    spark.sql("select * from cat.deltadb2.dtbl1 where id = 101").show()
+//    val replaceData1 = data1.toDF("id", "status", "start_date")
+//    val replaceData = data.toDF("id", "status", "start_date")
+//
+//    replaceData.writeTo("cat.deltadb2.dtbl1")
+//      .using("delta")
+//      .tableProperty("path", "/tmp/delta1")
+//      .create()
+//
+//    spark.sql("select * from cat.deltadb2.dtbl1 where id = 101").show()
 //
 //
 //    replaceData1.write
