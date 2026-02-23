@@ -248,7 +248,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 || provider.equalsIgnoreCase("arrow")) {
                 val ds = DataSourceV2Relation.create(table = v2Table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)), options = v2Table.getTableCaseInsensitiveStringMap)
                // ListenerUtil.copyPlanTagsIfExists(dd, ds)
-                ds
+                getSecureDataSource(ds)
               } else {
                 val dataSource = DataSource(
                   session,
@@ -344,7 +344,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        resolvedLeafPlan
         val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
         ListenerUtil.copyPlanTagsIfExists(dd, ds)
-        ds.copy(output = dd.output)
+        getSecureDataSource(ds.copy(output = dd.output))
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {
@@ -583,6 +583,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           }else{
             d
           }
+          getSecureDataSource(d)
 
         }
 
@@ -628,7 +629,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + p.toString())
-            lr
+            getSecureDataSource(lr)
 
 
 
