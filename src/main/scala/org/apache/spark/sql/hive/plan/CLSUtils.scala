@@ -2,7 +2,9 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.{Table, TableSchemaChangeCatalog}
@@ -10,6 +12,8 @@ import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
+
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 
 object CLSUtils {
 
@@ -88,5 +92,41 @@ object CLSUtils {
       leafPlan
     }
   }
+
+  def getSecureColumns(multipartIdentifier: Seq[String]):Option[Seq[String]]={
+
+    val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    val res = if (multipartIdentifier.size == 3) {
+      (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
+    } else if (multipartIdentifier.size == 2) {
+      (catalogName, multipartIdentifier(0), multipartIdentifier(1))
+    } else {
+      (catalogName, "default", multipartIdentifier(0))
+    }
+    try {
+      val ct = getSecureTableFrom(res._1, res._2, res._3)
+      Some(ct.schema.fields.map(f => f.name).toSeq)
+    }catch {
+      case e:Exception => None
+    }
+  }
+
+  def getProjectedTable(plan:LogicalPlan,ctx: TableNameContext):LogicalPlan={
+    if(ctx.identifierReference()!=null){
+      val multiParts = ctx.identifierReference().multipartIdentifier().parts.map(x=> x.identifier().toString()).toSeq
+      val secureColumns = getSecureColumns(multiParts)
+      secureColumns match {
+        case Some(cols) =>
+          val secureAttributes = cols.map(name => UnresolvedAttribute.apply(name))
+          Project(secureAttributes, plan)
+        case _ => plan
+      }
+    }else{
+      plan
+    }
+
+  }
+
+
 
 }

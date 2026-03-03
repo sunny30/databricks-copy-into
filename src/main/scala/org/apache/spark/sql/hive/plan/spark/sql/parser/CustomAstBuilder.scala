@@ -11,6 +11,7 @@ import org.apache.spark.sql.errors.QueryParsingErrors
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, ShowCatalogViews}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogAlterViewQueryCommand, NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
 import org.apache.spark.sql.hive.plan.spark.sql.stat.{CustomAnalyzeColumn, CustomAnalyzeTable}
@@ -387,7 +388,8 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
   }
 
   override def visitTableName(ctx: SqlBaseParser.TableNameContext): LogicalPlan = {
-    super.visitTableName(ctx)
+    val tablePlan = super.visitTableName(ctx)
+    CLSUtils.getProjectedTable(tablePlan,ctx)
   }
 
 
