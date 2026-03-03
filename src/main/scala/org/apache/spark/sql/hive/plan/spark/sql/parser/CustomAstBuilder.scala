@@ -377,4 +377,18 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
 //      case child: LogicalPlan => checkInvalidParameter(child, statement)
 //    }
 //  }
+
+  override def visitRegularQuerySpecification(ctx: SqlBaseParser.RegularQuerySpecificationContext): LogicalPlan = withOrigin(ctx) {
+    super.visitRegularQuerySpecification(ctx)
+  }
+
+  override def visitFromClause(ctx: SqlBaseParser.FromClauseContext): LogicalPlan = {
+    super.visitFromClause(ctx)
+  }
+
+  override def visitTableName(ctx: SqlBaseParser.TableNameContext): LogicalPlan = {
+    super.visitTableName(ctx)
+  }
+
+
 }

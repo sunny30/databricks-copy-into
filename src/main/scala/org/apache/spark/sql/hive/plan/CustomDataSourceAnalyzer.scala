@@ -248,7 +248,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 || provider.equalsIgnoreCase("arrow")) {
                 val ds = DataSourceV2Relation.create(table = v2Table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)), options = v2Table.getTableCaseInsensitiveStringMap)
                // ListenerUtil.copyPlanTagsIfExists(dd, ds)
-                getSecureDataSource(ds)
+                CLSUtils.getSecureDataSource(ds)
               } else {
                 val dataSource = DataSource(
                   session,
@@ -344,7 +344,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        resolvedLeafPlan
         val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
         ListenerUtil.copyPlanTagsIfExists(dd, ds)
-        getSecureDataSource(ds.copy(output = dd.output))
+        CLSUtils.getSecureDataSource(ds.copy(output = dd.output))
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {
@@ -585,7 +585,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               d
             }
           }else{
-            getSecureDataSource(d)
+            CLSUtils.getSecureDataSource(d)
           }
 
 
@@ -633,7 +633,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + p.toString())
-            getSecureDataSource(lr)
+            CLSUtils.getSecureDataSource(lr)
 
 
 
@@ -979,82 +979,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
-  def getSecureDataSource(plan:LogicalPlan):LogicalPlan ={
-    plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) => getSecurePlanFromDataSourceV2(ds,table)
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr,catalogTable.get)
-      case _ => plan
 
-    }
-  }
-  //covers Iceberg and V2Table
-  def getSecurePlanFromDataSourceV2(ds:DataSourceV2Relation, table:Table):LogicalPlan={
-    val ( catalogName, dbName, tableName) = getCatalogTableDetails(table)
-    val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    getSecureLeafPlan(secureTable,ds)
-  }
-
-  def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
-    val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"),table.identifier.database.getOrElse("default"), table.identifier.table)
-    val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    getSecureLeafPlan(secureTable, ds)
-  }
-
-
-
-
-  def getCatalogTableDetails(table:Table):(String,String,String)={
-    val ct = table match {
-      case v2CustomTable: V2CustomTable =>
-        v2CustomTable.catalogTable
-
-      case v2Table: V2Table =>  v2Table.v1Table
-       // (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
-      case deltaTableV2: DeltaTableV2 if deltaTableV2.catalogTable.isDefined => deltaTableV2.catalogTable.get
-     case sparkTable: SparkTable =>
-       val multiPartName = sparkTable.name().split("\\.").toArray
-       if(multiPartName.length==3){
-         val plugin = SparkSession.active.sessionState.catalogManager.catalog(multiPartName(0))
-         plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(multiPartName(1), multiPartName(2))
-       }else{
-         null //bad code needs to be fixed.
-       }
-      case _ =>
-        val multiPartName = table.name().split("\\.").toArray
-        if (multiPartName.length == 3) {
-          val plugin = SparkSession.active.sessionState.catalogManager.catalog(multiPartName(0))
-          plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(multiPartName(1), multiPartName(2))
-        } else {
-          null //bad code needs to be fixed.
-        }
-
-
-    }
-
-    (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
-
-  }
-
-
-
-  def getSecureTableFrom(catalogName:String, db:String,table:String):CatalogTable={
-    val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
-    val ct = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(db, table)
-    ct
-  }
-  def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan:LogicalPlan):LogicalPlan={
-
-    if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
-      val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
-      val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
-      leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
-      val analyzed = session.sessionState.analyzer.execute(Project(secureAttributes, leafPlan))
-      //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
-      analyzed
-    }else{
-      leafPlan
-    }
-  }
 
 
 
