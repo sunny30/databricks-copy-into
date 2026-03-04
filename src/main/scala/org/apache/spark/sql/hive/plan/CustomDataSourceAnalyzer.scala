@@ -185,9 +185,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
     val projectList = getViewColumns(table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
-    val child = Project(projectList, parsedPlan)
+    val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
+    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
+    val details = CLSUtils.getCatalogTableDetails(table)
+    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
+    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
 
-    val newChild = session.sessionState.analyzer.executeAndCheck(child, new QueryPlanningTracker())
+
+    val newChild = session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
     //val resolvedPlan = session.sharedState.sparkContext.
     View(desc = table.v1Table, isTempView = false, child = newChild)
   }
