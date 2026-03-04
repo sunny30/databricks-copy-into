@@ -14,6 +14,7 @@ import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
+import scala.jdk.CollectionConverters.asScalaBufferConverter
 
 object CLSUtils {
 
@@ -113,7 +114,7 @@ object CLSUtils {
 
   def getProjectedTable(plan:LogicalPlan,ctx: TableNameContext):LogicalPlan={
     if(ctx.identifierReference()!=null){
-      val multiParts = ctx.identifierReference().multipartIdentifier().parts.map(x=> x.identifier().toString()).toSeq
+      val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
       secureColumns match {
         case Some(cols) =>
