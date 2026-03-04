@@ -3,7 +3,7 @@ package org.apache.spark.sql.hive.plan
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
@@ -82,15 +82,40 @@ object CLSUtils {
 
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
+    val tagKey = if(catalogTable.tableType == CatalogTableType.VIEW){
+      "col-view-sec"
+    }else{
+      "col-table-sec"
+    }
+
     if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
       val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
       val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
       leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
-      val analyzed = SparkSession.active.sessionState.analyzer.execute(Project(secureAttributes, leafPlan))
+      val prj = Project(secureAttributes, leafPlan)
+      prj.setTagValue(TreeNodeTag[String](tagKey), "true")
+      val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
       analyzed
     } else {
       leafPlan
+    }
+  }
+
+  def getSecureTableFromMultiPart(multipartIdentifier: Seq[String]): Option[CatalogTable] ={
+    val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    val res = if (multipartIdentifier.size == 3) {
+      (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
+    } else if (multipartIdentifier.size == 2) {
+      (catalogName, multipartIdentifier(0), multipartIdentifier(1))
+    } else {
+      (catalogName, "default", multipartIdentifier(0))
+    }
+    try {
+      val ct = getSecureTableFrom(res._1, res._2, res._3)
+      Some(ct)
+    } catch {
+      case e: Exception => None
     }
   }
 
@@ -116,16 +141,40 @@ object CLSUtils {
     if(ctx.identifierReference()!=null){
       val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
+      val ct = getSecureTableFromMultiPart(multiParts)
+      val tag_key = ct match {
+        case Some(table) => if (table.tableType == CatalogTableType.VIEW){
+          "col-view-sec"
+        }else{
+          "col-table-sec"
+        }
+        case None => ""
+      }
       secureColumns match {
         case Some(cols) =>
           val secureAttributes = cols.map(name => UnresolvedAttribute.apply(name))
-          Project(secureAttributes, plan)
+          val prj = Project(secureAttributes, plan)
+          if(tag_key.nonEmpty)
+            prj.setTagValue(TreeNodeTag[String](tag_key), "true")
+          prj
         case _ => plan
       }
     }else{
       plan
     }
 
+  }
+
+  def isSecureTableProjection(plan:LogicalPlan):Boolean ={
+    plan.getTagValue(TreeNodeTag[String]("col-table-sec")).isDefined
+  }
+
+  def removeSecureProjection(plan:LogicalPlan):LogicalPlan ={
+    plan.transformUp{
+      case project: Project if isSecureTableProjection(project)=>
+        project.child
+      case plan: LogicalPlan => plan
+    }
   }
 
 
