@@ -94,6 +94,9 @@ object CLSUtils {
       leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
       val prj = Project(secureAttributes, leafPlan)
       prj.setTagValue(TreeNodeTag[String](tagKey), "true")
+      if(tagKey.equalsIgnoreCase("col-view-sec")){
+        return leafPlan
+      }
       val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
       analyzed
@@ -113,6 +116,8 @@ object CLSUtils {
     }
     try {
       val ct = getSecureTableFrom(res._1, res._2, res._3)
+      if(ct == null)
+        return None
       Some(ct)
     } catch {
       case e: Exception => None
@@ -137,8 +142,12 @@ object CLSUtils {
     }
   }
 
+  def isPlanAlreadyHaveSecureProjection(plan:LogicalPlan):Boolean = {
+    plan.find(pl => isSecureTableProjection(pl)).isDefined
+  }
+
   def getProjectedTable(plan:LogicalPlan,ctx: TableNameContext):LogicalPlan={
-    if(ctx.identifierReference()!=null){
+    if(ctx.identifierReference()!=null && !isPlanAlreadyHaveSecureProjection(plan)){
       val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
       val ct = getSecureTableFromMultiPart(multiParts)
@@ -172,7 +181,7 @@ object CLSUtils {
   def removeSecureProjection(plan:LogicalPlan):LogicalPlan ={
     plan.transformUp{
       case project: Project if isSecureTableProjection(project)=>
-        project.child
+       removeSecureProjection(project.child)
       case plan: LogicalPlan => plan
     }
   }

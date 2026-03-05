@@ -114,8 +114,14 @@ object App {
     spark.sql("create table cat.idb4.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
     spark.sql("insert into cat.idb4.ptbl values (1,30), (2,30), (3,31), (4,31)")
 
-    spark.read.table(" cat.idb4.ptbl").show()
+  //  spark.read.table(" cat.idb4.ptbl").show()
     spark.sql("select * from cat.idb4.ptbl").show()
+
+    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
+    spark.sql("select * from cat.idb4.v1").show()
+
+
+
 
 
     // DeltaTable.forName(spark,"").toDF

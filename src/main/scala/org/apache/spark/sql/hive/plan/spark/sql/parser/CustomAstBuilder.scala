@@ -61,7 +61,7 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     } else {
       LocalTempView
     }
-    val qPlan: LogicalPlan = plan(ctx.query)
+    val qPlan: LogicalPlan = CLSUtils.removeSecureProjection(super.plan(ctx.query))
 
     // Disallow parameter markers in the body of the view.
     // We need this limitation because we store the original query text, pre substitution.

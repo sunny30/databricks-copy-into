@@ -13,6 +13,7 @@ import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.command.ViewHelper.generateViewProperties
 import org.apache.spark.sql.execution.command.{CreateViewCommand, LeafRunnableCommand, RunnableCommand}
 import org.apache.spark.sql.hive.catalog.{FSMetaStoreCatalog, HMSCatalog}
+import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.types.MetadataBuilder
 
 case class NonDefaultCatalogCreateViewCommand(
@@ -27,7 +28,7 @@ case class NonDefaultCatalogCreateViewCommand(
                               viewType: ViewType,
                               isAnalyzed: Boolean = false,
                               referredTempFunctions: Seq[String] = Seq.empty)
-  extends RunnableCommand with AnalysisOnlyCommand {
+  extends RunnableCommand /*with AnalysisOnlyCommand*/ {
 
 
   override protected def withNewChildrenInternal(
@@ -37,7 +38,7 @@ case class NonDefaultCatalogCreateViewCommand(
   }
 
   // `plan` needs to be analyzed, but shouldn't be optimized so that caching works correctly.
-  override def childrenToAnalyze: Seq[LogicalPlan] = plan :: Nil
+  //override def childrenToAnalyze: Seq[LogicalPlan] = plan :: Nil
 
   def markAsAnalyzed(analysisContext: AnalysisContext): LogicalPlan = {
     copy(
@@ -68,13 +69,15 @@ case class NonDefaultCatalogCreateViewCommand(
         hadoopConfig = SparkSession.active.sharedState.hadoopConf
       )
     }
+    val analyzedPlan = SparkSession.active.sessionState.analyzer.execute(plan)
+    val viewPlan = CLSUtils.removeSecureProjection(analyzedPlan)
     if(!exists){
-      externalCatalog.createTable(prepareTable(sparkSession, plan),false)
+      externalCatalog.createTable(prepareTable(sparkSession, viewPlan),false)
     }
 
     if(replace){
       externalCatalog.dropTable(dbName, tableName,true, false)
-      externalCatalog.createTable(prepareTable(sparkSession, plan),false)
+      externalCatalog.createTable(prepareTable(sparkSession, viewPlan),false)
     }
     Seq.empty[Row]
   }
@@ -103,10 +106,11 @@ case class NonDefaultCatalogCreateViewCommand(
     if (originalText.isEmpty) {
       throw QueryCompilationErrors.createPersistedViewFromDatasetAPINotAllowedError()
     }
+    val queryPlan = CLSUtils.removeSecureProjection(analyzedPlan)
     val aliasedSchema = CharVarcharUtils.getRawSchema(
-      aliasPlan(session, analyzedPlan).schema, session.sessionState.conf)
+      aliasPlan(session, queryPlan).schema, session.sessionState.conf)
     val newProperties = generateViewProperties(
-      properties, session, analyzedPlan, aliasedSchema.fieldNames)
+      properties, session, queryPlan, aliasedSchema.fieldNames)
 
     CatalogTable(
 
