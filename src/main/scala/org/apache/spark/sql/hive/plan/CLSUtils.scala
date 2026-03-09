@@ -18,7 +18,25 @@ import scala.jdk.CollectionConverters.asScalaBufferConverter
 
 object CLSUtils {
 
+  def isViewTagPresent(plan:LogicalPlan):Boolean ={
+    plan.getTagValue(TreeNodeTag[String]("view-sql-plan")).isDefined
+  }
+  def isViewsPlan(plan:LogicalPlan):Boolean={
+    plan.find(isViewTagPresent).isDefined
+  }
+  def tagSingleViewPlan(plan:LogicalPlan):Unit={
+    val tagKey = "view-sql-plan"
+    plan.setTagValue(TreeNodeTag[String](tagKey), "true")
+  }
+
+  def tagViewPlan(plan: LogicalPlan):Unit={
+    plan.foreach(tagSingleViewPlan)
+  }
+
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
+    if(CLSUtils.isViewsPlan(plan)){
+      return plan
+    }
     plan match {
       case ds@DataSourceV2Relation(table, output, catalog, identifier, options) => getSecurePlanFromDataSourceV2(ds, table)
       case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr, catalogTable.get)
@@ -161,11 +179,15 @@ object CLSUtils {
       }
       secureColumns match {
         case Some(cols) =>
-          val secureAttributes = cols.map(name => UnresolvedAttribute.apply(name))
-          val prj = Project(secureAttributes, plan)
-          if(tag_key.nonEmpty)
+          if(tag_key.nonEmpty && tag_key.equalsIgnoreCase("col-table-sec")) {
+            val secureAttributes = cols.map(name => UnresolvedAttribute.apply(name))
+            val prj = Project(secureAttributes, plan)
+
             prj.setTagValue(TreeNodeTag[String](tag_key), "true")
-          prj
+            prj
+          }else{
+            plan
+          }
         case _ => plan
       }
     }else{

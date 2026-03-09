@@ -35,6 +35,7 @@ import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
 import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ViewUnresolvedRelation
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
@@ -187,13 +188,17 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
     val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
     val child = Project(projectList, parsedPlanWithoutSecureAttribute)
-    val details = CLSUtils.getCatalogTableDetails(table)
-    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
-    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
+//    val details = CLSUtils.getCatalogTableDetails(table)
+//    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
+//    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
+    CLSUtils.tagViewPlan(plan = child)
+    val newPlan = (new CLSSecRule(session)).apply(child)
 
-
-    val newChild = session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
+    CLSUtils.tagViewPlan(plan = newPlan)
+    val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
     //val resolvedPlan = session.sharedState.sparkContext.
+    CLSUtils.tagViewPlan(plan = newChild)
+    println("Returning View")
     View(desc = table.v1Table, isTempView = false, child = newChild)
   }
 
@@ -204,6 +209,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //    case c:CustomInsertIntoHadoopFsRelationCommand =>
     //      c.setAnalyzed()
     //      c
+
 
 
 
@@ -253,7 +259,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 || provider.equalsIgnoreCase("arrow")) {
                 val ds = DataSourceV2Relation.create(table = v2Table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)), options = v2Table.getTableCaseInsensitiveStringMap)
                // ListenerUtil.copyPlanTagsIfExists(dd, ds)
-                CLSUtils.getSecureDataSource(ds)
+                if(!CLSUtils.isViewsPlan(u)) {
+                  println("secure child should apply")
+                  CLSUtils.getSecureDataSource(ds)
+                }else{
+                  println("secure child should not apply")
+                  CLSUtils.tagViewPlan(ds)
+                    ds
+                }
               } else {
                 val dataSource = DataSource(
                   session,
@@ -564,11 +577,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case p: LogicalPlan => p resolveOperatorsUp {
 
+      case vu:ViewUnresolvedRelation =>
+        println("For ViewUnresolvedRelation")
+        apply(vu.u)
+
       //      case prj@Project(projectList, s@SubqueryAlias(_, view: View)) =>
       //      //  prj.copy(view.output)
       //        prj.setAnalyzed()
       //        val ats = getResolvedProjectAttributes(prj, view)
       //        prj.copy(ats)
+
+
+      case pl:LogicalPlan if CLSUtils.isViewsPlan(pl) =>
+        println("For View Plan came inside secure Projection")
+        new CLSSecRule(session).apply(pl)
 
       case ds@DataSourceV2ScanRelation(relation: DataSourceV2Relation, scan, output, keyGroupedPartitioning, ordering) =>
         println("this is DataSourceV2Scan")
