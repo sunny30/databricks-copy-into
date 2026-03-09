@@ -17,7 +17,7 @@ import org.apache.spark.sql.connector.catalog.SupportsNamespaces.PROP_OWNER
 import org.apache.spark.sql.hive.HiveUtils.{builtinHiveVersion, newTemporaryConfiguration}
 import org.apache.spark.sql.hive.client.HiveClientImpl.{fromHiveColumn, getHive, newHiveConf, toHiveColumn, toHivePartition, toHiveTableType}
 import org.apache.spark.sql.hive.client.{HiveClient, IsolatedClientLoader}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructField, StructType}
 import org.apache.spark.util.{CircularBuffer, MutableURLClassLoader, Utils}
 import org.apache.hadoop.hive.metastore.api.{Database => HiveDatabase, Table => MetaStoreApiTable, _}
 import org.apache.hadoop.hive.metastore.{IMetaStoreClient, TableType => HiveTableType}
@@ -27,6 +27,7 @@ import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_ASC
 import org.apache.hadoop.hive.ql.metadata.{Hive, HiveException, Partition => HivePartition, Table => HiveTable}
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.escapePathName
+import org.apache.spark.sql.catalyst.parser.{CatalystSqlParser, ParseException}
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog.{STATISTICS_COL_STATS_PREFIX, STATISTICS_NUM_ROWS, STATISTICS_PREFIX, STATISTICS_TOTAL_SIZE}
 import org.apache.spark.sql.hive.HiveUtils
@@ -265,6 +266,35 @@ class HMSCatalog(
     newPropsMap.putAll(newProps.asJava)
     ht.setParameters(newPropsMap)
     msClient.alter_table(ht.getDbName, ht.getTableName, ht)
+  }
+
+  def fromHiveColumn(hc: FieldSchema): StructField = {
+    val columnType = getSparkSQLDataType(hc)
+    val field = StructField(
+      name = hc.getName,
+      dataType = columnType,
+      nullable = true)
+    Option(hc.getComment).map(field.withComment).getOrElse(field)
+  }
+
+  def putBackticksForStructsAndArray(dataType:String):String={
+    dataType.replaceAll("""(?<=[,<]|^)\s*([^,<>:`]+?)(?=\s*:)""", "`$1`")
+  }
+
+  def getSparkSQLDataType(hc: FieldSchema): DataType = {
+    var retry= false
+    try {
+      CatalystSqlParser.parseDataType(hc.getType)
+    } catch {
+      case e: ParseException =>
+        if (!retry) {
+          val quotedDataTypeString = putBackticksForStructsAndArray(hc.getType)
+          retry = true
+          CatalystSqlParser.parseDataType(quotedDataTypeString)
+        } else {
+          throw QueryExecutionErrors.cannotRecognizeHiveTypeError(e, hc.getType, hc.getName)
+        }
+    }
   }
 
 
