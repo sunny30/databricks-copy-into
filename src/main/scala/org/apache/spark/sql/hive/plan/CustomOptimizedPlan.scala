@@ -134,7 +134,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             catalog.asTableCatalog.dropTable(ident)
           }
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-
+          Thread.sleep(30000)
         //  val table = catalog.asTableCatalog.loadTable(ident)
 
         //  spark.catalog.refreshTable(ident)
@@ -199,6 +199,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           ctas.copy(query = writePlan)
         }else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
