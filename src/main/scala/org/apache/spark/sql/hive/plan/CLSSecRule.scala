@@ -2,7 +2,7 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.analysis.{UnresolvedLeafNode, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedLeafNode, UnresolvedRelation, UnresolvedStar}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
@@ -17,16 +17,27 @@ class CLSSecRule(session: SparkSession)
     plan.getTagValue(TreeNodeTag[String]("custom-view-projection")).isDefined
   }
 
+  def isViewPlanContainsStar(project: Project):Boolean = {
+    project.projectList.exists {
+      case u: UnresolvedStar => true
+      case e: NamedExpression => false
+    }
+  }
+
 
   override def apply(plan: LogicalPlan): LogicalPlan = plan.transformUp{
     //case p: Project if CLSUtils.isSecureTableProjection(p)=> p.child
 
-    case proj: Project if isCustomProjectionView(proj)  =>
+    case proj: Project if isCustomProjectionView(proj)   =>
       println("Inside custom view Projection")
       proj.unsetTagValue(TreeNodeTag[String]("custom-view-projection"))
       changeViewProjectionForCustomAttributes(proj)
 
-    case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) => ViewUnresolvedRelation(u)
+    case prj:Project if CLSUtils.isViewsPlan(prj) && isViewPlanContainsStar(prj) && prj.child.resolved =>  descomposeStarInViewTextPlan(prj)
+
+    case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) if CLSUtils.isViewsPlan(u)=>
+      //CLSUtils.tagViewPlan(u)
+      ViewUnresolvedRelation(u)
 
     case plan: LogicalPlan => plan
   }
@@ -41,6 +52,19 @@ class CLSSecRule(session: SparkSession)
     val proj = project.copy(projectList = customProjLists)
    // proj.unsetTagValue(TreeNodeTag[String]("custom-view-projection"))
     proj
+  }
+
+  def descomposeStarInViewTextPlan(project: Project):Project={
+
+    val projections = project.projectList.flatMap {
+      case unresolvedStar: UnresolvedStar =>
+      println("Star found "+project.child.metadataOutput.mkString(","))
+        project.child.output
+      case namedExpression: NamedExpression => Seq(namedExpression)
+    }
+    println("Resolved child value "+project.child.resolved)
+    println("Star decompose "+projections.map(e=>e.sql).mkString(","))
+    project.copy(projectList = projections)
   }
 
 }

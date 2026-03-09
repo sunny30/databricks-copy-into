@@ -118,7 +118,7 @@ object App {
     spark.sql("select * from cat.idb4.ptbl").show()
 
     //spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
-    spark.sql("create view cat.idb4.v1(a,b) as select cls_id, age  from cat.idb4.ptbl")
+    spark.sql("create view cat.idb4.v1(a,b) as select cls_id, age from cat.idb4.ptbl")
     spark.sql("describe formatted cat.idb4.v1").show()
     spark.sql("select * from cat.idb4.v1").show()
 

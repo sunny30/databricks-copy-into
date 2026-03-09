@@ -194,9 +194,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //    val details = CLSUtils.getCatalogTableDetails(table)
 //    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
 //    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
+
     CLSUtils.tagViewPlan(plan = child)
     val newPlan = (new CLSSecRule(session)).apply(child)
-
+   // CLSUtils.tagViewPlan(plan = child)
     if (!isHiveCreatedView(table.v1Table))
       newPlan.setTagValue(TreeNodeTag[String]("custom-view-projection"), "true")
 
