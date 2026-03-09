@@ -91,6 +91,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   }
 
 
+
+
   private def getViewColumns(metadata: CatalogTable): Seq[NamedExpression] = {
     val projectList = if (!isHiveCreatedView(metadata)) {
       //      val viewColumnNames = if (metadata.viewQueryColumnNames.isEmpty) {
@@ -188,11 +190,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
     val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
     val child = Project(projectList, parsedPlanWithoutSecureAttribute)
+
 //    val details = CLSUtils.getCatalogTableDetails(table)
 //    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
 //    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
     CLSUtils.tagViewPlan(plan = child)
     val newPlan = (new CLSSecRule(session)).apply(child)
+
+    if (!isHiveCreatedView(table.v1Table))
+      newPlan.setTagValue(TreeNodeTag[String]("custom-view-projection"), "true")
 
     CLSUtils.tagViewPlan(plan = newPlan)
     val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
@@ -576,6 +582,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
 
     case p: LogicalPlan => p resolveOperatorsUp {
+
 
       case vu:ViewUnresolvedRelation =>
         println("For ViewUnresolvedRelation")
