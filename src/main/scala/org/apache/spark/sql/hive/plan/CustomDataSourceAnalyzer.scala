@@ -550,7 +550,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         InsertIntoStatement(relation, m, a, q, f, ip, c)
 
       } else {
-        InsertIntoHadoopFsRelationCommand(
+        val in = InsertIntoHadoopFsRelationCommand(
           outputPath = new Path(ct.storage.locationUri.get.toString),
           staticPartitions = Map.empty,
           ifPartitionNotExists = false,
@@ -564,6 +564,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           fileIndex = None,
           outputColumnNames = ct.schema.map(f => f.name)
         )
+        tagInsetIntoHadoopFsWithCatalogDetails(in, ct)
+        in
       }
 
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
@@ -833,6 +835,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             fileIndex = None,
             outputColumnNames = ct.schema.map(f => f.name)
           )
+          tagInsetIntoHadoopFsWithCatalogDetails(in,ct)
           ListenerUtil.copyPlanTagsIfExists(ab, in)
           ListenerUtil.setTableNameInPlan(in, ct.qualifiedName)
           in
@@ -1012,6 +1015,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val properties = convertTableProperties(tableSpec)
       properties
     }
+  }
+
+  def tagInsetIntoHadoopFsWithCatalogDetails(plan:InsertIntoHadoopFsRelationCommand, table:CatalogTable): Unit = {
+    plan.setTagValue(TreeNodeTag[String]("catalog-details"), s"${table.qualifiedName}")
+  }
+
+  def getCatalogDetailsFromInsertIntoHadoopFs(in:InsertIntoHadoopFsRelationCommand):Option[String]={
+    in.getTagValue(TreeNodeTag[String]("catalog-details"))
   }
 
 

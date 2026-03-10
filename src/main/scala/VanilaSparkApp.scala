@@ -100,6 +100,10 @@ object VanilaSparkApp {
     val sdt1 = (new HMSCatalog("", spark.sparkContext.getConf, null, spark)).getSparkSQLDataType(fs1)
     println(sdt1.sql)
 
+    val fs2 = new FieldSchema("id", s3, "")
+    val sdt2 = (new HMSCatalog("", spark.sparkContext.getConf, null, spark)).getSparkSQLDataType(fs2)
+    println(sdt2.sql)
+
 
     // val schema = StructType.fromDDL(s)
    // println(schema.prettyJson)
