@@ -5,7 +5,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.{Table, TableSchemaChangeCatalog}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
@@ -98,6 +98,13 @@ object CLSUtils {
     ct
   }
 
+  def getSecureViewPlan(view:View):LogicalPlan={
+    val tid = view.desc.identifier
+    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
+    val secureCatalogTable = getSecureTableFrom(catalogName,dbName,tableName)
+    getSecureLeafPlan(secureCatalogTable, view)
+  }
+
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
     val tagKey = if(catalogTable.tableType == CatalogTableType.VIEW){
@@ -108,13 +115,15 @@ object CLSUtils {
 
     if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
       val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
+      println("***Secure fields name***"+secureFields.mkString(","))
       val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
       leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
       val prj = Project(secureAttributes, leafPlan)
       prj.setTagValue(TreeNodeTag[String](tagKey), "true")
-      if(tagKey.equalsIgnoreCase("col-view-sec")){
-        return leafPlan
-      }
+//      if(tagKey.equalsIgnoreCase("col-view-sec")){
+//        println("returning leaf")
+//        return leafPlan
+//      }
       val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
       analyzed

@@ -206,7 +206,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //val resolvedPlan = session.sharedState.sparkContext.
     CLSUtils.tagViewPlan(plan = newChild)
     println("Returning View")
-    View(desc = table.v1Table, isTempView = false, child = newChild)
+    CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
   }
 
 
@@ -766,8 +766,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
               case _ => overwriteByExpression
             }
+          case view: View =>
+            println("view found")
+            view
 
           case prj@Project(projectList, s@SubqueryAlias(id: Identifier, view: View)) =>
+            println("project over view found")
             prj.copy(view.output)
 
 
