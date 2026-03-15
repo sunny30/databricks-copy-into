@@ -41,6 +41,14 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
     CatalogV2Util.structTypeToV2Columns(tableSchema)
   }
 
+  def getPartitionAttributeFromV2Table(query:LogicalPlan, table:Table):Seq[Attribute] = {
+    val ct = table.asInstanceOf[V2Table].v1Table
+    // ctas.partitioning.map(t => )
+    val ps = query.resolve(
+      ct.partitionSchema, spark.sessionState.analyzer.resolver)
+    ps
+  }
+
   def getFileFormat(formatName: String): FileFormat = {
     formatName.toLowerCase match {
       case "csv" => new CSVFileFormat
@@ -135,6 +143,9 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           }
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
           Thread.sleep(30000)
+
+
+          val ps = getPartitionAttributeFromV2Table(writePlan, table)
         //  val table = catalog.asTableCatalog.loadTable(ident)
 
         //  spark.catalog.refreshTable(ident)
@@ -143,7 +154,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
-            partitionColumns = Seq.empty[Attribute],
+            partitionColumns = ps,
             bucketSpec = None,
             fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
             Map.empty,
@@ -199,12 +210,12 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           ctas.copy(query = writePlan)
         }else {
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-
+          val ps = getPartitionAttributeFromV2Table(writePlan,table)
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
             ifPartitionNotExists = false,
-            partitionColumns = Seq.empty[Attribute],
+            partitionColumns = ps,
             bucketSpec = None,
             fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
             Map.empty,
@@ -221,4 +232,6 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case p: LogicalPlan => plan
     }
   }
+
+
 }
