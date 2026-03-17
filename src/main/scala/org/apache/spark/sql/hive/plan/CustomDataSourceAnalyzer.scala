@@ -304,7 +304,29 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               //            catalogTable = Some(deltaTableV2.catalogTable.get))
               //          LogicalRelation(dataSource.resolveRelation(false), deltaTableV2.catalogTable.get)
 
-              DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+              val ds = DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+              if (!CLSUtils.isViewsPlan(u)) {
+                println("secure child should apply")
+                CLSUtils.getSecureDataSource(ds)
+              } else {
+                println("secure child should not apply")
+                CLSUtils.tagViewPlan(ds)
+
+                val lr = DeltaRelation.fromV2Relation(deltaTableV2,ds,ds.options)
+                CLSUtils.tagSingleViewPlan(lr)
+                lr
+              }
+
+            case sparkTable: SparkTable =>
+              val ds = DataSourceV2Relation.create(sparkTable, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+              if (!CLSUtils.isViewsPlan(u)) {
+                println("secure child should apply")
+                CLSUtils.getSecureDataSource(ds)
+              } else {
+                println("secure child should not apply")
+                CLSUtils.tagViewPlan(ds)
+                ds
+              }
 
             case _ => u
 
@@ -369,6 +391,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        resolvedLeafPlan
         val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
         ListenerUtil.copyPlanTagsIfExists(dd, ds)
+        //ds.copy(output = dd.output)
         CLSUtils.getSecureDataSource(ds.copy(output = dd.output))
 
       } else {
@@ -670,7 +693,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + p.toString())
-            CLSUtils.getSecureDataSource(lr)
+            if(CLSUtils.isViewTagPresent(lr)){
+              lr
+            }else {
+              CLSUtils.getSecureDataSource(lr)
+            }
 
 
 

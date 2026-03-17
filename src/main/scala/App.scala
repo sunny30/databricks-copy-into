@@ -82,56 +82,56 @@ object App {
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
 
-    val df2 = df3.select("col1", "col3", "col2")
-    /**write begins**/
-    spark.sql("""create database if not exists cat.my_database""")
-    df2.write
-      .format("parquet") // or "delta", "orc", etc.
-      .option("path", "/tmp/wrp/") // Sets the external data location
-      .partitionBy("col2") // Specifies partition columns
-      .mode("append") // Options: "overwrite", "append", "ignore", "error"
-      .saveAsTable("cat.my_database.my_table_name")
+//    val df2 = df3.select("col1", "col3", "col2")
+//    /**write begins**/
+//    spark.sql("""create database if not exists cat.my_database""")
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      .option("path", "/tmp/wrp/") // Sets the external data location
+//      .partitionBy("col2") // Specifies partition columns
+//      .mode("append") // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name")
+//
+//    spark.sql("describe formatted cat.my_database.my_table_name").show()
+//    spark.read.table("cat.my_database.my_table_name").show()
+//
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      .option("path", "/tmp/wrp/") // Sets the external data location
+//      .partitionBy("col2") // Specifies partition columns
+//      .mode("append") // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name")
+//   // spark.sql("describe formatted cat.my_database.my_table_name").show()
+//    spark.read.table("cat.my_database.my_table_name").show()
+//
+//
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      .option("path", "/tmp/wrp1/") // Sets the external data location
+//     // .partitionBy("col2") // Specifies partition columns
+//      .mode("append") // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name1")
+//    spark.read.table("cat.my_database.my_table_name1").show()
+//
+//
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//     // .option("path", "/tmp/wrp1/") // Sets the external data location
+//       .partitionBy("col2") // Specifies partition columns
+//      .mode("append")
+//      // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name2")
+//    spark.read.table("cat.my_database.my_table_name2").show()
 
-    spark.sql("describe formatted cat.my_database.my_table_name").show()
-    spark.read.table("cat.my_database.my_table_name").show()
-
-    df2.write
-      .format("parquet") // or "delta", "orc", etc.
-      .option("path", "/tmp/wrp/") // Sets the external data location
-      .partitionBy("col2") // Specifies partition columns
-      .mode("append") // Options: "overwrite", "append", "ignore", "error"
-      .saveAsTable("cat.my_database.my_table_name")
-   // spark.sql("describe formatted cat.my_database.my_table_name").show()
-    spark.read.table("cat.my_database.my_table_name").show()
-
-
-    df2.write
-      .format("parquet") // or "delta", "orc", etc.
-      .option("path", "/tmp/wrp1/") // Sets the external data location
-     // .partitionBy("col2") // Specifies partition columns
-      .mode("append") // Options: "overwrite", "append", "ignore", "error"
-      .saveAsTable("cat.my_database.my_table_name1")
-    spark.read.table("cat.my_database.my_table_name1").show()
-
-
-    df2.write
-      .format("parquet") // or "delta", "orc", etc.
-     // .option("path", "/tmp/wrp1/") // Sets the external data location
-       .partitionBy("col2") // Specifies partition columns
-      .mode("append")
-      // Options: "overwrite", "append", "ignore", "error"
-      .saveAsTable("cat.my_database.my_table_name2")
-    spark.read.table("cat.my_database.my_table_name2").show()
-
-    df2.write
-      .format("parquet") // or "delta", "orc", etc.
-      // .option("path", "/tmp/wrp1/") // Sets the external data location
-    //  .partitionBy("col2")
-      // Specifies partition columns
-      .mode("append")
-      // Options: "overwrite", "append", "ignore", "error"
-      .saveAsTable("cat.my_database.my_table_name3")
-    spark.read.table("cat.my_database.my_table_name3").show()
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      // .option("path", "/tmp/wrp1/") // Sets the external data location
+//    //  .partitionBy("col2")
+//      // Specifies partition columns
+//      .mode("append")
+//      // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name3")
+//    spark.read.table("cat.my_database.my_table_name3").show()
 
 
     /***write ends***/
@@ -162,20 +162,31 @@ object App {
 //
 //
 //    //spark.sessionState.sqlParser.parsePlan("select * from cat.db.t, cat.db.t1")
-//    spark.sql("""create database if not exists cat.idb4""")
-//
-//    spark.sql("create table cat.idb4.tbl using parquet location '/tmp/tb' as select * from tmp_v")
-//
+    spark.sql("""create database if not exists cat.idb4""")
+
+    //spark.sql("create table cat.idb4.tbl using parquet location '/tmp/tb' as select * from tmp_v")
+
 //    spark.sql("create table cat.idb4.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 //    spark.sql("insert into cat.idb4.ptbl values (1,30), (2,30), (3,31), (4,31)")
 //
 //  //  spark.read.table(" cat.idb4.ptbl").show()
 //    spark.sql("select * from cat.idb4.ptbl").show()
-
-    //spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
+//
+//    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
 //    spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
 //    spark.sql("describe formatted cat.idb4.v1").show()
 //    spark.sql("select * from cat.idb4.v1").show()
+
+    spark.sql("create table cat.idb4.dtbl(cls_id int, age int) using delta  PARTITIONED BY (age)")
+    spark.sql("insert into cat.idb4.dtbl values (1,30), (2,30), (3,31), (4,31)")
+
+    //  spark.read.table(" cat.idb4.ptbl").show()
+    spark.sql("select * from cat.idb4.dtbl").show()
+
+    spark.sql("create view cat.idb4.v2(id , cls_age) as select *  from cat.idb4.dtbl")
+   // spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
+    spark.sql("describe formatted cat.idb4.v2").show()
+    spark.sql("select * from cat.idb4.v2").show()
 
 
 
