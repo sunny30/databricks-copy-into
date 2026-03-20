@@ -639,16 +639,18 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         } else {
           if (d.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
             d.setTagValue(TreeNodeTag[String]("centrify-resolver"), "resolved")
-            if(!d.table.isInstanceOf[V2CustomTable]) {
+            if (!d.table.isInstanceOf[V2CustomTable]) {
               apply(d)
-            }else{
+            } else {
               d
             }
-          }else{
-            CLSUtils.getSecureDataSource(d)
+          } else {
+            if (CLSUtils.isViewTagPresent(d)) {
+              d
+            } else {
+              CLSUtils.getSecureDataSource(d)
+            }
           }
-
-
         }
 
       case u: UnresolvedRelation =>

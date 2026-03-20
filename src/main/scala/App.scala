@@ -189,6 +189,18 @@ object App {
     spark.sql("select * from cat.idb4.v2").show()
 
 
+    spark.sql("create table cat.idb4.itbl(cls_id int, age int) using iceberg  PARTITIONED BY (age)")
+    spark.sql("insert into cat.idb4.itbl values (1,30), (2,30), (3,31), (4,31)")
+
+    //  spark.read.table(" cat.idb4.ptbl").show()
+    spark.sql("select * from cat.idb4.itbl").show()
+
+    spark.sql("create view cat.idb4.v3(id , cls_age) as select *  from cat.idb4.itbl")
+    // spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
+    spark.sql("describe formatted cat.idb4.v3").show()
+    spark.sql("select * from cat.idb4.v3").show()
+
+
 
 
 
