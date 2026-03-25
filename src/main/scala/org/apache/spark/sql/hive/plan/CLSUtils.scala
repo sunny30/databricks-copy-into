@@ -217,6 +217,14 @@ object CLSUtils {
     }
   }
 
+  def getSecureRelation(plan:LogicalPlan):LogicalPlan={
+    if (CLSUtils.isViewTagPresent(plan)) {
+      plan
+    } else {
+      CLSUtils.getSecureDataSource(plan)
+    }
+  }
+
 
 
 }

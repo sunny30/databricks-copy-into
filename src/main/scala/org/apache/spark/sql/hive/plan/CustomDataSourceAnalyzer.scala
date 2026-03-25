@@ -645,11 +645,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               d
             }
           } else {
-            if (CLSUtils.isViewTagPresent(d)) {
-              d
-            } else {
-              CLSUtils.getSecureDataSource(d)
-            }
+            CLSUtils.getSecureRelation(d)
           }
         }
 
@@ -695,11 +691,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + p.toString())
-            if(CLSUtils.isViewTagPresent(lr)){
-              lr
-            }else {
-              CLSUtils.getSecureDataSource(lr)
-            }
+            CLSUtils.getSecureRelation(lr)
 
 
 
