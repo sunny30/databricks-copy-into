@@ -11,6 +11,7 @@ import org.apache.spark.sql.errors.QueryParsingErrors
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
 import org.apache.spark.sql.execution.command.CreateViewCommand
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, ShowCatalogViews}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogAlterViewQueryCommand, NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
 import org.apache.spark.sql.hive.plan.spark.sql.stat.{CustomAnalyzeColumn, CustomAnalyzeTable}
@@ -60,7 +61,7 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     } else {
       LocalTempView
     }
-    val qPlan: LogicalPlan = plan(ctx.query)
+    val qPlan: LogicalPlan = CLSUtils.removeSecureProjection(super.plan(ctx.query))
 
     // Disallow parameter markers in the body of the view.
     // We need this limitation because we store the original query text, pre substitution.
@@ -377,4 +378,19 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
 //      case child: LogicalPlan => checkInvalidParameter(child, statement)
 //    }
 //  }
+
+  override def visitRegularQuerySpecification(ctx: SqlBaseParser.RegularQuerySpecificationContext): LogicalPlan = withOrigin(ctx) {
+    super.visitRegularQuerySpecification(ctx)
+  }
+
+  override def visitFromClause(ctx: SqlBaseParser.FromClauseContext): LogicalPlan = {
+    super.visitFromClause(ctx)
+  }
+
+  override def visitTableName(ctx: SqlBaseParser.TableNameContext): LogicalPlan = {
+    val tablePlan = super.visitTableName(ctx)
+    CLSUtils.getProjectedTable(tablePlan,ctx)
+  }
+
+
 }

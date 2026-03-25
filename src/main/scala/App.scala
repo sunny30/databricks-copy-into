@@ -73,7 +73,6 @@ object App {
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
-
     val df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
@@ -83,10 +82,66 @@ object App {
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
 
+//    val df2 = df3.select("col1", "col3", "col2")
+//    /**write begins**/
+//    spark.sql("""create database if not exists cat.my_database""")
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      .option("path", "/tmp/wrp/") // Sets the external data location
+//      .partitionBy("col2") // Specifies partition columns
+//      .mode("append") // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name")
+//
+//    spark.sql("describe formatted cat.my_database.my_table_name").show()
+//    spark.read.table("cat.my_database.my_table_name").show()
+//
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      .option("path", "/tmp/wrp/") // Sets the external data location
+//      .partitionBy("col2") // Specifies partition columns
+//      .mode("append") // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name")
+//   // spark.sql("describe formatted cat.my_database.my_table_name").show()
+//    spark.read.table("cat.my_database.my_table_name").show()
+//
+//
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      .option("path", "/tmp/wrp1/") // Sets the external data location
+//     // .partitionBy("col2") // Specifies partition columns
+//      .mode("append") // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name1")
+//    spark.read.table("cat.my_database.my_table_name1").show()
+//
+//
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//     // .option("path", "/tmp/wrp1/") // Sets the external data location
+//       .partitionBy("col2") // Specifies partition columns
+//      .mode("append")
+//      // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name2")
+//    spark.read.table("cat.my_database.my_table_name2").show()
+
+//    df2.write
+//      .format("parquet") // or "delta", "orc", etc.
+//      // .option("path", "/tmp/wrp1/") // Sets the external data location
+//    //  .partitionBy("col2")
+//      // Specifies partition columns
+//      .mode("append")
+//      // Options: "overwrite", "append", "ignore", "error"
+//      .saveAsTable("cat.my_database.my_table_name3")
+//    spark.read.table("cat.my_database.my_table_name3").show()
+
+
+    /***write ends***/
+
+
+
 
     val df4 = Seq(
       (7, "Hardy", 2.0),
-      (8, "vacum", 3.0),
+      (8, "vaccum", 3.0),
       (9, "sherlock", 4.0),
       (10, "johny", 5.0),
       (11, "Yes", 6.0),
@@ -101,9 +156,55 @@ object App {
       (11, "Yes"),
       (12, "papa")
     ).toDF("id", "name")
-    spark.sql("""create database if not exists cat.deltadb1""")
 
-    DeltaTable.forName(spark,"").toDF
+//    df5.createTempView("tmp_v")
+//
+//
+//
+//    //spark.sessionState.sqlParser.parsePlan("select * from cat.db.t, cat.db.t1")
+//    spark.sql("""create database if not exists cat.idb4""")
+//
+//    //spark.sql("create table cat.idb4.tbl using parquet location '/tmp/tb' as select * from tmp_v")
+//
+////    spark.sql("create table cat.idb4.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
+////    spark.sql("insert into cat.idb4.ptbl values (1,30), (2,30), (3,31), (4,31)")
+////
+////  //  spark.read.table(" cat.idb4.ptbl").show()
+////    spark.sql("select * from cat.idb4.ptbl").show()
+////
+////    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
+////    spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
+////    spark.sql("describe formatted cat.idb4.v1").show()
+////    spark.sql("select * from cat.idb4.v1").show()
+//
+//    spark.sql("create table cat.idb4.dtbl(cls_id int, age int) using delta  PARTITIONED BY (age)")
+//    spark.sql("insert into cat.idb4.dtbl values (1,30), (2,30), (3,31), (4,31)")
+//
+//    //  spark.read.table(" cat.idb4.ptbl").show()
+//    spark.sql("select * from cat.idb4.dtbl").show()
+//
+//    spark.sql("create view cat.idb4.v2(id , cls_age) as select *  from cat.idb4.dtbl")
+//   // spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
+//    spark.sql("describe formatted cat.idb4.v2").show()
+//    spark.sql("select * from cat.idb4.v2").show()
+//
+//
+//    spark.sql("create table cat.idb4.itbl(cls_id int, age int) using iceberg  PARTITIONED BY (age)")
+//    spark.sql("insert into cat.idb4.itbl values (1,30), (2,30), (3,31), (4,31)")
+//
+//    //  spark.read.table(" cat.idb4.ptbl").show()
+//    spark.sql("select * from cat.idb4.itbl").show()
+//
+//    spark.sql("create view cat.idb4.v3(id , cls_age) as select *  from cat.idb4.itbl")
+//    // spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
+//    spark.sql("describe formatted cat.idb4.v3").show()
+//    spark.sql("select * from cat.idb4.v3").show()
+
+
+
+
+
+    // DeltaTable.forName(spark,"").toDF
 //    df5.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
 //
 //    df4.write.mode(SaveMode.Overwrite).saveAsTable("cat.deltadb.tbl")
@@ -126,13 +227,15 @@ object App {
     )
 
     // 2. Convert to DataFrame and name the columns
-    val replaceData1 = data1.toDF("id", "status", "start_date")
-    val replaceData = data.toDF("id", "status", "start_date")
-
-//    replaceData.writeTo("cat.deltadb1.dtbl1")
+//    val replaceData1 = data1.toDF("id", "status", "start_date")
+//    val replaceData = data.toDF("id", "status", "start_date")
+//
+//    replaceData.writeTo("cat.deltadb2.dtbl1")
 //      .using("delta")
-//      .tableProperty("path", "/tmp/delta")
+//      .tableProperty("path", "/tmp/delta1")
 //      .create()
+//
+//    spark.sql("select * from cat.deltadb2.dtbl1 where id = 101").show()
 //
 //
 //    replaceData1.write
@@ -144,41 +247,41 @@ object App {
 //
 //    spark.sql("describe history cat.deltadb1.dtbl1").show()
 
-    replaceData1.writeTo("cat.deltadb1.itbl1")
-      .using("iceberg")
-      .tableProperty("path", "/tmp/ice")
-      .createOrReplace()
+//    replaceData1.writeTo("cat.deltadb1.itbl1")
+//      .using("iceberg")
+//      .tableProperty("path", "/tmp/ice")
+//      .createOrReplace()
+//
+//    replaceData.write
+//      .format("iceberg")
+//      .mode("overwrite")
+//      .saveAsTable("cat.deltadb1.itbl1")
+//
+//
+//    spark.sql("select * from cat.deltadb1.itbl1.history").show()
+//
+//    spark.sql("select * from cat.deltadb1.itbl1").show()
+//
+//
+//
+//
+//    replaceData1.write
+//      .format("iceberg")
+//      .saveAsTable("cat.deltadb1.itbl2")
+//
+//    spark.sql("select * from cat.deltadb1.itbl2.history").show()
+//
+//    spark.sql("select * from cat.deltadb1.itbl2").show()
 
-    replaceData.write
-      .format("iceberg")
-      .mode("overwrite")
-      .saveAsTable("cat.deltadb1.itbl1")
-
-
-    spark.sql("select * from cat.deltadb1.itbl1.history").show()
-
-    spark.sql("select * from cat.deltadb1.itbl1").show()
-
-
-
-
-    replaceData1.write
-      .format("iceberg")
-      .saveAsTable("cat.deltadb1.itbl2")
-
-    spark.sql("select * from cat.deltadb1.itbl2.history").show()
-
-    spark.sql("select * from cat.deltadb1.itbl2").show()
-
-    replaceData1.write
-      .format("iceberg")
-      .mode("overwrite")
-      .saveAsTable("cat.deltadb1.itbl3")
-
-    replaceData.write
-      .format("iceberg")
-      .mode("overwrite")
-      .saveAsTable("cat.deltadb1.itbl3")
+//    replaceData1.write
+//      .format("iceberg")
+//      .mode("overwrite")
+//      .saveAsTable("cat.deltadb1.itbl3")
+//
+//    replaceData.write
+//      .format("iceberg")
+//      .mode("overwrite")
+//      .saveAsTable("cat.deltadb1.itbl3")
 
 
 //    replaceData1.write
@@ -186,9 +289,9 @@ object App {
 //      .mode("error")
 //      .saveAsTable("cat.deltadb1.itbl2")
 
-    spark.sql("select * from cat.deltadb1.itbl3.history").show()
+//    spark.sql("select * from cat.deltadb1.itbl3.history").show()
 
-    spark.sql("select * from cat.deltadb1.itbl3").show()
+  //  spark.sql("select * from cat.deltadb1.itbl3").show()
 //    replaceData.write
 //      .format("iceberg")
 //      .mode("overwrite")

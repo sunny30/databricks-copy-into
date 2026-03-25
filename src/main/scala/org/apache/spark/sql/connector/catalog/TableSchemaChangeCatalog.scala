@@ -32,5 +32,7 @@ trait TableSchemaChangeCatalog extends CatalogPlugin {
                               table:CatalogTable
                               ):Unit
 
+  def loadSecureTable(db:String, table:String): CatalogTable
+
 
 }

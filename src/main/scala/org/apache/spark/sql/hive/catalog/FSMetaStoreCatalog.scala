@@ -13,6 +13,7 @@ import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.hive.catalog.FSMetaStoreCatalog.{DatabaseDesc, TableDesc}
+import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
 
 import java.io.IOException
 import scala.collection.mutable
@@ -23,7 +24,7 @@ class FSMetaStoreCatalog(
                         sparkConf: SparkConf,
                         hadoopConfig: Configuration = new Configuration,
                         sparkSession: SparkSession = SparkSession.active
-                        ) extends ExternalCatalog  {
+                        ) extends ExternalSecureCatalog  {
 
   val warehousePath = sparkConf.get("spark.sql.warehouse.dir")
   val catalogPath = new Path(warehousePath, catalogName+".cat")
@@ -137,10 +138,34 @@ class FSMetaStoreCatalog(
 
   override def getTable(db: String, table: String): CatalogTable = {
     try {
-      FSMetaStoreCatalog.catalog(db).tables(table).table
+      val ct = FSMetaStoreCatalog.catalog(db).tables(table).table
+      ct
+    } catch {
+      case e: Exception => null
+    }
+
+  }
+
+  override def getSecureTable(db: String, table: String): CatalogTable = {
+    try {
+      val ct = FSMetaStoreCatalog.catalog(db).tables(table).table
+      if(isThereSecureColumn(ct)){
+        getSecureColumnsTable(ct)
+      }else{
+        ct
+      }
     }catch {
       case e:Exception => null
     }
+  }
+
+  private def isThereSecureColumn(catalogTable: CatalogTable):Boolean={
+    catalogTable.schema.fields.toSeq.exists(f => f.name.startsWith("cls_"))
+  }
+
+  private def getSecureColumnsTable(catalogTable: CatalogTable):CatalogTable={
+    val secureSchema = StructType(catalogTable.schema.fields.toSeq.filter(f => f.name.startsWith("cls_")))
+    catalogTable.copy(schema = secureSchema)
   }
 
   override def getTablesByName(db: String, tables: Seq[String]): Seq[CatalogTable] = {

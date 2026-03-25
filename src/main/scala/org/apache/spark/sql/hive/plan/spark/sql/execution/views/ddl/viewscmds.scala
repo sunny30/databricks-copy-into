@@ -1,16 +1,19 @@
 package org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl
 
+import org.apache.spark.sql.catalyst.analysis.{NamedRelation, UnresolvedLeafNode, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.DescribeCommandSchema
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ShowViews, UnaryCommand}
+import org.apache.spark.sql.catalyst.trees.TreePattern.{TreePattern, UNRESOLVED_RELATION}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.connector.catalog.Identifier
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.types.{BooleanType, StringType, StructType}
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -126,6 +129,19 @@ case class CatalogDescribeViewCmd(
     propertiesMap
   }
 
+}
+
+
+case class ViewUnresolvedRelation(u:UnresolvedRelation)
+  extends UnresolvedLeafNode with NamedRelation {
+  import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
+
+  /** Returns a `.` separated name for this relation. */
+  def tableName: String = u.multipartIdentifier.quoted
+
+  override def name: String = tableName
+
+  final override val nodePatterns: Seq[TreePattern] = Seq(UNRESOLVED_RELATION)
 }
 
 

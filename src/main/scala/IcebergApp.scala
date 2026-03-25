@@ -53,6 +53,10 @@ object IcebergApp {
     spark.sql("select * from local.db.logs1.history").show()
 
 
+    replaceData2.write
+      .format("iceberg")
+      .mode("overwrite").option("path", "/tmp/ipst").save()
+
    // spark.sql("describe formatted local.db.logs").show()
 
    // val df = spark.sql("select * from local.db.logs")

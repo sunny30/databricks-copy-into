@@ -17,7 +17,7 @@ import org.apache.spark.sql.connector.catalog.SupportsNamespaces.PROP_OWNER
 import org.apache.spark.sql.hive.HiveUtils.{builtinHiveVersion, newTemporaryConfiguration}
 import org.apache.spark.sql.hive.client.HiveClientImpl.{fromHiveColumn, getHive, newHiveConf, toHiveColumn, toHivePartition, toHiveTableType}
 import org.apache.spark.sql.hive.client.{HiveClient, IsolatedClientLoader}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{DataType, StructField, StructType}
 import org.apache.spark.util.{CircularBuffer, MutableURLClassLoader, Utils}
 import org.apache.hadoop.hive.metastore.api.{Database => HiveDatabase, Table => MetaStoreApiTable, _}
 import org.apache.hadoop.hive.metastore.{IMetaStoreClient, TableType => HiveTableType}
@@ -27,9 +27,11 @@ import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_ASC
 import org.apache.hadoop.hive.ql.metadata.{Hive, HiveException, Partition => HivePartition, Table => HiveTable}
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.escapePathName
+import org.apache.spark.sql.catalyst.parser.{CatalystSqlParser, ParseException}
 import org.apache.spark.sql.execution.datasources.PartitioningUtils
 import org.apache.spark.sql.hive.HiveExternalCatalog.{STATISTICS_COL_STATS_PREFIX, STATISTICS_NUM_ROWS, STATISTICS_PREFIX, STATISTICS_TOTAL_SIZE}
 import org.apache.spark.sql.hive.HiveUtils
+import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
 import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
@@ -46,7 +48,7 @@ class HMSCatalog(
                   sparkConf: SparkConf,
                   hadoopConfig: Configuration = new Configuration,
                   sparkSession: SparkSession = SparkSession.active
-                ) extends ExternalCatalog {
+                ) extends ExternalSecureCatalog {
 
   lazy val msClient = getMSC(client)
 
@@ -266,6 +268,35 @@ class HMSCatalog(
     msClient.alter_table(ht.getDbName, ht.getTableName, ht)
   }
 
+  def fromHiveColumn(hc: FieldSchema): StructField = {
+    val columnType = getSparkSQLDataType(hc)
+    val field = StructField(
+      name = hc.getName,
+      dataType = columnType,
+      nullable = true)
+    Option(hc.getComment).map(field.withComment).getOrElse(field)
+  }
+
+  def putBackticksForStructsAndArray(dataType:String):String={
+    dataType.replaceAll("""(?<=[,<]|^)\s*([^,<>:`]+?)(?=\s*:)""", "`$1`")
+  }
+
+  def getSparkSQLDataType(hc: FieldSchema): DataType = {
+    var retry= false
+    try {
+      CatalystSqlParser.parseDataType(hc.getType)
+    } catch {
+      case e: ParseException =>
+        if (!retry) {
+          val quotedDataTypeString = putBackticksForStructsAndArray(hc.getType)
+          retry = true
+          CatalystSqlParser.parseDataType(quotedDataTypeString)
+        } else {
+          throw QueryExecutionErrors.cannotRecognizeHiveTypeError(e, hc.getType, hc.getName)
+        }
+    }
+  }
+
 
   private def convertHiveTableToCatalogTable(h: HiveTable): CatalogTable = {
     // Note: Hive separates partition columns and the schema, but for us the
@@ -427,6 +458,16 @@ class HMSCatalog(
       convertHiveTableToCatalogTable(new org.apache.hadoop.hive.ql.metadata.Table(ht))
     }catch {
       case ex:NoSuchObjectException => null
+      case e: Exception => throw e
+    }
+  }
+
+  override def getSecureTable(db: String, table: String): CatalogTable = {
+    try {
+      val ht = msClient.getTable(catalogName, db, table)
+      convertHiveTableToCatalogTable(new org.apache.hadoop.hive.ql.metadata.Table(ht))
+    } catch {
+      case ex: NoSuchObjectException => null
       case e: Exception => throw e
     }
   }

@@ -17,7 +17,7 @@ import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.{convertTableProperties, withDefaultOwnership}
-import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, TableCatalog}
+import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, Table, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
@@ -33,8 +33,9 @@ import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
 import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
-import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.CustomCatalogFileIndex
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ViewUnresolvedRelation
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
@@ -88,6 +89,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     metadata.viewQueryColumnNames.isEmpty &&
       metadata.schema.fieldNames.exists(_.matches("_c[0-9]+"))
   }
+
+
 
 
   private def getViewColumns(metadata: CatalogTable): Seq[NamedExpression] = {
@@ -185,11 +188,25 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
     val projectList = getViewColumns(table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
-    val child = Project(projectList, parsedPlan)
+    val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
+    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
 
-    val newChild = session.sessionState.analyzer.executeAndCheck(child, new QueryPlanningTracker())
+//    val details = CLSUtils.getCatalogTableDetails(table)
+//    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
+//    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
+
+    CLSUtils.tagViewPlan(plan = child)
+    val newPlan = (new CLSSecRule(session)).apply(child)
+   // CLSUtils.tagViewPlan(plan = child)
+    if (!isHiveCreatedView(table.v1Table))
+      newPlan.setTagValue(TreeNodeTag[String]("custom-view-projection"), "true")
+
+    CLSUtils.tagViewPlan(plan = newPlan)
+    val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
     //val resolvedPlan = session.sharedState.sparkContext.
-    View(desc = table.v1Table, isTempView = false, child = newChild)
+    CLSUtils.tagViewPlan(plan = newChild)
+    println("Returning View")
+    CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
   }
 
 
@@ -199,6 +216,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //    case c:CustomInsertIntoHadoopFsRelationCommand =>
     //      c.setAnalyzed()
     //      c
+
 
 
 
@@ -248,7 +266,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 || provider.equalsIgnoreCase("arrow")) {
                 val ds = DataSourceV2Relation.create(table = v2Table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)), options = v2Table.getTableCaseInsensitiveStringMap)
                // ListenerUtil.copyPlanTagsIfExists(dd, ds)
-                ds
+                if(!CLSUtils.isViewsPlan(u)) {
+                  println("secure child should apply")
+                  CLSUtils.getSecureDataSource(ds)
+                }else{
+                  println("secure child should not apply")
+                  CLSUtils.tagViewPlan(ds)
+                    ds
+                }
               } else {
                 val dataSource = DataSource(
                   session,
@@ -279,7 +304,29 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               //            catalogTable = Some(deltaTableV2.catalogTable.get))
               //          LogicalRelation(dataSource.resolveRelation(false), deltaTableV2.catalogTable.get)
 
-              DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+              val ds = DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+              if (!CLSUtils.isViewsPlan(u)) {
+                println("secure child should apply")
+                CLSUtils.getSecureDataSource(ds)
+              } else {
+                println("secure child should not apply")
+                CLSUtils.tagViewPlan(ds)
+
+                val lr = DeltaRelation.fromV2Relation(deltaTableV2,ds,ds.options)
+                CLSUtils.tagSingleViewPlan(lr)
+                lr
+              }
+
+            case sparkTable: SparkTable =>
+              val ds = DataSourceV2Relation.create(sparkTable, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
+              if (!CLSUtils.isViewsPlan(u)) {
+                println("secure child should apply")
+                CLSUtils.getSecureDataSource(ds)
+              } else {
+                println("secure child should not apply")
+                CLSUtils.tagViewPlan(ds)
+                ds
+              }
 
             case _ => u
 
@@ -344,7 +391,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 //        resolvedLeafPlan
         val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = table.getTableCaseInsensitiveStringMap)
         ListenerUtil.copyPlanTagsIfExists(dd, ds)
-        ds.copy(output = dd.output)
+        //ds.copy(output = dd.output)
+        CLSUtils.getSecureDataSource(ds.copy(output = dd.output))
 
       } else {
         val leafPlan = if (provider.equalsIgnoreCase("custom")) {
@@ -525,7 +573,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         InsertIntoStatement(relation, m, a, q, f, ip, c)
 
       } else {
-        InsertIntoHadoopFsRelationCommand(
+        val in = InsertIntoHadoopFsRelationCommand(
           outputPath = new Path(ct.storage.locationUri.get.toString),
           staticPartitions = Map.empty,
           ifPartitionNotExists = false,
@@ -539,6 +587,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           fileIndex = None,
           outputColumnNames = ct.schema.map(f => f.name)
         )
+        tagInsetIntoHadoopFsWithCatalogDetails(in, ct)
+        in
       }
 
     case i@InsertIntoStatement(d: DataSourceV2Relation, m: Map[String, Option[String]], a: Seq[String], q: LogicalPlan, f: Boolean, ip: Boolean, c: Boolean) => {
@@ -559,11 +609,21 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case p: LogicalPlan => p resolveOperatorsUp {
 
+
+      case vu:ViewUnresolvedRelation =>
+        println("For ViewUnresolvedRelation")
+        apply(vu.u)
+
       //      case prj@Project(projectList, s@SubqueryAlias(_, view: View)) =>
       //      //  prj.copy(view.output)
       //        prj.setAnalyzed()
       //        val ats = getResolvedProjectAttributes(prj, view)
       //        prj.copy(ats)
+
+
+      case pl:LogicalPlan if CLSUtils.isViewsPlan(pl) =>
+        println("For View Plan came inside secure Projection")
+        new CLSSecRule(session).apply(pl)
 
       case ds@DataSourceV2ScanRelation(relation: DataSourceV2Relation, scan, output, keyGroupedPartitioning, ordering) =>
         println("this is DataSourceV2Scan")
@@ -573,16 +633,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case d: DataSourceV2Relation =>
         println("this is DataSourceV2" + d.toString())
         if (d.table.isInstanceOf[DeltaTableV2]) {
+          println("Inside DataSourceV2 for DeltaTable")
           DeltaRelation.fromV2Relation(d.table.asInstanceOf[DeltaTableV2], d, d.options)
 
         } else {
           if (d.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
             d.setTagValue(TreeNodeTag[String]("centrify-resolver"), "resolved")
-            apply(d)
-          }else{
-            d
+            if (!d.table.isInstanceOf[V2CustomTable]) {
+              apply(d)
+            } else {
+              d
+            }
+          } else {
+            CLSUtils.getSecureRelation(d)
           }
-
         }
 
       case u: UnresolvedRelation =>
@@ -624,6 +688,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           println("got you")
         }
         p match {
+
+          case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
+            println("Inside Logical Relation " + p.toString())
+            CLSUtils.getSecureRelation(lr)
+
+
 
           case d: DeserializeToObject =>
             if (!d.resolved) {
@@ -717,12 +787,17 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
               case _ => overwriteByExpression
             }
+          case view: View =>
+            println("view found")
+            view
 
           case prj@Project(projectList, s@SubqueryAlias(id: Identifier, view: View)) =>
+            println("project over view found")
             prj.copy(view.output)
 
 
           case _ =>
+          //  p
             val pl = ResolveReferences(p)
             pl.resolved
             //  pl.setAnalyzed()
@@ -785,6 +860,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             fileIndex = None,
             outputColumnNames = ct.schema.map(f => f.name)
           )
+          tagInsetIntoHadoopFsWithCatalogDetails(in,ct)
           ListenerUtil.copyPlanTagsIfExists(ab, in)
           ListenerUtil.setTableNameInPlan(in, ct.qualifiedName)
           in
@@ -965,6 +1041,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       properties
     }
   }
+
+  def tagInsetIntoHadoopFsWithCatalogDetails(plan:InsertIntoHadoopFsRelationCommand, table:CatalogTable): Unit = {
+    plan.setTagValue(TreeNodeTag[String]("catalog-details"), s"${table.qualifiedName}")
+  }
+
+  def getCatalogDetailsFromInsertIntoHadoopFs(in:InsertIntoHadoopFsRelationCommand):Option[String]={
+    in.getTagValue(TreeNodeTag[String]("catalog-details"))
+  }
+
+
 
 
 
