@@ -227,7 +227,16 @@ object App {
     )
 
     // 2. Convert to DataFrame and name the columns
-//    val replaceData1 = data1.toDF("id", "status", "start_date")
+    val replaceData1 = data1.toDF("id", "status", "start_date")
+    spark.sql("""create database if not exists cat.idb9""")
+    spark.sql("create table cat.idb9.tbl(id int) using delta")
+    replaceData1.write
+          .format("delta")
+          .mode("overwrite").option("overwriteSchema", "true")
+          .saveAsTable("cat.idb9.tbl")
+    spark.read.table("cat.idb9.tbl").show()
+
+    spark.sql("describe history cat.idb9.tbl")
 //    val replaceData = data.toDF("id", "status", "start_date")
 //
 //    replaceData.writeTo("cat.deltadb2.dtbl1")
