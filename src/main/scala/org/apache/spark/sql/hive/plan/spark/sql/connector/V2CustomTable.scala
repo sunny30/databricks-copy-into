@@ -56,14 +56,14 @@ case class V2CustomTable(name: String,
 
     }
 
-    val fileIndex = fileTable.fileIndex
+    var fileIndex = fileTable.fileIndex
     val dataSchema = catalogTable.dataSchema
     val readSchema = catalogTable.schema
 
     val paths = getPaths(options)
     val customFileTable = new V2CustomFileTable(sparkSession = sparkSession, options = options, paths = paths, userSpecifiedSchema = Some(readSchema), fileTable = fileTable, catalogTable = catalogTable)
-
-    V2CustomTableScanBuilder(multiPartName,provider, sparkSession, customFileTable.fileIndex,readSchema, dataSchema, options)
+    //fileIndex = customFileTable.fileIndex
+    V2CustomTableScanBuilder(multiPartName,provider, sparkSession, fileIndex,readSchema, dataSchema, options)
 
 
   }
