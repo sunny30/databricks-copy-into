@@ -26,6 +26,8 @@ object App {
       set("spark.sql.test.env", "true").
       set("spark.sql.hive.metastore.jars.path", "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/parquet-column-1.13.1.jar," +
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-metastore-3.1.3.jar," +
+//        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/jackson-core-2.6.7.jar" +
+//        "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/jackson-databind-2.6.7.3"+
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/hive-exec-3.1.3.jar, " +
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/commons-logging-1.1.1.jar," +
         "file:///Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/commons-io-2.7.jar," +

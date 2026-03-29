@@ -1,12 +1,15 @@
 package org.apache.spark.sql.hive.plan.spark.sql.connector
 
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition}
 import org.apache.spark.sql.connector.catalog.{SupportsRead, Table, TableCapability, TableProvider}
 import org.apache.spark.sql.connector.read.ScanBuilder
 import org.apache.spark.sql.execution.datasources.FileFormat
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
+import org.apache.spark.sql.execution.datasources.v2.{FileDataSourceV2, FileTable}
 import org.apache.spark.sql.execution.datasources.v2.csv.{CSVDataSourceV2, CSVTable}
 import org.apache.spark.sql.execution.datasources.v2.json.{JsonDataSourceV2, JsonTable}
 import org.apache.spark.sql.execution.datasources.v2.orc.{OrcDataSourceV2, OrcTable}
@@ -53,13 +56,23 @@ case class V2CustomTable(name: String,
 
     }
 
-    val fileIndex = fileTable.fileIndex
+    var fileIndex = fileTable.fileIndex
     val dataSchema = catalogTable.dataSchema
     val readSchema = catalogTable.schema
 
+    val paths = getPaths(options)
+    val customFileTable = new V2CustomFileTable(sparkSession = sparkSession, options = options, paths = paths, userSpecifiedSchema = Some(readSchema), fileTable = fileTable, catalogTable = catalogTable)
+    //fileIndex = customFileTable.fileIndex
     V2CustomTableScanBuilder(multiPartName,provider, sparkSession, fileIndex,readSchema, dataSchema, options)
 
 
+  }
+
+  protected def getPaths(map: CaseInsensitiveStringMap): Seq[String] = {
+    val paths = Option(map.get("paths")).map { pathStr =>
+      FileDataSourceV2.readPathsToSeq(pathStr)
+    }.getOrElse(Seq.empty)
+    paths ++ Option(map.get("path")).toSeq
   }
 
   override def schema(): StructType = catalogTable.schema
@@ -99,4 +112,10 @@ case class V2CustomTable(name: String,
     }
 
   }
+}
+
+private object FileDataSourceV2 {
+  private lazy val objectMapper = new ObjectMapper().registerModule(DefaultScalaModule)
+  def readPathsToSeq(paths: String): Seq[String] =
+    objectMapper.readValue(paths, classOf[Seq[String]])
 }
