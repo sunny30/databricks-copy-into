@@ -19,9 +19,11 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper,
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.{convertTableProperties, withDefaultOwnership}
 import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, Table, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.connector.expressions.Transform
-import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable}
+import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable, TableChanges}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.DeleteCommand
+import org.apache.spark.sql.delta.commands.cdc.CDCReader
+import org.apache.spark.sql.delta.commands.cdc.CDCReader.DeltaCDFRelation
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
@@ -304,10 +306,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               //            catalogTable = Some(deltaTableV2.catalogTable.get))
               //          LogicalRelation(dataSource.resolveRelation(false), deltaTableV2.catalogTable.get)
 
-              val ds = DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)))
-              if (!CLSUtils.isViewsPlan(u)) {
-                println("secure child should apply")
-                CLSUtils.getSecureDataSource(ds)
+              val ds = DataSourceV2Relation.create(deltaTableV2, Some(sessionCatalog), Some(Identifier.of(Seq(res._2).toArray, res._3)), options = u.options)
+              if (!CLSUtils.isViewsPlan(u) ) {
+                if(CDCReader.isCDCRead(u.options)){
+                  ds
+                }else {
+                  println("secure child should apply")
+                  CLSUtils.getSecureDataSource(ds)
+                }
               } else {
                 println("secure child should not apply")
                 CLSUtils.tagViewPlan(ds)
@@ -631,9 +637,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         ds
 
       case d: DataSourceV2Relation =>
-        println("this is DataSourceV2" + d.toString())
-        if (d.table.isInstanceOf[DeltaTableV2]) {
+        println("this is DataSourceV2 " + d.toString())
+        if (d.table.isInstanceOf[DeltaTableV2] && d.getTagValue(DeltaRelation.KEEP_AS_V2_RELATION_TAG).isEmpty ) {
           println("Inside DataSourceV2 for DeltaTable")
+          println("Making map "+ d.options.asScala.mkString(","))
           DeltaRelation.fromV2Relation(d.table.asInstanceOf[DeltaTableV2], d, d.options)
 
         } else {
@@ -645,7 +652,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               d
             }
           } else {
-            CLSUtils.getSecureRelation(d)
+            if(CDCReader.isCDCRead(d.options)){
+              d
+            }else {
+              CLSUtils.getSecureRelation(d)
+            }
           }
         }
 
@@ -684,14 +695,24 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       //        res
       case p: LogicalPlan =>
         println("Default plan is " + p.toString())
-        if (p.toString().contains("AppendData")) {
-          println("got you")
-        }
+
         p match {
 
+          case tc@TableChanges(child, fnName, cdcAttr) if tc.child.resolved =>
+            println("tc child plan is "+child.toString())
+            tc.toReadQuery
+           // getDeltaTableV2RelationFrom(child)
+
+
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
-            println("Inside Logical Relation " + p.toString())
-            CLSUtils.getSecureRelation(lr)
+            println("Inside Logical Relation " + relation.toString)
+            if(lr.relation.isInstanceOf[DeltaCDFRelation]) {
+              lr
+            } else {
+              lr
+              //println("")
+             CLSUtils.getSecureRelation(lr)
+            }
 
 
 
@@ -1049,10 +1070,6 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   def getCatalogDetailsFromInsertIntoHadoopFs(in:InsertIntoHadoopFsRelationCommand):Option[String]={
     in.getTagValue(TreeNodeTag[String]("catalog-details"))
   }
-
-
-
-
 
 
 

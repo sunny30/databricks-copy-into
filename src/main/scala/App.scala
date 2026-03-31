@@ -159,6 +159,24 @@ object App {
       (12, "papa")
     ).toDF("id", "name")
 
+    /**delta convert and cdc changes for three part name**/
+
+    spark.sql("""create database if not exists cat.ddb1""")
+    spark.sql("create table cat.ddb1.dt(id int) using delta TBLPROPERTIES (delta.enableChangeDataFeed = true)")
+    spark.sql("insert into cat.ddb1.dt values (1), (2)")
+    spark.sql("insert into cat.ddb1.dt values (3), (4)")
+    spark.sql("insert into cat.ddb1.dt values (5), (6)")
+    spark.sql("SELECT * FROM table_changes('cat.ddb1.dt', 0, 2)").show()
+    println("SQL output of CDC")
+//    spark.read.format("delta")
+//      .option("readChangeFeed", "true")
+//      .option("startingVersion", 0).table("cat.ddb1.dt").show()
+//    println("Dataframe output of CDC")
+
+
+    /**ends with delta convert and cdc changes for three part name**/
+
+
 //    df5.createTempView("tmp_v")
 //
 //
@@ -230,15 +248,15 @@ object App {
 
     // 2. Convert to DataFrame and name the columns
     val replaceData1 = data1.toDF("id", "status", "start_date")
-    spark.sql("""create database if not exists cat.idb9""")
-    spark.sql("create table cat.idb9.tbl(id int) using delta")
-    replaceData1.write
-          .format("delta")
-          .mode("overwrite").option("overwriteSchema", "true")
-          .saveAsTable("cat.idb9.tbl")
-    spark.read.table("cat.idb9.tbl").show()
-
-    spark.sql("describe history cat.idb9.tbl")
+//    spark.sql("""create database if not exists cat.idb9""")
+//    spark.sql("create table cat.idb9.tbl(id int) using delta")
+//    replaceData1.write
+//          .format("delta")
+//          .mode("overwrite").option("overwriteSchema", "true")
+//          .saveAsTable("cat.idb9.tbl")
+//    spark.read.table("cat.idb9.tbl").show()
+//
+//    spark.sql("describe history cat.idb9.tbl")
 //    val replaceData = data.toDF("id", "status", "start_date")
 //
 //    replaceData.writeTo("cat.deltadb2.dtbl1")

@@ -9,6 +9,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.{Table, TableSchemaChangeCatalog}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
+import org.apache.spark.sql.delta.commands.cdc.CDCReader
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
@@ -38,7 +39,7 @@ object CLSUtils {
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) => getSecurePlanFromDataSourceV2(ds, table)
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) => getSecurePlanFromDataSourceV2(ds, table)
       case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr, catalogTable.get)
       case _ => plan
 
@@ -53,6 +54,7 @@ object CLSUtils {
   }
 
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
+    println("Inside getSecurePlanFromLogicalRelation")
     val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
     getSecureLeafPlan(secureTable, ds)
@@ -174,6 +176,7 @@ object CLSUtils {
   }
 
   def getProjectedTable(plan:LogicalPlan,ctx: TableNameContext):LogicalPlan={
+    println("Inside getProjectedTable")
     if(ctx.identifierReference()!=null && !isPlanAlreadyHaveSecureProjection(plan)){
       val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
@@ -218,6 +221,7 @@ object CLSUtils {
   }
 
   def getSecureRelation(plan:LogicalPlan):LogicalPlan={
+
     if (CLSUtils.isViewTagPresent(plan)) {
       plan
     } else {

@@ -37,6 +37,7 @@ class CLSSecRule(session: SparkSession)
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) if CLSUtils.isViewsPlan(u)=>
       //CLSUtils.tagViewPlan(u)
+      println("View unresolved relation")
       ViewUnresolvedRelation(u)
 
     case plan: LogicalPlan => plan
