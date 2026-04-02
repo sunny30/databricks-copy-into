@@ -18,7 +18,7 @@ import org.apache.spark.sql.catalyst.parser.extensions.IcebergSparkSqlExtensions
 
 class CustomDeltaSqlParser(val delegate: CustomSparkSQLParser) extends ParserInterface {
 
-  private val builder = new DeltaSqlAstBuilder
+  private val builder = new CustomDeltaSqlAstBuilder()
   private val substitution = new VariableSubstitution
 
 

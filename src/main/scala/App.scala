@@ -141,23 +141,51 @@ object App {
 
 
 
-    val df4 = Seq(
-      (7, "Hardy", 2.0),
-      (8, "vaccum", 3.0),
-      (9, "sherlock", 4.0),
-      (10, "johny", 5.0),
-      (11, "Yes", 6.0),
-      (12, "papa", 7.0)
-    ).toDF("col1", "col2", "col3")
+//    val df4 = Seq(
+//      (7, "Hardy", 2.0),
+//      (8, "vaccum", 3.0),
+//      (9, "sherlock", 4.0),
+//      (10, "johny", 5.0),
+//      (11, "Yes", 6.0),
+//      (12, "papa", 7.0)
+//    ).toDF("col1", "col2", "col3")
+//
+//    val df5 = Seq(
+//      (7, "Hardy"),
+//      (8, "vacum"),
+//      (9, "sherlock"),
+//      (10, "johny"),
+//      (11, "Yes"),
+//      (12, "papa")
+//    ).toDF("id", "name")
 
-    val df5 = Seq(
-      (7, "Hardy"),
-      (8, "vacum"),
-      (9, "sherlock"),
-      (10, "johny"),
-      (11, "Yes"),
-      (12, "papa")
-    ).toDF("id", "name")
+    /**delta convert and cdc changes for three part name**/
+
+//    spark.sql("""create database if not exists cat.ddb1""")
+//    spark.sql("create table cat.ddb1.dt(id int) using delta TBLPROPERTIES (delta.enableChangeDataFeed = true)")
+//    spark.sql("insert into cat.ddb1.dt values (1), (2)")
+//    spark.sql("insert into cat.ddb1.dt values (3), (4)")
+//    spark.sql("insert into cat.ddb1.dt values (5), (6)")
+//    spark.sql("SELECT * FROM table_changes('cat.ddb1.dt', 0, 2)").show()
+   // println("SQL output of CDC")
+//    spark.read.format("delta")
+//      .option("readChangeFeed", "true")
+//      .option("startingVersion", 0).table("cat.ddb1.dt").show()
+//    println("Dataframe output of CDC")
+
+
+    spark.sql("""create database if not exists cat.ddb2""")
+    spark.sql("create table cat.ddb2.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+    spark.sql("create table cat.ddb2.pt(id int, name1 string) using parquet")
+    spark.sql("insert into cat.ddb2.ppt values(1,'sh'), (2, 'su')")
+    spark.sql("insert into cat.ddb2.pt values(1,'sh'), (2, 'su')")
+
+    spark.sql("CONVERT TO DELTA cat.ddb2.ppt")
+    spark.sql("CONVERT TO DELTA cat.ddb2.pt")
+    spark.sql("describe formatted cat.ddb2.ppt").show()
+    spark.sql("describe formatted cat.ddb2.pt").show()
+    /**ends with delta convert and cdc changes for three part name**/
+
 
 //    df5.createTempView("tmp_v")
 //
@@ -230,15 +258,15 @@ object App {
 
     // 2. Convert to DataFrame and name the columns
     val replaceData1 = data1.toDF("id", "status", "start_date")
-    spark.sql("""create database if not exists cat.idb9""")
-    spark.sql("create table cat.idb9.tbl(id int) using delta")
-    replaceData1.write
-          .format("delta")
-          .mode("overwrite").option("overwriteSchema", "true")
-          .saveAsTable("cat.idb9.tbl")
-    spark.read.table("cat.idb9.tbl").show()
-
-    spark.sql("describe history cat.idb9.tbl")
+//    spark.sql("""create database if not exists cat.idb9""")
+//    spark.sql("create table cat.idb9.tbl(id int) using delta")
+//    replaceData1.write
+//          .format("delta")
+//          .mode("overwrite").option("overwriteSchema", "true")
+//          .saveAsTable("cat.idb9.tbl")
+//    spark.read.table("cat.idb9.tbl").show()
+//
+//    spark.sql("describe history cat.idb9.tbl")
 //    val replaceData = data.toDF("id", "status", "start_date")
 //
 //    replaceData.writeTo("cat.deltadb2.dtbl1")

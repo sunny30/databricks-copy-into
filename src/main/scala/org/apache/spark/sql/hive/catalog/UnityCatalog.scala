@@ -172,8 +172,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     table match {
       case deltaTableV2: DeltaTableV2 => (new UnityDeltaCatalog(externalCatalog, catalogName)).alterTable(ident, changes)
       case _ => try {
+        val newProvider = properties.getOrElse("spark.sql.sources.provider", catalogTable.provider.getOrElse("csv"))
         externalCatalog.alterTable(
           catalogTable.copy(
+            provider = Some(newProvider),
             properties = properties, schema = schema, owner = owner, comment = comment,
             storage = storage))
 
