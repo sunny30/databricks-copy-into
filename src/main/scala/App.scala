@@ -54,7 +54,7 @@ object App {
       .set("spark.sql.cbo.enabled", "true")
       .set("spark.sql.cbo.planStats.enabled", "true")
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
-      .set("spark.sql.parquet.aggregatePushdown", "true")
+      .set("spark.sql.parquet.aggregatePushdown", "true").set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.ptotocol.ManifestCommitProtocol")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -174,17 +174,26 @@ object App {
 //    println("Dataframe output of CDC")
 
 
-    spark.sql("""create database if not exists cat.ddb2""")
-    spark.sql("create table cat.ddb2.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
-    spark.sql("create table cat.ddb2.pt(id int, name1 string) using parquet")
-    spark.sql("insert into cat.ddb2.ppt values(1,'sh'), (2, 'su')")
-    spark.sql("insert into cat.ddb2.pt values(1,'sh'), (2, 'su')")
-
-    spark.sql("CONVERT TO DELTA cat.ddb2.ppt")
-    spark.sql("CONVERT TO DELTA cat.ddb2.pt")
-    spark.sql("describe formatted cat.ddb2.ppt").show()
-    spark.sql("describe formatted cat.ddb2.pt").show()
+//    spark.sql("""create database if not exists cat.ddb2""")
+//    spark.sql("create table cat.ddb2.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+//    spark.sql("create table cat.ddb2.pt(id int, name1 string) using parquet")
+//    spark.sql("insert into cat.ddb2.ppt values(1,'sh'), (2, 'su')")
+//    spark.sql("insert into cat.ddb2.pt values(1,'sh'), (2, 'su')")
+//
+//    spark.sql("CONVERT TO DELTA cat.ddb2.ppt")
+//    spark.sql("CONVERT TO DELTA cat.ddb2.pt")
+//    spark.sql("describe formatted cat.ddb2.ppt").show()
+//    spark.sql("describe formatted cat.ddb2.pt").show()
+//    spark.sql("describe history cat.ddb2.ppt").show()
+//    spark.sql("describe history cat.ddb2.pt").show()
     /**ends with delta convert and cdc changes for three part name**/
+
+
+    spark.sql("""create database if not exists cat.ddb3""")
+    spark.sql("create table cat.ddb3.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+    spark.sql("create table cat.ddb3.pt(id int, name1 string) using parquet")
+    spark.sql("insert into cat.ddb3.ppt values(1,'sh'), (2, 'su')")
+    spark.sql("insert into cat.ddb3.pt values(1,'sh'), (2, 'su')")
 
 
 //    df5.createTempView("tmp_v")
