@@ -189,11 +189,18 @@ object App {
     /**ends with delta convert and cdc changes for three part name**/
 
 
-    spark.sql("""create database if not exists cat.ddb3""")
-    spark.sql("create table cat.ddb3.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
-    spark.sql("create table cat.ddb3.pt(id int, name1 string) using parquet")
-    spark.sql("insert into cat.ddb3.ppt values(1,'sh'), (2, 'su')")
-    spark.sql("insert into cat.ddb3.pt values(1,'sh'), (2, 'su')")
+    spark.sql("""create database if not exists cat.ddb4""")
+    spark.sql("create table cat.ddb4.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+    spark.sql("insert into cat.ddb4.ppt values(1,'1'), (2, '2')")
+
+    spark.conf.set("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
+    spark.sql("select distinct name1 from cat.ddb4.ppt").show()
+
+//    spark.sql("""create database if not exists cat.ddb3""")
+//    spark.sql("create table cat.ddb3.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+//    spark.sql("create table cat.ddb3.pt(id int, name1 string) using parquet")
+//    spark.sql("insert into cat.ddb3.ppt values(1,'sh'), (2, 'su')")
+//    spark.sql("insert into cat.ddb3.pt values(1,'sh'), (2, 'su')")
 
 
 //    df5.createTempView("tmp_v")
