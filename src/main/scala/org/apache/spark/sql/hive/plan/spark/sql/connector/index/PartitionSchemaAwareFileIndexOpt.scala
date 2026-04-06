@@ -195,7 +195,7 @@ class PartitionSchemaAwareFileIndexOpt(
 
 // ── Companion ──────────────────────────────────────────────────────────────
 
-object PartitionSchemaAwareFileIndex {
+object PartitionSchemaAwareFileIndexOpt {
 
   def apply(
              sparkSession: SparkSession,

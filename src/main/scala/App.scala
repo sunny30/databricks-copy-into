@@ -69,6 +69,7 @@ object App {
     /** Custom data format  write options* */
 
     import spark.implicits._
+    spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
@@ -189,12 +190,12 @@ object App {
     /**ends with delta convert and cdc changes for three part name**/
 
 
-    spark.sql("""create database if not exists cat.ddb4""")
-    spark.sql("create table cat.ddb4.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
-    spark.sql("insert into cat.ddb4.ppt values(1,'1'), (2, '2')")
-
-    spark.conf.set("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
-    spark.sql("select distinct name1 from cat.ddb4.ppt").show()
+//    spark.sql("""create database if not exists cat.ddb4""")
+//    spark.sql("create table cat.ddb4.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+//    spark.sql("insert into cat.ddb4.ppt values(1,'1'), (2, '2')")
+//
+//    spark.conf.set("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
+//    spark.sql("select distinct name1 from cat.ddb4.ppt").show()
 
 //    spark.sql("""create database if not exists cat.ddb3""")
 //    spark.sql("create table cat.ddb3.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")

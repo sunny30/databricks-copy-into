@@ -254,7 +254,7 @@ class ManifestAwareFileIndex(
   private val failOnIncomplete: Boolean =
     sparkSession.conf.get("spark.sql.manifest.failOnIncompleteWrite", "true").toBoolean
 
-  private val hadoopConf = sparkSession.sessionState.newHadoopConf()
+   override val hadoopConf = sparkSession.sessionState.newHadoopConf()
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  PARTITION SCHEMA OVERRIDE
