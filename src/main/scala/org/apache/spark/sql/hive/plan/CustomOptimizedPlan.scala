@@ -142,7 +142,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             catalog.asTableCatalog.dropTable(ident)
           }
           val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-          Thread.sleep(30000)
+          //Thread.sleep(30000)
 
 
           val ps = getPartitionAttributeFromV2Table(writePlan, table)

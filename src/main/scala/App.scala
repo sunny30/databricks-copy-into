@@ -54,7 +54,8 @@ object App {
       .set("spark.sql.cbo.enabled", "true")
       .set("spark.sql.cbo.planStats.enabled", "true")
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
-      .set("spark.sql.parquet.aggregatePushdown", "true").set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.ptotocol.ManifestCommitProtocol")
+      .set("spark.sql.parquet.aggregatePushdown", "true")
+      .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV3")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -69,14 +70,14 @@ object App {
     /** Custom data format  write options* */
 
     import spark.implicits._
-    spark.sql("create table db.t1(id int) using parquet")
+    //spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
-    val df3 = Seq(
+    var df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
       (9, "Xiaoyu", 4.0),
@@ -84,6 +85,20 @@ object App {
       (11, "Bharath", 6.0),
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
+
+    df3 = df3.select("col1", "col3", "col2")
+ //   spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/manifest_db.db/tbl/").show()
+
+    spark.sql("""create database if not exists cat.manifest_db""")
+    df3.write.partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+    df3.write.partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+
+
+    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
+    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
+
+
+
 
 //    val df2 = df3.select("col1", "col3", "col2")
 //    /**write begins**/
