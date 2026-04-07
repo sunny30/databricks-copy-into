@@ -103,169 +103,289 @@ class ManifestFileCommitProtocolV2(
   //        and _committed_ that super.commitJob already placed there.)
   // ─────────────────────────────────────────────────────────────────────────
   override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
-    val oldFiles = listDataFileNames(fs, path)
-    pendingDeleteByDir.put(path.toString, oldFiles.asJava)
-    logInfo(s"ManifestCommitProtocol.deleteWithJob: deferred $path " +
-      s"(${oldFiles.size} old data files captured)")
-    true  // signal success; actual deletion happens in commitJob
+    // path = table root for full overwrite, or specific prefix for partial overwrite.
+    // Recurse to find every partition leaf dir that directly contains data files.
+    // Also record the exact top-level path passed in so we can delete empty parent
+    // dirs later if needed.
+    collectOldFilesRecursively(fs, path)
+    logInfo(
+      s"ManifestCommitProtocol.deleteWithJob: deferred $path → " +
+        s"${pendingDeleteByDir.size()} partition dir(s) with old data")
+    true
+  }
+
+
+  private def collectOldFilesRecursively(fs: FileSystem, dir: Path): Unit = {
+    val statuses =
+      try {
+        fs.listStatus(dir)
+      }
+      catch {
+        case _: Exception => return
+      }
+
+    val (subDirs, files) = statuses.partition(_.isDirectory)
+
+    // Data files directly in this dir (not hidden)
+    val dataFilesHere = files
+      .map(_.getPath.getName)
+      .filter(isDataFile)
+
+    if (dataFilesHere.nonEmpty) {
+      // This is a partition leaf dir (or root for unpartitioned).
+      // Key MUST be qualified — matches newTaskTempFile's makeQualified key.
+      val qualifiedKey = fs.makeQualified(dir).toString
+      val list = new java.util.ArrayList[String]()
+      dataFilesHere.foreach(list.add)
+      pendingDeleteByDir.put(qualifiedKey, list)
+      logDebug(
+        s"ManifestCommitProtocol.collectOldFiles: $qualifiedKey → " +
+          s"${dataFilesHere.length} old file(s)")
+    }
+
+    // Recurse into non-hidden subdirs (partition dirs: p=1/, year=2024/, etc.)
+    subDirs
+      .filterNot(s => {
+        val n = s.getPath.getName
+        n.startsWith("_") || n.startsWith(".")
+      })
+      .foreach(s => collectOldFilesRecursively(fs, s.getPath))
+  }
+
+  private def cleanupEmptyAncestors(
+                                     fs: FileSystem,
+                                     dir: Path,
+                                     stopAt: Path): Unit = {
+
+    // Qualify both paths so string comparison is reliable
+    val qualDir = try {
+      fs.makeQualified(dir)
+    }
+    catch {
+      case _: Exception => return
+    }
+    val qualStopAt = try {
+      fs.makeQualified(stopAt)
+    }
+    catch {
+      case _: Exception => return
+    }
+
+    // Never climb above or to the table root
+    if (qualDir == qualStopAt) return
+    if (!qualDir.toString.startsWith(qualStopAt.toString)) return
+
+    try {
+      if (!fs.exists(qualDir)) return
+
+      val children = fs.listStatus(qualDir)
+
+      // Check if this dir is truly empty — no files, no subdirs
+      // (hidden files like _started_ that we may have left are NOT counted
+      //  as "real" content; we check for data files and non-hidden subdirs)
+      val hasRealContent = children.exists { s =>
+        val name = s.getPath.getName
+        !name.startsWith("_") && !name.startsWith(".")
+      }
+
+      if (!hasRealContent) {
+        // Dir is empty (or only has hidden marker files) — delete it
+        fs.delete(qualDir, /* recursive = */ true)
+        logInfo(
+          s"ManifestCommitProtocol: deleted empty ancestor dir $qualDir")
+
+        // Continue walking up
+        cleanupEmptyAncestors(fs, qualDir.getParent, qualStopAt)
+      }
+      // else: dir still has real content (siblings) → stop climbing
+
+    } catch {
+      case e: Exception =>
+        logWarning(
+          s"ManifestCommitProtocol: cleanupEmptyAncestors failed at $qualDir: " +
+            s"${e.getMessage}")
+      // Do not propagate — ancestor cleanup is best-effort
+    }
   }
 
   override def commitJob(
                           jobContext: JobContext,
                           taskCommits: Seq[TaskCommitMessage]): Unit = {
 
-    // ── Step 1: Unwrap CombinedCommitPayload ──────────────────────────────
-    // Split into:
-    //   superMessages       — carry original Tuple2 for super.commitJob()
-    //   mergedPartitionFiles — our partition→files map for manifest writing
+    // ── Step 1: unwrap CombinedCommitPayload ────────────────────────────────
     val mergedPartitionFiles =
-    new java.util.HashMap[String, java.util.List[String]]()
+      new java.util.HashMap[String, java.util.List[String]]()
 
     val superMessages: Seq[TaskCommitMessage] = taskCommits.map { msg =>
       msg.obj match {
-        case cp: CombinedCommitPayloadV2 =>
+        case cp: CombinedCommitPayload =>
           cp.partitionFiles.forEach { (partDir, files) =>
             mergedPartitionFiles
               .computeIfAbsent(partDir, _ => new java.util.ArrayList[String]())
               .addAll(files)
           }
-          new TaskCommitMessage(cp.superObj)   // restore Tuple2 for super
-
-        case _ => msg  // empty task or unexpected — pass through unchanged
+          new TaskCommitMessage(cp.superObj)
+        case _ => msg
       }
     }
 
-    // ── Step 2: Capture REMOVED file lists BEFORE super.commitJob() ───────
+    // ── Step 2: capture REMOVED lists BEFORE super.commitJob() ──────────────
     //
-    // DYNAMIC overwrite:
-    //   super.commitJob() will call fs.delete(finalPartDir, true) for each
-    //   partition being overwritten. We MUST list old files NOW before they
-    //   are deleted, otherwise we lose the "removed" metric forever.
-    //
-    // STATIC overwrite:
-    //   Already captured in deleteWithJob(). No listing needed here.
-    val removedByPartition = new java.util.HashMap[String, java.util.List[String]]()
+    // Dynamic overwrite: list old files in each written partition dir NOW,
+    //   before super.commitJob() deletes them.
+    // Static overwrite: already captured in deleteWithJob → collectOldFilesRecursively.
+    val removedByPartition =
+    new java.util.HashMap[String, java.util.List[String]]()
 
     if (dynamicPartitionOverwrite) {
       mergedPartitionFiles.keySet().forEach { partDir =>
-        val p     = new Path(partDir)
+        val p = new Path(partDir)
         val partFs = p.getFileSystem(jobContext.getConfiguration)
-        val old   = listDataFileNames(partFs, p)
+        val old = listDataFileNames(partFs, partFs.makeQualified(p))
         if (old.nonEmpty) {
           removedByPartition.put(partDir, old.asJava)
-          logInfo(s"ManifestCommitProtocol: captured ${old.size} old files " +
-            s"from $partDir before dynamic overwrite")
+          logInfo(s"ManifestCommitProtocol: captured ${old.size} old file(s) at $partDir")
         }
       }
     } else {
-      // Static: use what deleteWithJob() recorded
-      pendingDeleteByDir.forEach { (dirPath, oldFiles) =>
-        if (!oldFiles.isEmpty) removedByPartition.put(dirPath, oldFiles)
+      // Static: pendingDeleteByDir has old file lists keyed by qualified path.
+      // Build removedByPartition from only the partitions that ARE being written
+      // (others get the full dir deleted below, not listed in manifest).
+      pendingDeleteByDir.forEach { (qualDir, oldFiles) =>
+        if (mergedPartitionFiles.containsKey(qualDir) && !oldFiles.isEmpty) {
+          removedByPartition.put(qualDir, oldFiles)
+        }
+      }
+      // For partitions NOT in mergedPartitionFiles, the whole dir will be deleted
+      // in step 6. We still record their files in the ROOT manifest removed list.
+      pendingDeleteByDir.forEach { (qualDir, oldFiles) =>
+        if (!mergedPartitionFiles.containsKey(qualDir) && !oldFiles.isEmpty) {
+          // These files are going away via full dir delete; add to removed list
+          removedByPartition.merge(
+            qualDir, new java.util.ArrayList[String](oldFiles),
+            (a, b) => {
+              a.addAll(b); a
+            })
+        }
       }
     }
 
-    // ── Step 3: super.commitJob() ─────────────────────────────────────────
-    //
-    // DYNAMIC overwrite (what super does):
-    //   for each partition in partitionPaths (from Tuple2._2):
-    //     fs.delete(outputPath/p=1, recursive=true)   ← DELETES old dir entirely
-    //     fs.rename(stagingDir/p=1, outputPath/p=1)   ← moves new files to final
-    //   fs.delete(stagingDir)
-    //
-    //   Result: outputPath/p=1/ has ONLY new data files after this call.
-    //   Any _started_ or _committed_ we wrote at task time is now gone
-    //   (it was inside the old dir that got deleted). This is why we must
-    //   write _committed_ AFTER this call, not before.
-    //
-    // STATIC overwrite (what super does):
-    //   Renames staged files to final output dir.
-    //   Old files still coexist with new files (we deferred deletion).
-    //   Result: outputPath/p=1/ has OLD + NEW data files after this call.
+    // ── Step 3: super.commitJob() ────────────────────────────────────────────
+    // Dynamic: deletes old partition dirs, renames staging → final.
+    // Static:  renames staged files to final (old files still coexist).
+    // _committed_ MUST be written AFTER this call in both cases.
     super.commitJob(jobContext, superMessages)
 
-    // ── Step 4: Write per-partition _committed_ ───────────────────────────
-    //
-    // Written AFTER super.commitJob() for two reasons:
-    //   (a) Dynamic: partition dirs now exist at final location with new files.
-    //       Writing _committed_ before would have it deleted by super's
-    //       fs.delete(finalPartDir, true).
-    //   (b) Static: new files are now at final location (alongside old ones).
-    //       _committed_ correctly lists only the new files; old files will be
-    //       deleted in step 6 below.
+    // ── Step 4: write per-partition _committed_ (AFTER super) ────────────────
     mergedPartitionFiles.forEach { (partDir, addedFiles) =>
       val partPath = new Path(partDir)
-      val partFs   = partPath.getFileSystem(jobContext.getConfiguration)
-      val removed  = removedByPartition.getOrDefault(
+      val partFs = partPath.getFileSystem(jobContext.getConfiguration)
+      val removed = removedByPartition.getOrDefault(
         partDir, new java.util.ArrayList[String]())
       writePartitionCommitted(
         partFs, partPath, addedFiles.asScala.toSeq, removed.asScala.toSeq)
     }
 
-    // ── Step 5: Write root-level _committed_ ─────────────────────────────
-    val allRemoved = removedByPartition.values().asScala
-      .flatMap(_.asScala).toSeq
+    // ── Step 5: write root-level _committed_ ─────────────────────────────────
+    val allRemoved = removedByPartition.values().asScala.flatMap(_.asScala).toSeq
     writeRootCommitted(jobFs, outputDir, mergedPartitionFiles, allRemoved)
 
-    // ── Step 6: Delete old files (STATIC overwrite only) ─────────────────
+    // ── Step 6: clean up old data (STATIC overwrite only) ────────────────────
     //
-    // Delete ONLY the specific OLD files captured in deleteWithJob().
-    // NOT the whole directory — that would destroy new data files and
-    // the _committed_ manifest we just wrote in step 4.
+    //  TWO DIFFERENT ACTIONS depending on whether a partition got new data:
     //
-    // After this step:
-    //   outputPath/p=1/ has: new data files + _committed_<tid>
-    //   Old data files are gone.
+    //  A) Partition IS in mergedPartitionFiles (e.g. p=1, p=2):
+    //     New data files + _committed_ are already in this dir.
+    //     Delete only the specific OLD data files by name.
+    //     Do NOT delete the dir or _committed_.
+    //
+    //  B) Partition is NOT in mergedPartitionFiles (e.g. p=3):
+    //     No new data was written here. The partition must be fully removed.
+    //     Delete the ENTIRE directory recursively.
+    //     This is the bug fix: old code only deleted files, leaving an empty
+    //     orphan directory that still appeared in partition discovery.
+    //
     if (!dynamicPartitionOverwrite) {
-      pendingDeleteByDir.forEach { (dirPath, oldFileNames) =>
-        val dirFs = new Path(dirPath).getFileSystem(jobContext.getConfiguration)
-        oldFileNames.forEach { name =>
-          val filePath = new Path(dirPath, name)
+      pendingDeleteByDir.forEach { (qualDir, oldFileNames) =>
+        val dirPath = new Path(qualDir)
+        val dirFs = dirPath.getFileSystem(jobContext.getConfiguration)
+
+        if (mergedPartitionFiles.containsKey(qualDir)) {
+          // ── Case A: partition has new data ──────────────────────────────────
+          // Delete only the old data files captured before the write.
+          // Leave new data files and _committed_ untouched.
+          oldFileNames.forEach { name =>
+            val filePath = new Path(qualDir, name)
+            try {
+              if (dirFs.exists(filePath)) {
+                dirFs.delete(filePath, false)
+                logDebug(s"ManifestCommitProtocol: deleted old file $filePath")
+              }
+            } catch {
+              case e: Exception =>
+                logWarning(
+                  s"ManifestCommitProtocol: could not delete old file $filePath: " +
+                    s"${e.getMessage}")
+            }
+          }
+
+        } else {
+          // ── Case B: partition has NO new data ───────────────────────────────
+          // This partition does not exist in the new dataset.
+          // Delete the entire partition directory so it is completely removed
+          // from the table. Leaving an empty dir would cause it to appear in
+          // partition discovery (inferPartitioning) with zero rows.
           try {
-            if (dirFs.exists(filePath)) {
-              dirFs.delete(filePath, false)
-              logDebug(s"ManifestCommitProtocol: deleted old file $filePath")
+            if (dirFs.exists(dirPath)) {
+              dirFs.delete(dirPath, /* recursive = */ true)
+              logInfo(
+                s"ManifestCommitProtocol: deleted stale partition dir $qualDir " +
+                  s"(not present in new write)")
+              cleanupEmptyAncestors(dirFs, dirPath.getParent, new Path(outputPath))
             }
           } catch {
             case e: Exception =>
               logWarning(
-                s"ManifestCommitProtocol: could not delete old file $filePath: ${e.getMessage}")
+                s"ManifestCommitProtocol: could not delete stale partition dir " +
+                  s"$qualDir: ${e.getMessage}")
           }
         }
       }
       pendingDeleteByDir.clear()
     }
 
-    // ── Step 7: Delete _started_ files ───────────────────────────────────
-    //
-    // Root _started_ — always present
+    // ── Step 7: delete _started_ files ───────────────────────────────────────
     safeDelete(jobFs, new Path(outputDir, s"_started_$jobId"))
 
     if (dynamicPartitionOverwrite) {
-      // For DYNAMIC: partition-level _started_ files were inside the old
-      // partition dirs. super.commitJob() deleted those dirs entirely in step 3,
-      // so _started_ is already gone. Nothing to do for partition level.
-      //
-      // But clean up any _started_/_committed_ from PREVIOUS jobs that might
-      // be lingering in the newly renamed partition dirs.
+      // Dynamic: super deleted old partition dirs entirely (step 3).
+      // Partition-level _started_ is gone with them. Clean old manifests only.
       mergedPartitionFiles.keySet().forEach { partDir =>
-        val p     = new Path(partDir)
-        val partFs = p.getFileSystem(jobContext.getConfiguration)
-        cleanupOldManifests(p, partFs)
+        val p = new Path(partDir)
+        val pFs = p.getFileSystem(jobContext.getConfiguration)
+        cleanupOldManifests(p, pFs)
       }
     } else {
-      // For STATIC: partition-level _started_ still exists (dir was not deleted).
-      // Delete it per partition.
+      // Static: dirs for written partitions still exist. Delete their _started_.
+      // Dirs for stale partitions (case B) were deleted entirely in step 6.
       mergedPartitionFiles.keySet().forEach { partDir =>
-        val p     = new Path(partDir)
-        val partFs = p.getFileSystem(jobContext.getConfiguration)
-        safeDelete(partFs, new Path(p, s"_started_$jobId"))
+        val p = new Path(partDir)
+        val pFs = p.getFileSystem(jobContext.getConfiguration)
+        safeDelete(pFs, new Path(p, s"_started_$jobId"))
       }
     }
 
     logInfo(
       s"ManifestCommitProtocol.commitJob: complete. " +
-        s"path=$outputPath partitions=${mergedPartitionFiles.size()} " +
-        s"dynamic=$dynamicPartitionOverwrite")
+        s"path=$outputPath " +
+        s"partitions_written=${mergedPartitionFiles.size()} " +
+        s"partitions_deleted_entirely=${
+          pendingDeleteByDir.asScala.keys
+            .count(k => !mergedPartitionFiles.containsKey(k))
+        } " +
+        s"dynamic=$dynamicPartitionOverwrite " +
+        s"added=${mergedPartitionFiles.values().asScala.map(_.size()).sum} " +
+        s"removed=${allRemoved.size}")
   }
 
   override def abortJob(jobContext: JobContext): Unit = {
@@ -376,7 +496,7 @@ class ManifestFileCommitProtocolV2(
     taskPartitionFiles.clear()
     seenPartitionDirs.clear()
 
-    new TaskCommitMessage(CombinedCommitPayloadV2(superMsg.obj, snapshot))
+    new TaskCommitMessage(CombinedCommitPayload(superMsg.obj, snapshot))
   }
 
   override def abortTask(taskContext: TaskAttemptContext): Unit = {

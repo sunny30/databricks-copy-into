@@ -55,7 +55,7 @@ object App {
       .set("spark.sql.cbo.planStats.enabled", "true")
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
       .set("spark.sql.parquet.aggregatePushdown", "true")
-      .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV3")
+      .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV2")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -86,16 +86,21 @@ object App {
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
 
-    df3 = df3.select("col1", "col3", "col2")
- //   spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/manifest_db.db/tbl/").show()
 
-    spark.sql("""create database if not exists cat.manifest_db""")
-    df3.write.partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
-    df3.write.partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+   df3 = df3.select("col1", "col3", "col2")
+   df3.write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
+   df3.filter("col1>9").write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
 
 
-    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
-    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
+//// //   spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/manifest_db.db/tbl/").show()
+////
+//    spark.sql("""create database if not exists cat.manifest_db""")
+//    df3.write.option("path", "/tmp/mtbl").partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+//    df3.filter("col1 > 9").write.partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+////
+//
+//    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
+//    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
 
 
 
