@@ -77,19 +77,32 @@ object App {
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
-    var df3 = Seq(
-      (7, "John", 2.0),
-      (8, "Sunny", 3.0),
-      (9, "Xiaoyu", 4.0),
-      (10, "Shashi", 5.0),
-      (11, "Bharath", 6.0),
-      (12, "Vivek", 7.0)
-    ).toDF("col1", "col2", "col3")
+//    var df3 = Seq(
+//      (7, "John", 2.0),
+//      (8, "Sunny", 3.0),
+//      (9, "Xiaoyu", 4.0),
+//      (10, "Shashi", 5.0),
+//      (11, "Bharath", 6.0),
+//      (12, "Vivek", 7.0)
+//    ).toDF("col1", "col2", "col3")
 
+//    val data = Seq(
+//      (101, "A", "2025-01-15"),
+//      (102, "B", "2025-01-20"),
+//      (103, "C", "2025-01-25")
+//    )
+//
+//    val data1 = Seq(
+//      (102, "A", "2025-01-15"),
+//      (103, "B", "2025-01-20"),
+//      (104, "C", "2025-01-25")
+//    )
 
-   df3 = df3.select("col1", "col3", "col2")
-   df3.write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
-   df3.filter("col1>9").write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
+    spark.sql("""create table singlet4(id int) using parquet""")
+
+//   df3 = df3.select("col1", "col3", "col2")
+//   df3.write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
+//   df3.filter("col1>9").write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
 
 
 //// //   spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/manifest_db.db/tbl/").show()
@@ -281,20 +294,10 @@ object App {
     import spark.implicits._
 
     // 1. Define your data as a Sequence of Tuples
-    val data = Seq(
-      (101, "A", "2025-01-15"),
-      (102, "B", "2025-01-20"),
-      (103, "C", "2025-01-25")
-    )
 
-    val data1 = Seq(
-      (102, "A", "2025-01-15"),
-      (103, "B", "2025-01-20"),
-      (104, "C", "2025-01-25")
-    )
 
     // 2. Convert to DataFrame and name the columns
-    val replaceData1 = data1.toDF("id", "status", "start_date")
+  //  val replaceData1 = data1.toDF("id", "status", "start_date")
 //    spark.sql("""create database if not exists cat.idb9""")
 //    spark.sql("create table cat.idb9.tbl(id int) using delta")
 //    replaceData1.write

@@ -9,18 +9,22 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.read.Statistics
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, CreateDataSourceTableCommand, CreateTableCommand, DDLUtils}
-import org.apache.spark.sql.execution.datasources.{InsertIntoDataSourceCommand, LogicalRelation, SaveIntoDataSourceCommand}
+import org.apache.spark.sql.execution.datasources.{InsertIntoDataSourceCommand, InsertIntoHadoopFsRelationCommand, LogicalRelation, SaveIntoDataSourceCommand}
 import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, InsertIntoHiveTable}
+import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.CreateCatalogTable
 import org.apache.spark.sql.sources.{BaseRelation, CreatableRelationProvider}
 
 class TwoToThreePartRule(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging {
 
+  private def getCurrentOrDefaultCatalog:String={
+    session.sessionState.catalogManager.currentCatalog.name()
+  }
 
-  override def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperatorsUp {
-    case c@CreateTableCommand(table, ignoreIfExists) => c //needs change
+  override def apply(plan: LogicalPlan): LogicalPlan = plan.transformUp {
+    case c@CreateTableCommand(table, ignoreIfExists) => CreateCatalogTable(getCurrentOrDefaultCatalog,table, ignoreIfExists) //needs change
 
-    case cd@CreateDataSourceTableCommand(table, ignoreIfExists) if DDLUtils.isDatasourceTable(table) => cd //needs change
+    case cd@CreateDataSourceTableCommand(table, ignoreIfExists) if DDLUtils.isDatasourceTable(table) => CreateCatalogTable(getCurrentOrDefaultCatalog,table, ignoreIfExists)//needs change
 
     case ch@CreateHiveTableAsSelectCommand(tableDesc: CatalogTable, query: LogicalPlan, outputColumnNames: Seq[String], mode: SaveMode) => ch
 
@@ -36,6 +40,13 @@ class TwoToThreePartRule(session: SparkSession)
     partitionCols: Seq[AttributeReference], tableStats: Option[Statistics], _) => hiveTableRelation
 
     case insertIntoHiveTable: InsertIntoHiveTable => insertIntoHiveTable
+
+    case insertIntoHadoopFSRelationCommand@InsertIntoHadoopFsRelationCommand(outputPath, staticPartitions, ifPartitionNotExists, partitionColumns, bucketSpec, fileFormat, options,
+    query, mode, catalogTable, fileIndex, outputColumnNames) if catalogTable.isDefined  => insertIntoHadoopFSRelationCommand
+
+    case plan: LogicalPlan =>
+      println("Two to three part name plan logic "+ plan.toString())
+      plan
 
 
   }

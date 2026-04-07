@@ -284,7 +284,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
 
 
-  override def registerTableInMetastore(table: CatalogTable): Unit = {
+  override def registerTableInMetastore(table: CatalogTable,ignoreIfExists:Boolean=false): Unit = {
     val dbPath = getDBPath(table.database)
     val dbStringPath = if (dbPath.toString.endsWith("/")) {
       dbPath.toString
@@ -299,7 +299,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
     }
     val newtable = table.copy(storage = table.storage.copy(locationUri = location))
-    externalCatalog.createTable(newtable, false)
+    externalCatalog.createTable(newtable, ignoreIfExists)
   }
 
 

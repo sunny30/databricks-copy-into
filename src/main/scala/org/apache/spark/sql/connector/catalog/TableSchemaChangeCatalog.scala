@@ -29,7 +29,8 @@ trait TableSchemaChangeCatalog extends CatalogPlugin {
                    ): Option[CatalogStatistics]
 
   def registerTableInMetastore(
-                              table:CatalogTable
+                              table:CatalogTable,
+                              ignoreIfExists:Boolean=false
                               ):Unit
 
   def loadSecureTable(db:String, table:String): CatalogTable
