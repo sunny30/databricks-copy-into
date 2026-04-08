@@ -77,14 +77,26 @@ object App {
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
-//    var df3 = Seq(
-//      (7, "John", 2.0),
-//      (8, "Sunny", 3.0),
-//      (9, "Xiaoyu", 4.0),
-//      (10, "Shashi", 5.0),
-//      (11, "Bharath", 6.0),
-//      (12, "Vivek", 7.0)
-//    ).toDF("col1", "col2", "col3")
+    var df3 = Seq(
+      (7, "John", 2.0),
+      (8, "Sunny", 3.0),
+      (9, "Xiaoyu", 4.0),
+      (10, "Shashi", 5.0),
+      (11, "Bharath", 6.0),
+      (12, "Vivek", 7.0)
+    ).toDF("col1", "col2", "col3")
+
+   // spark.sql("""create table singlet03(id int) using parquet""")
+ //  spark.sql("create table int07(col1 int, col3 double, col2 string) using parquet partitioned by(col2) location '/tmp/etbl'")
+     df3 = df3.select("col1", "col3", "col2")
+//    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("int03")
+//
+
+    df3.write.partitionBy("col2").option("path", "/tmp/etbl").format("parquet").mode(SaveMode.Overwrite).saveAsTable("int08")
+    spark.read.table("int08").show()
+
+//    df3 = df3.select("col1", "col3", "col2")
+//    df3.write.partitionBy("col2").format("delta").mode(SaveMode.Overwrite).saveAsTable("single04")
 
 //    val data = Seq(
 //      (101, "A", "2025-01-15"),
@@ -98,7 +110,10 @@ object App {
 //      (104, "C", "2025-01-25")
 //    )
 
-    spark.sql("""create table singlet4(id int) using parquet""")
+//    spark.sql("""create table singlet01(id int) using parquet""")
+//    spark.sql("insert into singlet01 values(1), (2)")
+//
+//    spark.sql("select * from singlet01").show()
 
 //   df3 = df3.select("col1", "col3", "col2")
 //   df3.write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")

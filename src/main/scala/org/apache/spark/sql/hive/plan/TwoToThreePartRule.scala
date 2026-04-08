@@ -11,7 +11,7 @@ import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, CreateDataSourceTableCommand, CreateTableCommand, DDLUtils}
 import org.apache.spark.sql.execution.datasources.{InsertIntoDataSourceCommand, InsertIntoHadoopFsRelationCommand, LogicalRelation, SaveIntoDataSourceCommand}
 import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, InsertIntoHiveTable}
-import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.CreateCatalogTable
+import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.{CreateCatalogTable, CustomCreateDataSourceTableAsSelectCommand}
 import org.apache.spark.sql.sources.{BaseRelation, CreatableRelationProvider}
 
 class TwoToThreePartRule(session: SparkSession)
@@ -28,7 +28,7 @@ class TwoToThreePartRule(session: SparkSession)
 
     case ch@CreateHiveTableAsSelectCommand(tableDesc: CatalogTable, query: LogicalPlan, outputColumnNames: Seq[String], mode: SaveMode) => ch
 
-    case cdas@CreateDataSourceTableAsSelectCommand(table: CatalogTable, mode: SaveMode, query: LogicalPlan, outputColumnNames: Seq[String]) => cdas
+    case cdas@CreateDataSourceTableAsSelectCommand(table: CatalogTable, mode: SaveMode, query: LogicalPlan, outputColumnNames: Seq[String]) => CustomCreateDataSourceTableAsSelectCommand(getCurrentOrDefaultCatalog,table,mode,query,outputColumnNames)
 
     case dsw@SaveIntoDataSourceCommand(query: LogicalPlan, dataSource: CreatableRelationProvider, options: Map[String, String], mode: SaveMode) => dsw
 
