@@ -58,8 +58,10 @@ object VanilaSparkApp {
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
 
-    spark.sql("create table save_tbl1(id int) using parquet")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("save_tbl1")
+   // spark.sql("create table save_tbl1(id int) using parquet")
+    df3.write.format("parquet").mode(SaveMode.Overwrite).option("path", "/tmp/vtbl").saveAsTable("save_tbl9")
+    df3.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("save_tbl9")
+    spark.sql("describe formatted save_tbl9").show()
 
 ////    spark.sql("create table vt1(id int) using delta")
 ////    spark.sql("insert into vt1 values(1), (2)")

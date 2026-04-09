@@ -92,9 +92,11 @@ object App {
    // df3 = df3.select("col1", "col3", "col2")
    // df3.write.insertInto("in04")
     //df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("int05")
-    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("in80")
-    df3.write.mode(SaveMode.Append).saveAsTable("in80")
-    spark.read.table("in80").show()
+//    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("in80")
+//    df3.write.mode(SaveMode.Append).saveAsTable("in80")
+//    spark.read.table("in80").show()
+
+    spark.sql("create table ht1(id int) using hive options('fileformat' = 'parquet')")
 
 
     //
