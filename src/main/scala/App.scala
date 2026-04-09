@@ -87,13 +87,20 @@ object App {
     ).toDF("col1", "col2", "col3")
 
    // spark.sql("""create table singlet03(id int) using parquet""")
- //  spark.sql("create table int07(col1 int, col3 double, col2 string) using parquet partitioned by(col2) location '/tmp/etbl'")
-     df3 = df3.select("col1", "col3", "col2")
-//    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("int03")
-//
+    //location '/tmp/etbl'
+    //spark.sql("create table in04(col1 int, col3 double, col2 string) using parquet partitioned by(col2) ")
+   // df3 = df3.select("col1", "col3", "col2")
+   // df3.write.insertInto("in04")
+    //df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("int05")
+    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("in80")
+    df3.write.mode(SaveMode.Append).saveAsTable("in80")
+    spark.read.table("in80").show()
 
-    df3.write.partitionBy("col2").option("path", "/tmp/etbl").format("parquet").mode(SaveMode.Overwrite).saveAsTable("int08")
-    spark.read.table("int08").show()
+
+    //
+
+    //df3.write.partitionBy("col2").option("path", "/tmp/etbl").format("parquet").mode(SaveMode.Overwrite).saveAsTable("in0")
+   // spark.read.table("in0").show()
 
 //    df3 = df3.select("col1", "col3", "col2")
 //    df3.write.partitionBy("col2").format("delta").mode(SaveMode.Overwrite).saveAsTable("single04")

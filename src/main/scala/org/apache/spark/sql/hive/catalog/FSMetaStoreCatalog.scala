@@ -240,8 +240,11 @@ class FSMetaStoreCatalog(
             throw QueryExecutionErrors.unableToCreateTableAsFailedToCreateDirectoryError(
               table, defaultTableLocation, e)
         }
-
-        tableDefinition.withNewStorage(locationUri = Some(defaultTableLocation.toUri))
+        if(catalogName.equalsIgnoreCase("spark_catalog") && tableDefinition.storage.locationUri.isDefined){
+          tableDefinition
+        }else {
+          tableDefinition.withNewStorage(locationUri = Some(defaultTableLocation.toUri))
+        }
 
       } else {
           tableDefinition

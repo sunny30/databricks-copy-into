@@ -39,13 +39,14 @@ case class CreateCatalogTable(catalogName: String, table: CatalogTable, ignoreIf
     }else{
       val tableURI = getTablePathTable(sparkSession)
       val newTable = table.copy(storage = table.storage.copy(locationUri = tableURI))
-      SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].registerTableInMetastore(newTable, ignoreIfExists)
 
       if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")) {
         val dbPath = sparkSession.sessionState.catalog.getDatabaseMetadata(table.database).locationUri
         SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[SupportsNamespaces].createNamespace(Array(table.database), Map("location" -> dbPath.toString).asJava)
         sessionState.catalog.createTable(newTable, ignoreIfExists = false)
       }
+      SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].registerTableInMetastore(newTable, ignoreIfExists)
+
       Seq.empty[Row]
 
     }
@@ -99,10 +100,18 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     val tableCatalog = sparkSession.sessionState.catalogManager.catalog(catalogName).asTableCatalog
     val ident = Identifier.of(Seq(table.identifier.database.getOrElse("default")).toArray, table.identifier.table)
     val tableExists = tableCatalog.tableExists(ident)
+    if(tableExists && mode == SaveMode.ErrorIfExists){
+      throw QueryCompilationErrors.tableAlreadyExistsError(table.identifier.quotedString)
+    }
+
     val outPutPath = if(tableExists){
       table.storage.locationUri.get
     }else{
-      sparkSession.sessionState.catalog.defaultTablePath(table.identifier)
+      if(table.storage.locationUri.isDefined){
+        table.storage.locationUri.get
+      }else {
+        sparkSession.sessionState.catalog.defaultTablePath(table.identifier)
+      }
     }
     val (schema, outputColumnNames, partitionColumns) = if(mode == SaveMode.Overwrite){
       if(tableExists)
@@ -123,7 +132,7 @@ case class CustomCreateDataSourceTableAsSelectCommand(
       }
     }
 
-    val ps = if(!tableExists || mode == SaveMode.Overwrite) {
+    val ps = if(!tableExists) {
       val newTable = table.copy(schema = schema,storage = table.storage.copy(locationUri = Some(outPutPath)))
       CreateCatalogTable(catalogName,newTable, false).run(sparkSession)
       getPartitionAttributeFromTable(writePlan,newTable,sparkSession)
@@ -138,6 +147,11 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     }
 
 
+    val newMode = if(mode == SaveMode.ErrorIfExists){
+      SaveMode.Append
+    }else{
+      mode
+    }
     InsertIntoHadoopFsRelationCommand(
       outputPath = new Path(outPutPath.toString),
       staticPartitions = Map.empty,
@@ -147,7 +161,7 @@ case class CustomCreateDataSourceTableAsSelectCommand(
       fileFormat = fileFormat,
       table.storage.properties,
       query = writePlan,
-      mode,
+      newMode,
       None,
       None,
       outputColumnNames
