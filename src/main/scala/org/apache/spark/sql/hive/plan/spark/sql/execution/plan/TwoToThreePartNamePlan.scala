@@ -104,6 +104,13 @@ case class CustomCreateDataSourceTableAsSelectCommand(
       throw QueryCompilationErrors.tableAlreadyExistsError(table.identifier.quotedString)
     }
 
+    if (mode == SaveMode.Ignore) {
+      if (tableExists) {
+        return Seq.empty[Row]
+      }
+    }
+
+
     val outPutPath = if(tableExists){
       table.storage.locationUri.get
     }else{
@@ -204,5 +211,7 @@ case class CustomCreateDataSourceTableAsSelectCommand(
       ps
 
     }
+
+
 
 }

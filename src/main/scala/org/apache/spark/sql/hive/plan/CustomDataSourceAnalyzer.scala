@@ -33,6 +33,7 @@ import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, Data
 import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
+import org.apache.spark.sql.execution.datasources.text.TextFileFormat
 import org.apache.spark.sql.hive.catalog.BestEffortStagedTable
 import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
@@ -826,6 +827,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
     }
   }
+  private def getTextFileFormat(table:CatalogTable):FileFormat ={
+    val tblprops = table.properties
+    val storageProps = table.storage.properties
+    if(tblprops.contains("option.delimiter") || tblprops.contains("field.delim") || tblprops.contains("delimiter")
+    || storageProps.contains("option.delimiter") || storageProps.contains("field.delim") || storageProps.contains("delimiter")){
+      new CSVFileFormat
+    }else{
+      new TextFileFormat
+    }
+  }
 
   def getHiveTableFileFormat(table: CatalogTable): FileFormat = {
     table.storage.properties("fileformat").toLowerCase match {
@@ -835,6 +846,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       case "avro" => new AvroFileFormat
       case "json" => new JsonFileFormat
       case "text" => new CSVFileFormat
+      case "textfile" => getTextFileFormat(table)
       case "arrow" => new ArrowFileFormat
       case "_" => throw new IllegalAccessException("invalid format")
     }
@@ -866,7 +878,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           ins
 
         } else {
-          val ff = getFileFormat(ct.provider.getOrElse("csv"))
+          val ff = if (provider.equalsIgnoreCase("hive")) {
+            getHiveTableFileFormat(ct)
+          } else {
+            getFileFormat(provider)
+          }
           val in = InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(ct.storage.locationUri.get.toString),
             staticPartitions = Map.empty,

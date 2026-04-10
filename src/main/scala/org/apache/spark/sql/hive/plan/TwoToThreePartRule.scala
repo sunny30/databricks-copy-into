@@ -26,7 +26,9 @@ class TwoToThreePartRule(session: SparkSession)
 
     case cd@CreateDataSourceTableCommand(table, ignoreIfExists) if DDLUtils.isDatasourceTable(table) => CreateCatalogTable(getCurrentOrDefaultCatalog,table, ignoreIfExists)//needs change
 
-    case ch@CreateHiveTableAsSelectCommand(tableDesc: CatalogTable, query: LogicalPlan, outputColumnNames: Seq[String], mode: SaveMode) => ch
+    case ch@CreateHiveTableAsSelectCommand(tableDesc: CatalogTable, query: LogicalPlan, outputColumnNames: Seq[String], mode: SaveMode) =>
+      val newTableDesc = getNewTableWithFileFormatProperty(tableDesc)
+      CustomCreateDataSourceTableAsSelectCommand(getCurrentOrDefaultCatalog,newTableDesc,mode,query,outputColumnNames)
 
     case cdas@CreateDataSourceTableAsSelectCommand(table: CatalogTable, mode: SaveMode, query: LogicalPlan, outputColumnNames: Seq[String]) => CustomCreateDataSourceTableAsSelectCommand(getCurrentOrDefaultCatalog,table,mode,query,outputColumnNames)
 
@@ -48,6 +50,37 @@ class TwoToThreePartRule(session: SparkSession)
       println("Two to three part name plan logic "+ plan.toString())
       plan
 
+
+  }
+
+
+  def getNewTableWithFileFormatProperty(table: CatalogTable): CatalogTable = {
+    val fileFormat = table.provider match {
+      case Some("hive") =>
+        table.storage.serde match {
+          case Some(v) =>
+            if (v.contains("parquet"))
+              "parquet"
+            else if (v.contains("orc"))
+              "orc"
+            else if (v.contains("avro"))
+              "avro"
+            else if (v.contains("json") || v.contains("Json"))
+              "json"
+            else {
+              "textfile"
+            }
+        }
+      case Some(v) => v
+      case _ => throw new IllegalArgumentException("Provider format is missing")
+    }
+
+    val existingProps = table.storage.properties
+    val newStorageProps = existingProps ++ Map("fileformat" -> fileFormat)
+    val storage = table.storage.copy(properties = newStorageProps)
+    val existingTblProps = table.properties
+    val newTblProps = existingTblProps ++ Map("fileformat" -> fileFormat)
+    table.copy(properties = newTblProps, storage = storage)
 
   }
 
