@@ -96,12 +96,13 @@ object App {
 //    df3.write.mode(SaveMode.Append).saveAsTable("in80")
 //    spark.read.table("in80").show()
 
-   spark.sql("create table ht2(id int) using hive options('fileformat' = 'textfile', 'field.delim' = ';')")
+   //spark.sql("create table ht2(id int) using hive options('fileformat' = 'textfile', 'field.delim' = ';')")
 
-//    df3.write.partitionBy("col2").format("hive").option("fileformat", "parquet").mode(SaveMode.Overwrite).saveAsTable("in005")
-//    df3.write.mode(SaveMode.Append).saveAsTable("in005")
-//    df3.write.insertInto("in005")
-//    spark.read.table("in005").show()
+    df3.write.partitionBy("col2").format("hive").option("fileformat", "parquet").mode(SaveMode.Overwrite).saveAsTable("in006")
+    df3.write.mode(SaveMode.Append).saveAsTable("in006")
+    df3.write.insertInto("in006")
+    spark.sql("insert into in006 values (14,8.0,'satish'), (15,8.0,'pandey')")
+    spark.read.table("in006").show()
     //
 
     //df3.write.partitionBy("col2").option("path", "/tmp/etbl").format("parquet").mode(SaveMode.Overwrite).saveAsTable("in0")
