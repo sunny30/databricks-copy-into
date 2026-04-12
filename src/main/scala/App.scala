@@ -88,8 +88,14 @@ object App {
 
    // spark.sql("""create table singlet03(id int) using parquet""")
     //location '/tmp/etbl'
-    //spark.sql("create table in04(col1 int, col3 double, col2 string) using parquet partitioned by(col2) ")
+    spark.sql("""create database if not exists cat.ddb""")
+    spark.sql("create table cat.ddb.dt04(col1 int, col3 double, col2 string) using delta partitioned by(col2) ")
     df3 = df3.select("col1", "col3", "col2")
+    df3.write.insertInto("cat.ddb.dt04")
+    spark.read.table("cat.ddb.dt04").show()
+    spark.sql("update cat.ddb.dt04 SET col2 = 'Satish' where col1 = 10")
+    spark.read.table("cat.ddb.dt04").show()
+
    // df3.write.insertInto("in04")
     //df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("int05")
 //    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("in80")
@@ -98,11 +104,11 @@ object App {
 
    //spark.sql("create table ht2(id int) using hive options('fileformat' = 'textfile', 'field.delim' = ';')")
 
-    df3.write.partitionBy("col2").format("hive").option("fileformat", "parquet").mode(SaveMode.Overwrite).saveAsTable("in006")
-    df3.write.mode(SaveMode.Append).saveAsTable("in006")
-    df3.write.insertInto("in006")
-    spark.sql("insert into in006 values (14,8.0,'satish'), (15,8.0,'pandey')")
-    spark.read.table("in006").show()
+//    df3.write.partitionBy("col2").format("hive").option("fileformat", "parquet").mode(SaveMode.Overwrite).saveAsTable("in006")
+//    df3.write.mode(SaveMode.Append).saveAsTable("in006")
+//    df3.write.insertInto("in006")
+//    spark.sql("insert into in006 values (14,8.0,'satish'), (15,8.0,'pandeyCentr')")
+//    spark.read.table("in006").show()
     //
 
     //df3.write.partitionBy("col2").option("path", "/tmp/etbl").format("parquet").mode(SaveMode.Overwrite).saveAsTable("in0")

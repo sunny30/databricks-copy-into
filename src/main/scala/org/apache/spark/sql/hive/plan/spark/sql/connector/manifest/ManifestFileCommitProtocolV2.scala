@@ -64,7 +64,8 @@ class ManifestFileCommitProtocolV2(
     !name.startsWith("_") && !name.startsWith(".")
 
   // List bare data filenames in a directory. Returns empty if dir doesn't exist.
-  private def listDataFileNames(fs: FileSystem, dir: Path): Seq[String] =
+  private def
+  (fs: FileSystem, dir: Path): Seq[String] =
     try {
       fs.listStatus(dir)
         .filter(s => isDataFile(s.getPath.getName))
