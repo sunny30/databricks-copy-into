@@ -313,7 +313,7 @@ class FSMetaStoreCatalog(
     if(tableExists(db, table)) {
       val location = getTable(db, table).location
       val path = new Path(location)
-      fs.delete(path)
+     // fs.delete(path)
       FSMetaStoreCatalog.catalog(db).tables.remove(table)
       println("drop completed")
     }else{

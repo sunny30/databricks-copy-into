@@ -32,7 +32,7 @@ object ManifestState {
  * Parsed content of one _committed_<tid> file.
  * addedFiles contains bare filenames only — NOT full paths.
  */
-case class CommittedManifest(
+final case class CommittedManifestV1(
                               tid:        String,
                               addedFiles: Seq[String],
                               removedFiles: Seq[String]

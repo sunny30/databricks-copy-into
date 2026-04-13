@@ -59,7 +59,7 @@ final case class CommittedManifest(
 //  Optimized deletes → parallel thread pool, configurable parallelism
 // ─────────────────────────────────────────────────────────────────────────────
 
-class ManifestCommitProtocolV4(
+class ManifestFileCommitProtocolV4(
                               jobId: String,
                               outputPath: String,
                               dynamicPartitionOverwrite: Boolean = false
