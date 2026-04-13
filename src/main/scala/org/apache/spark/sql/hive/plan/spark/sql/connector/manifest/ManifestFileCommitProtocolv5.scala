@@ -38,7 +38,8 @@ final case class StartedManifestV5(
  * Used by PATH A recovery to identify and delete garbage files precisely,
  * even when multiple tasks wrote to the same partition.
  */
-final case class PendingTaskManifest(
+final case class PendingTaskManifestV5
+(
                                       jobId:         String,
                                       taskAttemptId: String,
                                       partitionPath: String,
@@ -210,10 +211,10 @@ class ManifestFileCommitProtocolV5(
     writeJson(fs, new Path(partDir, pendingFileName(taskAttemptId)), content)
   }
 
-  private def parsePendingFile(path: Path, fs: FileSystem): PendingTaskManifest =
+  private def parsePendingFile(path: Path, fs: FileSystem): PendingTaskManifestV5 =
     try {
       val c = readFileContent(path, fs, 64 * 1024 * 1024)
-      PendingTaskManifest(
+      PendingTaskManifestV5(
         jobId         = extractJsonString(c, "jobId").getOrElse(jobId),
         taskAttemptId = extractJsonString(c, "taskAttemptId").getOrElse(""),
         partitionPath = extractJsonString(c, "partitionPath").getOrElse(path.getParent.toString),
@@ -222,7 +223,7 @@ class ManifestFileCommitProtocolV5(
     } catch {
       case e: Exception =>
         logWarning(s"ManifestCommitProtocol: cannot parse _pending_ $path: ${e.getMessage}")
-        PendingTaskManifest(jobId, "", path.getParent.toString, "", Seq.empty)
+        PendingTaskManifestV5(jobId, "", path.getParent.toString, "", Seq.empty)
     }
 
   // ═══════════════════════════════════════════════════════════════════════════
