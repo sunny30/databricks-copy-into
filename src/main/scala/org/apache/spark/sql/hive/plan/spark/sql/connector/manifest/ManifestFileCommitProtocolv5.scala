@@ -17,13 +17,13 @@ import scala.collection.mutable
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Carries super's Tuple2 + our partition→files map in one TaskCommitMessage. */
-final case class CombinedCommitPayload(
+final case class CombinedCommitPayloadV5(
                                         superObj:       Any,
                                         partitionFiles: java.util.HashMap[String, java.util.List[String]]
                                       )
 
 /** Parsed content of a _started_<tid> file (job-level lock signal). */
-final case class StartedManifest(
+final case class StartedManifestV5(
                                   jobId:         String,
                                   partitionPath: String,
                                   startedAt:     String,
@@ -47,7 +47,7 @@ final case class PendingTaskManifest(
                                     )
 
 /** Parsed content of _committed_<tid>. */
-final case class CommittedManifest(
+final case class CommittedManifestV5(
                                     tid:          String,
                                     addedFiles:   Seq[String],
                                     removedFiles: Seq[String]
@@ -167,10 +167,10 @@ class ManifestFileCommitProtocolV5(
     writeJson(fs, path, content)
   }
 
-  private def parseStartedFile(path: Path, fs: FileSystem): StartedManifest =
+  private def parseStartedFile(path: Path, fs: FileSystem): StartedManifestV5 =
     try {
       val c = readFileContent(path, fs, 1024 * 1024)
-      StartedManifest(
+      StartedManifestV5(
         jobId         = extractJsonString(c, "jobId").getOrElse(jobId),
         partitionPath = extractJsonString(c, "partitionPath").getOrElse(path.getParent.toString),
         startedAt     = extractJsonString(c, "startedAt").getOrElse(""),
@@ -179,7 +179,7 @@ class ManifestFileCommitProtocolV5(
     } catch {
       case e: Exception =>
         logWarning(s"ManifestCommitProtocol: cannot parse _started_ $path: ${e.getMessage}")
-        StartedManifest(jobId, path.getParent.toString, "", outputPath, false)
+        StartedManifestV5(jobId, path.getParent.toString, "", outputPath, false)
     }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -268,9 +268,9 @@ class ManifestFileCommitProtocolV5(
       s"""{"added":[$addedStr],"removed":[$removedStr],"partitions":{$partitionsJson}}""")
   }
 
-  private def parseCommittedFile(path: Path, fs: FileSystem): CommittedManifest = {
+  private def parseCommittedFile(path: Path, fs: FileSystem): CommittedManifestV5 = {
     val c = readFileContent(path, fs, 256 * 1024 * 1024)
-    CommittedManifest(
+    CommittedManifestV5(
       tid          = path.getName.stripPrefix("_committed_"),
       addedFiles   = extractJsonStringArray(c, "added"),
       removedFiles = extractJsonStringArray(c, "removed"))
@@ -607,7 +607,7 @@ class ManifestFileCommitProtocolV5(
     val mergedPartitionFiles = new java.util.HashMap[String, java.util.List[String]]()
     val superMessages: Seq[TaskCommitMessage] = taskCommits.map { msg =>
       msg.obj match {
-        case cp: CombinedCommitPayload =>
+        case cp: CombinedCommitPayloadV5 =>
           cp.partitionFiles.forEach { (partDir, files) =>
             mergedPartitionFiles
               .computeIfAbsent(partDir, _ => new java.util.ArrayList[String]())
@@ -884,7 +884,7 @@ class ManifestFileCommitProtocolV5(
     taskPartitionFiles.clear()
     seenPartitionDirs.clear()
 
-    new TaskCommitMessage(CombinedCommitPayload(superMsg.obj, snapshot))
+    new TaskCommitMessage(CombinedCommitPayloadV5(superMsg.obj, snapshot))
   }
 
   override def abortTask(taskContext: TaskAttemptContext): Unit = {
