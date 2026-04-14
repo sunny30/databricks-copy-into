@@ -55,7 +55,7 @@ object App {
       .set("spark.sql.cbo.planStats.enabled", "true")
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
       .set("spark.sql.parquet.aggregatePushdown", "true")
-      .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV6")
+      .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV5")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -86,15 +86,28 @@ object App {
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
 
+    val df = Seq(
+      (1, "Alice", 34, "A"),
+      (2, "Bob", 45,"A"),
+      (3, "Charlie", 29,"B"),
+      (4, "Clair", 29, "A"),
+      (5, "Alan", 34, "B")).
+    toDF("id", "name", "age", "category")
+
+    df.write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
+    spark.read.parquet("/tmp/prt").filter("age = 29 or (age=45 and category='A')").
+      write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
+
+    spark.read.parquet("/tmp/prt").show()
    // spark.sql("""create table singlet03(id int) using parquet""")
     //location '/tmp/etbl'
-    spark.sql("""create database if not exists cat.pdb3""")
-    //spark.sql("create table cat.ddb.dt04(col1 int, col3 double, col2 string) using parquet partitioned by(col2) ")
-    df3 = df3.select("col1", "col3", "col2")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).partitionBy("col2").saveAsTable("cat.pdb3.ptb05")
-    df3 = df3.filter("col1>9")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).partitionBy("col2").saveAsTable("cat.pdb3.ptb05")
-    spark.read.table("cat.pdb3.ptb05").show()
+//    spark.sql("""create database if not exists cat.pdb3""")
+//    //spark.sql("create table cat.ddb.dt04(col1 int, col3 double, col2 string) using parquet partitioned by(col2) ")
+//    df3 = df3.select("col1", "col3", "col2")
+//    df3.write.format("parquet").mode(SaveMode.Overwrite).partitionBy("col2").saveAsTable("cat.pdb3.ptb05")
+//    df3 = df3.filter("col1>9")
+//    df3.write.format("parquet").mode(SaveMode.Overwrite).partitionBy("col2").saveAsTable("cat.pdb3.ptb05")
+//    spark.read.table("cat.pdb3.ptb05").show()
    // spark.sql("update cat.ddb.dt04 SET col2 = 'Satish' where col1 = 10")
    // spark.read.table("cat.ddb.dt04").show()
 

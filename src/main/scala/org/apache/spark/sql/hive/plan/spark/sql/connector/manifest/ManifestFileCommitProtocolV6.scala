@@ -1,11 +1,11 @@
 package org.apache.spark.sql.hive.plan.spark.sql.connector.manifest
 
 
-
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.mapreduce.{JobContext, TaskAttemptContext}
-import org.apache.spark.internal.io.FileCommitProtocol.{TaskCommitMessage}
+import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
 import org.apache.spark.internal.io.FileNameSpec
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.datasources.SQLHadoopMapReduceCommitProtocol
 
 import java.time.Instant
@@ -15,46 +15,23 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Top-level types
-//  Defined OUTSIDE the class so Java serialization/deserialization preserves
-//  class identity and pattern matching works on the driver after round-trip.
+//  Top-level types — outside the class so pattern match survives serialization
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Payload inside every TaskCommitMessage.
- * Carries super's original Tuple2 alongside our partition→files map so that
- * super.commitJob() can cast its messages correctly while we extract our data.
- */
 final case class CombinedCommitPayloadV6(
                                         superObj:       Any,
                                         partitionFiles: java.util.HashMap[String, java.util.List[String]]
                                       )
 
-/**
- * Parsed content of _started_<jobId>.
- *
- * DBIO alignment:
- *   _started_ is the job-level transaction lock signal.
- *   It is written at setupJob (root) and at newTaskTempFile (partition, first file).
- *   It is UPDATED at commitTask with pendingFiles — the actual data files written
- *   by this task that are now at final location.
- *   pendingFiles makes _started_ a recovery source independent of _pending_ files.
- */
 final case class StartedManifestV6(
                                   jobId:         String,
                                   partitionPath: String,
                                   startedAt:     String,
                                   outputPath:    String,
                                   dynamic:       Boolean,
-                                  pendingFiles:  Seq[String]   // files at final location, not yet job-committed
+                                  pendingFiles:  Seq[String]
                                 )
 
-/**
- * Parsed content of _pending_<jobId>_<taskAttemptId>.
- *
- * One file per task per partition.  Never overwritten by another task.
- * Recovery PATH A unions all _pending_<jobId>_* in a dir for complete coverage.
- */
 final case class PendingTaskManifestV6(
                                       jobId:         String,
                                       taskAttemptId: String,
@@ -63,14 +40,6 @@ final case class PendingTaskManifestV6(
                                       pendingFiles:  Seq[String]
                                     )
 
-/**
- * Parsed content of _committed_<jobId>.
- *
- * DBIO alignment:
- *   added[]   — files that are valid and readable for this transaction
- *   removed[] — files that were present before this transaction and are now deleted
- *   Both lists are the durable recovery record for PATH B.
- */
 final case class CommittedManifestV6(
                                     tid:          String,
                                     addedFiles:   Seq[String],
@@ -79,25 +48,6 @@ final case class CommittedManifestV6(
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  ManifestCommitProtocol
-//
-//  DBIO-compatible, petabyte-scale open-source Spark 3.5 commit protocol.
-//
-//  File layout per partition dir (matches Databricks DBIO):
-//    _started_<jobId>                    job-level lock · minimal + pendingFiles
-//    _pending_<jobId>_<taskAttemptId>    per-task uncommitted file list
-//    _committed_<jobId>                  committed manifest: added[] + removed[]
-//
-//  Three-source recovery on next setupJob():
-//    PATH A (_started_ only):          delete all files across _pending_ + _started_ + tid-scan
-//    PATH B (_started_ + _committed_): complete deferred old-file deletion
-//
-//  Petabyte-scale properties:
-//    All dir traversal is iterative BFS (no stack overflow)
-//    Single shared thread pool per job (no repeated create/shutdown)
-//    Driver stores dir paths only, not filenames (no OOM)
-//    File listing is lazy (step 2 of commitJob, not at deleteWithJob time)
-//    Manifest writes, deletes, listings all parallel
-//    deleteParallelism configurable via spark.sql.manifest.deleteParallelism
 // ─────────────────────────────────────────────────────────────────────────────
 
 class ManifestFileCommitProtocolV6(
@@ -106,35 +56,25 @@ class ManifestFileCommitProtocolV6(
                               dynamicPartitionOverwrite: Boolean = false
                             ) extends SQLHadoopMapReduceCommitProtocol(jobId, outputPath, dynamicPartitionOverwrite) {
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  SERIALIZATION CONTRACT
-  //
-  //  The committer object is Java-serialized on the DRIVER and sent to each
-  //  EXECUTOR.  @transient fields are NULL after deserialization.
-  //
-  //  DRIVER-side fields  → initialize in setupJob()
-  //  EXECUTOR-side fields → initialize in setupTask()  ← NEVER inline
-  // ═══════════════════════════════════════════════════════════════════════════
-
-  // ── DRIVER-SIDE ─────────────────────────────────────────────────────────────
+  // ── DRIVER-SIDE @transient ─────────────────────────────────────────────────
   @transient private var outputDir:         Path            = _
-  @transient private var jobFs:             FileSystem      = _
+  private var jobFs:             FileSystem      = FileSystem.get(SparkSession.active.sparkContext.hadoopConfiguration)
   @transient private var sharedPool:        ExecutorService = _
   @transient private var deleteParallelism: Int             = 16
   @transient private var writeParallelism:  Int             = 16
 
-  // Stores ONLY directory paths (qualified absolute), never filenames.
-  // Avoids driver OOM on petabyte tables with billions of old files.
-  // Old filenames are re-listed lazily in commitJob step 2.
-  @transient private val pendingDeleteDirs =
+  // ── FIX #2: Use RELATIVE paths as keys — eliminates scheme/hostname mismatch ──
+  // Both collectOldDirsBFS and newTaskTempFile will store paths relative to
+  // outputPath (e.g. "year=2024/month=01/day=15" not "s3a://bucket/t/year=...").
+  // Relative paths are scheme-independent and always match.
+  @transient private val pendingDeleteRelDirs =
   java.util.Collections.newSetFromMap(
     new java.util.concurrent.ConcurrentHashMap[String, java.lang.Boolean]())
 
-  // ── EXECUTOR-SIDE ── initialized in setupTask(), never inline ────────────
+  // ── EXECUTOR-SIDE — initialized in setupTask() only ───────────────────────
   @transient private var taskPartitionFiles
   : java.util.concurrent.ConcurrentHashMap[
     String, java.util.concurrent.CopyOnWriteArrayList[String]] = _
-
   @transient private var seenPartitionDirs
   : java.util.concurrent.ConcurrentHashMap[String, java.lang.Boolean] = _
 
@@ -163,7 +103,7 @@ class ManifestFileCommitProtocolV6(
   }
 
   private def writeJson(fs: FileSystem, path: Path, json: String): Unit = {
-    val out = fs.create(path, /* overwrite= */ true)
+    val out = fs.create(path, true)
     try { out.write(json.getBytes("UTF-8")) } finally { out.close() }
   }
 
@@ -183,25 +123,48 @@ class ManifestFileCommitProtocolV6(
         if (inner.isEmpty) Seq.empty
         else inner.split(",")
           .map(_.trim.stripPrefix("\"").stripSuffix("\""))
-          .filter(_.nonEmpty)
-          .toSeq
+          .filter(_.nonEmpty).toSeq
     }
   }
 
+  // ── FIX #2 helpers: relative path computation ─────────────────────────────
+
+  /**
+   * Converts an absolute qualified path to a path relative to outputPath.
+   * e.g. "s3a://bucket/table/year=2024/month=01" -> "year=2024/month=01"
+   *      "s3a://bucket/table" -> "" (root)
+   * Uses jobFs (driver-side only).
+   */
+  private def toRelKey(absPath: Path): String = {
+//    if(jobFs == null)
+//      jobFs = absPath.getFileSystem()getFileSystem
+    val qualBase = jobFs.makeQualified(new Path(outputPath)).toString.stripSuffix("/")
+    val qualPath = jobFs.makeQualified(absPath).toString.stripSuffix("/")
+    qualPath.stripPrefix(qualBase).stripPrefix("/")
+  }
+
+  /**
+   * Converts a relative key back to an absolute Path for FS operations.
+   */
+  private def toAbsPath(relKey: String): Path =
+    if (relKey.isEmpty) new Path(outputPath)
+    else new Path(outputPath, relKey)
+
+  // ── Same helper for executor side using task configuration ─────────────────
+  private def toRelKeyExec(absPath: Path, taskContext: TaskAttemptContext): String = {
+    val partFs   = absPath.getFileSystem(taskContext.getConfiguration)
+    val qualBase = partFs.makeQualified(new Path(outputPath)).toString.stripSuffix("/")
+    val qualPath = partFs.makeQualified(absPath).toString.stripSuffix("/")
+    qualPath.stripPrefix(qualBase).stripPrefix("/")
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
-  //  PARALLEL EXECUTION
-  //  Single shared pool per job — created in setupJob, shutdown in commitJob.
+  //  PARALLEL EXECUTION — single shared pool per job
   // ═══════════════════════════════════════════════════════════════════════════
 
   private def submitTask[T](body: => T): Future[T] =
     sharedPool.submit(new Callable[T] { def call(): T = body })
 
-  /**
-   * Runs seq of tasks in parallel on sharedPool.
-   * Collects all results; logs but does not re-throw errors so one failure
-   * never aborts an entire batch (e.g. one file delete failure does not
-   * prevent the remaining 999 from completing).
-   */
   private def parallelExec[T](tasks: Seq[() => T], label: String): Seq[T] = {
     if (tasks.isEmpty) return Seq.empty
     val futures = tasks.map(t => submitTask(t()))
@@ -215,14 +178,7 @@ class ManifestFileCommitProtocolV6(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  _started_<jobId>  WRITE / PARSE
-  //
-  //  DBIO: _started_ is the in-progress transaction lock.
-  //        It is written once at setupJob (root) and once per partition at
-  //        newTaskTempFile (first file per partition per task).
-  //        It is OVERWRITTEN at commitTask to add pendingFiles so that
-  //        recovery PATH A has a reliable file list even if _pending_ was
-  //        never written (crash between staging→final rename and _pending_ write).
+  //  _started_ WRITE / PARSE
   // ═══════════════════════════════════════════════════════════════════════════
 
   private def writeStartedFile(
@@ -230,7 +186,6 @@ class ManifestFileCommitProtocolV6(
                                 path:          Path,
                                 partitionPath: String,
                                 pendingFiles:  Seq[String] = Seq.empty): Unit = {
-
     val filesJson = pendingFiles.map(f => s""""$f"""").mkString(",")
     writeJson(fs, path,
       s"""{
@@ -260,38 +215,31 @@ class ManifestFileCommitProtocolV6(
     }
 
   /**
-   * Overwrites partition _started_<jobId> to add this task's files.
-   * Reads existing content first to union files written by prior tasks
-   * in the same partition for the same job.
-   *
-   * Called BEFORE super.commitTask() (before staging→final rename) so that
-   * if the cluster crashes after rename but before _pending_ is written,
-   * recovery PATH A finds these filenames in _started_ and deletes them.
+   * Updates partition _started_ with this task's file list BEFORE super.commitTask().
+   * Reads existing, unions with new files, rewrites.
+   * Makes _started_ a reliable recovery source independent of _pending_.
+   * Best-effort — race condition between concurrent tasks is acceptable
+   * because _pending_ is the authoritative per-task source.
    */
   private def updatePartitionStarted(
                                       partDir:     String,
+                                      relKey:      String,
                                       files:       Seq[String],
                                       taskContext: TaskAttemptContext): Unit = {
-
     val partPath    = new Path(partDir)
     val partFs      = partPath.getFileSystem(taskContext.getConfiguration)
     val startedPath = new Path(partPath, s"_started_$jobId")
 
     val existing: Seq[String] = try {
-      if (partFs.exists(startedPath))
-        parseStartedFile(startedPath, partFs).pendingFiles
+      if (partFs.exists(startedPath)) parseStartedFile(startedPath, partFs).pendingFiles
       else Seq.empty
     } catch { case _: Exception => Seq.empty }
 
-    writeStartedFile(partFs, startedPath, partDir, (existing ++ files).distinct)
+    writeStartedFile(partFs, startedPath, relKey, (existing ++ files).distinct)
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  _pending_<jobId>_<taskAttemptId>  WRITE / PARSE
-  //
-  //  One file per task per partition.  Never overwritten by another task.
-  //  Written AFTER super.commitTask() so filenames are confirmed at final location.
-  //  Recovery PATH A unions all _pending_<jobId>_* in a dir.
+  //  _pending_ WRITE / PARSE
   // ═══════════════════════════════════════════════════════════════════════════
 
   @inline private def pendingFileName(taskAttemptId: String) =
@@ -302,7 +250,6 @@ class ManifestFileCommitProtocolV6(
                                 partDir:       Path,
                                 taskAttemptId: String,
                                 files:         Seq[String]): Unit = {
-
     val filesJson = files.map(f => s""""$f"""").mkString(",")
     writeJson(fs, new Path(partDir, pendingFileName(taskAttemptId)),
       s"""{
@@ -330,12 +277,7 @@ class ManifestFileCommitProtocolV6(
     }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  _committed_<jobId>  WRITE / PARSE
-  //
-  //  DBIO: _committed_ is the durable success record.
-  //  added[]   — files readable by this transaction
-  //  removed[] — files that existed before and are being superseded
-  //  Recovery PATH B uses removed[] to complete interrupted deletions.
+  //  _committed_ WRITE / PARSE
   // ═══════════════════════════════════════════════════════════════════════════
 
   private def writePartitionCommittedFile(
@@ -343,7 +285,6 @@ class ManifestFileCommitProtocolV6(
                                            partDir: Path,
                                            added:   Seq[String],
                                            removed: Seq[String]): Unit = {
-
     val a = added.map(f => s""""$f"""").mkString(",")
     val r = removed.map(f => s""""$f"""").mkString(",")
     writeJson(fs, new Path(partDir, s"_committed_$jobId"),
@@ -351,25 +292,23 @@ class ManifestFileCommitProtocolV6(
   }
 
   private def writeRootCommittedFile(
-                                      rootFs:         FileSystem,
-                                      rootDir:        Path,
-                                      partitionFiles: java.util.HashMap[String, java.util.List[String]],
-                                      allRemoved:     Seq[String]): Unit = {
+                                      rootFs:            FileSystem,
+                                      rootDir:           Path,
+                                      // keyed by RELATIVE path
+                                      partitionFiles:    java.util.HashMap[String, java.util.List[String]],
+                                      allRemoved:        Seq[String]): Unit = {
 
-    val addedRelative = partitionFiles.asScala.flatMap { case (pDir, files) =>
-      val rel = pDir.stripPrefix(outputPath).stripPrefix("/")
-      files.asScala.map(f => if (rel.isEmpty) f else s"$rel/$f")
+    val addedRelative = partitionFiles.asScala.flatMap { case (relKey, files) =>
+      files.asScala.map(f => if (relKey.isEmpty) f else s"$relKey/$f")
     }.toSeq
 
-    val partitionsJson = partitionFiles.asScala.map { case (pDir, files) =>
-      val rel  = pDir.stripPrefix(outputPath).stripPrefix("/")
+    val partitionsJson = partitionFiles.asScala.map { case (relKey, files) =>
       val fStr = files.asScala.map(f => s""""$f"""").mkString(",")
-      s""""$rel":[$fStr]"""
+      s""""$relKey":[$fStr]"""
     }.mkString(",")
 
     val a = addedRelative.map(f => s""""$f"""").mkString(",")
     val r = allRemoved.map(f => s""""$f"""").mkString(",")
-
     writeJson(rootFs, new Path(rootDir, s"_committed_$jobId"),
       s"""{"added":[$a],"removed":[$r],"partitions":{$partitionsJson}}""")
   }
@@ -383,10 +322,8 @@ class ManifestFileCommitProtocolV6(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  STATIC OVERWRITE — collect old dirs (NOT files) before write
-  //
-  //  Iterative BFS.  Stores only dir paths to avoid driver OOM.
-  //  Old filenames are re-listed lazily in commitJob step 2.
+  //  ITERATIVE BFS — collects old dir RELATIVE keys
+  //  FIX #2: stores relative paths so they match mergedPartitionFiles keys
   // ═══════════════════════════════════════════════════════════════════════════
 
   private def collectOldDirsBFS(fs: FileSystem, startDir: Path): Unit = {
@@ -400,8 +337,10 @@ class ManifestFileCommitProtocolV6(
       val (subDirs, files) = statuses.partition(_.isDirectory)
 
       if (files.exists(s => isDataFile(s.getPath.getName))) {
-        pendingDeleteDirs.add(fs.makeQualified(dir).toString)
-        logDebug(s"ManifestCommitProtocol.collectOld: $dir")
+        // FIX #2: store as relative key — no scheme/hostname in key
+        val relKey = toRelKey(dir)
+        pendingDeleteRelDirs.add(relKey)
+        logDebug(s"ManifestCommitProtocol.collectOld: relKey='$relKey' absPath=$dir")
       }
 
       subDirs
@@ -411,11 +350,7 @@ class ManifestFileCommitProtocolV6(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  EMPTY ANCESTOR CLEANUP — iterative upward walk
-  //
-  //  After a stale leaf partition dir is deleted, walks UP the tree and removes
-  //  every ancestor that is now empty, stopping at outputPath.
-  //  Handles arbitrarily deep multi-level partitions (year/month/day/hour/...).
+  //  ITERATIVE ANCESTOR CLEANUP
   // ═══════════════════════════════════════════════════════════════════════════
 
   private def cleanupEmptyAncestorsBFS(
@@ -428,15 +363,14 @@ class ManifestFileCommitProtocolV6(
     var current  = try { fs.makeQualified(startAt) }
     catch { case _: Exception => return }
 
-    while (current != qualStop &&
-      current.toString.startsWith(qualStop.toString)) {
+    while (current != qualStop && current.toString.startsWith(qualStop.toString)) {
       try {
-        if (!fs.exists(current)) {
-          current = current.getParent
-        } else {
-          val hasReal = fs.listStatus(current)
-            .exists(s => { val n = s.getPath.getName; !n.startsWith("_") && !n.startsWith(".") })
-          if (hasReal) return  // sibling content exists — stop
+        if (!fs.exists(current)) { current = current.getParent }
+        else {
+          val hasReal = fs.listStatus(current).exists { s =>
+            val n = s.getPath.getName; !n.startsWith("_") && !n.startsWith(".")
+          }
+          if (hasReal) return
           fs.delete(current, true)
           logInfo(s"ManifestCommitProtocol: deleted empty ancestor $current")
           current = current.getParent
@@ -451,101 +385,65 @@ class ManifestFileCommitProtocolV6(
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  RECOVERY — iterative BFS, parallel per-dir tasks
-  //
-  //  Called at setupJob() BEFORE cleanupOrphanedStarted so recovery
-  //  can read the _started_ files it needs.
-  //
-  //  PATH A  _started_<tid> present, no _committed_<tid>:
-  //    Three-source file collection (union, distinct):
-  //      S1 _pending_<tid>_*  pendingFiles   ← authoritative (post-rename)
-  //      S2 _started_<tid>    pendingFiles   ← backup (pre-rename)
-  //      S3 tid-pattern scan  filename match ← last resort
-  //    Delete all found files in parallel.
-  //    Delete all _pending_<tid>_* and _started_<tid>.
-  //
-  //  PATH B  _started_<tid> + _committed_<tid> both present:
-  //    Read _committed_.removed[] → delete each file still on disk.
-  //    If partition empty after and no newer _committed_ → delete dir + ancestors.
-  //    Delete _started_<tid>.
-  //
-  //  Both paths are fully idempotent: fs.exists() guard before every delete.
+  //  RECOVERY — iterative BFS, parallel per-dir
   // ═══════════════════════════════════════════════════════════════════════════
 
   private def recoverBFS(rootDir: Path, fs: FileSystem): Unit = {
-    val rootPath  = new Path(outputPath)
-    val bfsQueue  = new LinkedBlockingQueue[Path]()
-    val futures   = new java.util.concurrent.ConcurrentLinkedQueue[Future[_]]()
+    val rootPath = new Path(outputPath)
+    val bfsQueue = new LinkedBlockingQueue[Path]()
+    val futures  = new java.util.concurrent.ConcurrentLinkedQueue[Future[_]]()
 
     bfsQueue.add(rootDir)
 
-    // BFS: scan dirs, submit recovery work in parallel, keep BFS going
     while (!bfsQueue.isEmpty) {
       val dir      = bfsQueue.poll()
       val statuses = try { fs.listStatus(dir) }
       catch { case _: Exception => Array.empty[FileStatus] }
       val (subDirs, files) = statuses.partition(_.isDirectory)
 
-      // Index manifest files in this dir by tid
       val committedByTid: Map[String, Path] = files
         .withFilter(_.getPath.getName.startsWith("_committed_"))
-        .map(s => s.getPath.getName.stripPrefix("_committed_") -> s.getPath)
-        .toMap
+        .map(s => s.getPath.getName.stripPrefix("_committed_") -> s.getPath).toMap
 
       val startedByTid: Map[String, Path] = files
         .withFilter(_.getPath.getName.startsWith("_started_"))
-        .map(s => s.getPath.getName.stripPrefix("_started_") -> s.getPath)
-        .toMap
+        .map(s => s.getPath.getName.stripPrefix("_started_") -> s.getPath).toMap
 
-      // _pending_<tid>_* grouped by tid
-      val pendingByTid: Map[String, Seq[Path]] =
-        files
-          .filter { s =>
-            val name = s.getPath.getName
-            val parts = name.stripPrefix("_pending_").split("_")
-            name.startsWith("_pending_") && parts.length >= 2
-          }
-          .groupBy { s =>
-            s.getPath.getName.stripPrefix("_pending_").split("_").head
-          }
-          .map { case (tid, seq) =>
-            tid -> seq.map(_.getPath).toSeq
-          }
+      val pendingByTid: Map[String, Seq[Path]] = files
+        .filter { s =>
+          val n = s.getPath.getName
+          n.startsWith("_pending_") && n.stripPrefix("_pending_").split("_").length >= 2
+        }
+        .groupBy(s => s.getPath.getName.stripPrefix("_pending_").split("_").head)
+        .mapValues(_.map(_.getPath).toSeq)
 
-      // Snapshot files list for use inside lambda (avoid capturing mutable state)
-      val filesList = files.toSeq
+      val filesList        = files.toSeq
+      val allCommittedCapt = committedByTid
 
-      // Submit recovery for each tid that has a _started_ in this dir
       startedByTid.foreach { case (tid, startedPath) =>
-        val dirCapture         = dir
-        val committedPathOpt   = committedByTid.get(tid)
-        val pendingPaths       = pendingByTid.getOrElse(tid, Seq.empty)
-        val allCommittedCapt   = committedByTid
-        val filesCapt          = filesList
+        val dirC         = dir
+        val pendingPaths = pendingByTid.getOrElse(tid, Seq.empty)
+        val filesCapt    = filesList
 
         futures.add(submitTask {
-          committedPathOpt match {
+          committedByTid.get(tid) match {
             case None =>
-              recoverPathA(dirCapture, fs, tid, startedPath,
-                pendingPaths, filesCapt, rootPath)
+              recoverPathA(dirC, fs, tid, startedPath, pendingPaths, filesCapt, rootPath)
             case Some(committedPath) =>
-              recoverPathB(dirCapture, fs, tid, startedPath,
-                committedPath, allCommittedCapt, rootPath)
+              recoverPathB(dirC, fs, tid, startedPath, committedPath, allCommittedCapt, rootPath)
           }
         })
       }
 
-      // Enqueue non-hidden subdirs for BFS continuation
       subDirs
         .withFilter(s => { val n = s.getPath.getName; !n.startsWith("_") && !n.startsWith(".") })
         .foreach(s => bfsQueue.add(s.getPath))
     }
 
-    // Drain all recovery futures
     futures.asScala.foreach { f =>
       try { f.get(30, TimeUnit.MINUTES) }
       catch { case e: Exception =>
-        logWarning(s"ManifestCommitProtocol.recover: task failed: ${e.getMessage}") }
+        logWarning(s"ManifestCommitProtocol.recover: ${e.getMessage}") }
     }
   }
 
@@ -560,48 +458,39 @@ class ManifestFileCommitProtocolV6(
 
     logInfo(s"ManifestCommitProtocol.recover[A]: uncommitted write at $dir tid=$tid")
 
-    // Source 1: _pending_<tid>_* pendingFiles (authoritative — written after rename)
     val fromPending: Set[String] = pendingPaths.flatMap { pp =>
       try { parsePendingFile(pp, fs).pendingFiles }
       catch { case _: Exception => Seq.empty[String] }
     }.toSet
 
-    // Source 2: _started_ pendingFiles (backup — written before rename)
-    // Covers crash window: rename done, _pending_ not yet written
     val fromStarted: Set[String] =
-    try { parseStartedFile(startedPath, fs).pendingFiles.toSet }
-    catch { case _: Exception => Set.empty[String] }
+      try { parseStartedFile(startedPath, fs).pendingFiles.toSet }
+      catch { case _: Exception => Set.empty[String] }
 
-    // Source 3: filename tid-pattern scan (last resort — no manifest needed)
     val tidPattern = s"-tid-$tid-"
     val fromScan: Set[String] = filesInDir
-      .withFilter(s => isDataFile(s.getPath.getName) &&
-        s.getPath.getName.contains(tidPattern))
-      .map(_.getPath.getName)
-      .toSet
+      .withFilter(s => isDataFile(s.getPath.getName) && s.getPath.getName.contains(tidPattern))
+      .map(_.getPath.getName).toSet
 
     val toDelete = fromPending ++ fromStarted ++ fromScan
     val deleted  = new AtomicInteger(0)
-
-    val deleteTasks: Seq[() => Unit] = toDelete.toSeq.map { name => () =>
+    val tasks: Seq[() => Unit] = toDelete.toSeq.map { name => () =>
       val p = new Path(dir, name)
       try {
         if (fs.exists(p)) {
-          fs.delete(p, false); deleted.incrementAndGet()
+          fs.delete(p, false)
+          deleted.incrementAndGet()
           logInfo("")
-        }
-      } catch { case e: Exception =>
+      }
+      }
+      catch { case e: Exception =>
         logWarning(s"ManifestCommitProtocol.recover[A]: cannot delete $p: ${e.getMessage}") }
     }
-    parallelExec(deleteTasks, s"recoverA-del[$dir]")
-
-    // Clean up _pending_ files then _started_
+    parallelExec(tasks, s"recoverA[$dir]")
     pendingPaths.foreach(pp => safeDelete(fs, pp))
     safeDelete(fs, startedPath)
-
     logInfo(
-      s"ManifestCommitProtocol.recover[A]: complete at $dir tid=$tid " +
-        s"deleted=${deleted.get}/${toDelete.size} " +
+      s"ManifestCommitProtocol.recover[A]: $dir tid=$tid deleted=${deleted.get}/${toDelete.size} " +
         s"(pending=${fromPending.size} started=${fromStarted.size} scan=${fromScan.size})")
   }
 
@@ -623,23 +512,19 @@ class ManifestFileCommitProtocolV6(
         return }
 
     val deleted = new AtomicInteger(0)
-    val deleteTasks: Seq[() => Unit] = manifest.removedFiles
-      .withFilter(isDataFile)
-      .map { name => () =>
-        val p = new Path(dir, name)
-        try {
-          if (fs.exists(p)) {
-            fs.delete(p, false)
-            deleted.incrementAndGet()
-            logInfo("")
-          }
-        } catch { case e: Exception =>
-          logWarning(
-            s"ManifestCommitProtocol.recover[B]: cannot delete $p: ${e.getMessage}") }
+    val tasks: Seq[() => Unit] = manifest.removedFiles.withFilter(isDataFile).map { name => () =>
+      val p = new Path(dir, name)
+      try { if (fs.exists(p)) {
+        fs.delete(p, false);
+        deleted.incrementAndGet()
+        logInfo("")
       }
-    parallelExec(deleteTasks, s"recoverB-del[$dir]")
+      }
+      catch { case e: Exception =>
+        logWarning(s"ManifestCommitProtocol.recover[B]: cannot delete $p: ${e.getMessage}") }
+    }
+    parallelExec(tasks, s"recoverB[$dir]")
 
-    // If no data remains and no newer _committed_ from another job → delete dir
     val remainingData =
       try { fs.listStatus(dir).exists(s => isDataFile(s.getPath.getName)) }
       catch { case _: Exception => true }
@@ -652,48 +537,34 @@ class ManifestFileCommitProtocolV6(
           cleanupEmptyAncestorsBFS(fs, dir.getParent, rootDir)
         }
       } catch { case e: Exception =>
-        logWarning(
-          s"ManifestCommitProtocol.recover[B]: cannot delete stale $dir: ${e.getMessage}") }
-      return   // dir gone — skip deleting _started_
+        logWarning(s"ManifestCommitProtocol.recover[B]: cannot delete $dir: ${e.getMessage}") }
+      return
     }
 
     safeDelete(fs, startedPath)
     logInfo(
-      s"ManifestCommitProtocol.recover[B]: complete at $dir tid=$tid " +
+      s"ManifestCommitProtocol.recover[B]: $dir tid=$tid " +
         s"deleted=${deleted.get}/${manifest.removedFiles.size}")
   }
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  ORPHAN CLEANUP — iterative BFS
-  //
-  //  Run AFTER recovery so it does not accidentally remove the _started_ files
-  //  that PATH A needs to read.  Only removes _started_ files that have no
-  //  _committed_, no _pending_ files (truly orphaned from very old jobs).
-  // ═══════════════════════════════════════════════════════════════════════════
 
   private def cleanupOrphanedStartedBFS(dir: Path, fs: FileSystem): Unit = {
     val queue = new java.util.ArrayDeque[Path]()
     queue.add(dir)
-
     while (!queue.isEmpty) {
       val current  = queue.poll()
       val statuses = try { fs.listStatus(current) }
       catch { case _: Exception => Array.empty[FileStatus] }
       val (subDirs, files) = statuses.partition(_.isDirectory)
 
-      val committedTids: Set[String] = files
+      val committedTids = files
         .withFilter(_.getPath.getName.startsWith("_committed_"))
         .map(_.getPath.getName.stripPrefix("_committed_")).toSet
-
-      val pendingTids: Set[String] = files
+      val pendingTids = files
         .withFilter(_.getPath.getName.startsWith("_pending_"))
-        .flatMap { s =>
-          val parts = s.getPath.getName.stripPrefix("_pending_").split("_")
-          if (parts.length >= 1) Some(parts(0)) else None
-        }.toSet
+        .flatMap(s => s.getPath.getName.stripPrefix("_pending_").split("_").headOption)
+        .toSet
 
-      files
-        .withFilter(_.getPath.getName.startsWith("_started_"))
+      files.withFilter(_.getPath.getName.startsWith("_started_"))
         .foreach { s =>
           val tid = s.getPath.getName.stripPrefix("_started_")
           if (!committedTids.contains(tid) && !pendingTids.contains(tid)) {
@@ -724,45 +595,29 @@ class ManifestFileCommitProtocolV6(
       .getInt("spark.sql.manifest.writeParallelism", 16)
 
     val poolSize = math.max(deleteParallelism, writeParallelism)
+    sharedPool = Executors.newFixedThreadPool(poolSize, new ThreadFactory {
+      val counter = new AtomicInteger(0)
+      def newThread(r: Runnable): Thread = {
+        val t = new Thread(r, s"manifest-commit-${counter.incrementAndGet()}")
+        t.setDaemon(true); t
+      }
+    })
 
-    // Single shared pool for the entire job (manifests + deletes + listings)
-    sharedPool = Executors.newFixedThreadPool(
-      poolSize,
-      new ThreadFactory {
-        val counter = new AtomicInteger(0)
-        def newThread(r: Runnable): Thread = {
-          val t = new Thread(r, s"manifest-commit-${counter.incrementAndGet()}")
-          t.setDaemon(true)
-          t
-        }
-      })
-
-    // Recovery MUST run before cleanupOrphanedStarted so PATH A can read _started_
+    // Recovery BEFORE cleanupOrphanedStarted (PATH A needs _started_ to be intact)
     recoverBFS(outputDir, jobFs)
-
-    // Now clean up truly orphaned _started_ (no _committed_, no _pending_)
     cleanupOrphanedStartedBFS(outputDir, jobFs)
 
-    // Write root-level job lock
     writeStartedFile(jobFs, new Path(outputDir, s"_started_$jobId"), outputPath)
-
-    logInfo(
-      s"ManifestCommitProtocol.setupJob: path=$outputPath jobId=$jobId " +
-        s"dynamic=$dynamicPartitionOverwrite poolSize=$poolSize")
+//    logInfo(
+//      s"ManifestCommitProtocol.setupJob: path=$outputPath jobId=$jobId " +
+//        s"dynamic=$dynamicPartitionOverwrite poolSize=$poolSize")
   }
 
-  /**
-   * Called by InsertIntoHadoopFsRelationCommand for STATIC overwrite only
-   * (skipped when dynamicPartitionOverwrite=true).
-   *
-   * Defers deletion: records dir paths only (not filenames) to avoid driver OOM.
-   * Old filenames are listed lazily in commitJob step 2.
-   */
   override def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
     collectOldDirsBFS(fs, path)
     logInfo(
       s"ManifestCommitProtocol.deleteWithJob: deferred $path → " +
-        s"${pendingDeleteDirs.size()} partition dirs recorded")
+        s"${pendingDeleteRelDirs.size()} relative dir keys recorded")
     true
   }
 
@@ -772,115 +627,155 @@ class ManifestFileCommitProtocolV6(
 
     val rootPath = new Path(outputPath)
 
-    // ── Step 1: unwrap CombinedCommitPayload from each task ──────────────────
+    // ── Step 1: unwrap CombinedCommitPayloadV6 ─────────────────────────────────
+    // mergedPartitionFiles keyed by RELATIVE path (from commitTask)
     val mergedPartitionFiles =
-      new java.util.concurrent.ConcurrentHashMap[String, java.util.List[String]]()
+    new java.util.concurrent.ConcurrentHashMap[String, java.util.List[String]]()
 
     val superMessages: Seq[TaskCommitMessage] = taskCommits.map { msg =>
       msg.obj match {
         case cp: CombinedCommitPayloadV6 =>
-          cp.partitionFiles.forEach { (pDir, files) =>
-            mergedPartitionFiles
-              .compute(pDir, (_, existing) => {
-                val list = if (existing == null) new java.util.ArrayList[String]() else existing
-                list.addAll(files)
-                list
-              })
+          cp.partitionFiles.forEach { (relKey, files) =>
+            mergedPartitionFiles.compute(relKey, (_, existing) => {
+              val list = if (existing == null) new java.util.ArrayList[String]() else existing
+              list.addAll(files); list
+            })
           }
           new TaskCommitMessage(cp.superObj)
         case _ => msg
       }
     }
 
-    // ── Step 2: capture REMOVED lists BEFORE super.commitJob() ──────────────
+    // ── Step 2: capture REMOVED lists ────────────────────────────────────────
     //
-    // DYNAMIC: list old files NOW — super.commitJob() deletes these dirs next.
-    // STATIC:  re-list dirs recorded in deleteWithJob (files still there).
-    // Parallel listing for throughput.
+    // FIX #1 — FileOutputCommitter v2 (default in Hadoop 3.x):
+    //   With algorithm.version=2, commitTask() renames files directly to the
+    //   FINAL output dir (NOT to staging). By the time we reach commitJob(),
+    //   ALL new files are already at their final location alongside old files.
+    //   If we list now without filtering, removedByPartition captures new files
+    //   too, and step 6 deletes new data.
+    //
+    //   Fix: after listing, subtract the new file set from the result.
+    //   This is order-independent: works whether listing is before or after
+    //   super.commitJob() and regardless of algorithm version.
+    //
+    // For DYNAMIC: list from mergedPartitionFiles dirs (dynamic uses abs-path
+    //   staging, so new files are NOT at final location before super runs). ✓
+    // For STATIC:  list from pendingDeleteRelDirs. Written partition dirs may
+    //   already contain new files (v2). Stale partition dirs never contain new
+    //   files (nothing was written there). Filter handles both correctly.
     val removedByPartition =
     new java.util.concurrent.ConcurrentHashMap[String, java.util.List[String]]()
 
-    val listingDirs: Seq[String] =
+    val listingRelKeys: Seq[String] =
       if (dynamicPartitionOverwrite) mergedPartitionFiles.keySet().asScala.toSeq
-      else pendingDeleteDirs.asScala.toSeq
+      else pendingDeleteRelDirs.asScala.toSeq
 
-    val listTasks: Seq[() => Unit] = listingDirs.map { pDir => () =>
-      val p      = new Path(pDir)
-      val partFs = p.getFileSystem(jobContext.getConfiguration)
-      val old    = listDataFileNames(partFs, partFs.makeQualified(p))
-      if (old.nonEmpty)
-        removedByPartition.put(pDir, old.toList.asJava)
+    val listTasks: Seq[() => Unit] = listingRelKeys.map { relKey => () =>
+      val absPath = toAbsPath(relKey)
+      val partFs  = absPath.getFileSystem(jobContext.getConfiguration)
+      val allFiles = listDataFileNames(partFs, absPath)
+
+      // FIX #1: subtract new files written by THIS job from the listing.
+      // New files: those whose names are in mergedPartitionFiles[relKey].
+      // Old files: everything else.
+      val newFileSet = mergedPartitionFiles
+        .getOrDefault(relKey, java.util.Collections.emptyList[String]())
+        .asScala.toSet
+      val oldFiles = allFiles.filterNot(f => newFileSet.contains(f))
+
+      if (oldFiles.nonEmpty)
+        removedByPartition.put(relKey, oldFiles.toList.asJava)
+
       logInfo("")
     }
     parallelExec(listTasks, "step2-listOld")
 
-    // ── Step 3: super.commitJob() ────────────────────────────────────────────
-    //
-    // DYNAMIC: fs.delete(old partition dirs) then fs.rename(staging → final)
-    // STATIC:  fs.rename(staged files → final). Old files still coexist.
-    // _committed_ MUST be written AFTER this call in both cases.
+    // ── Step 3: super.commitJob() ─────────────────────────────────────────────
+    // For v1: renames staged files to final (old + new coexist until step 6).
+    // For v2: no-op at job level (files already moved in commitTask).
+    // For dynamic: deletes old partition dirs + renames staging → final.
     super.commitJob(jobContext, superMessages)
 
-    // ── Step 4: PARALLEL write per-partition _committed_ (AFTER super) ──────
-    //
-    // After super: new files are at final location in all cases.
-    // _committed_ is now safe to write.
+    // ── Step 4: PARALLEL write per-partition _committed_ (AFTER super) ───────
+    // Written after super so that in all cases (v1/v2/dynamic) the new data
+    // files are at their final location when _committed_ is created.
     val writeCommittedTasks: Seq[() => Unit] =
-    mergedPartitionFiles.asScala.toSeq.map { case (pDir, addedFiles) => () =>
-      val partPath = new Path(pDir)
-      val partFs   = partPath.getFileSystem(jobContext.getConfiguration)
-      val removed  = removedByPartition.getOrDefault(pDir, java.util.Collections.emptyList())
+    mergedPartitionFiles.asScala.toSeq.map { case (relKey, addedFiles) => () =>
+      val absPath = toAbsPath(relKey)
+      val partFs  = absPath.getFileSystem(jobContext.getConfiguration)
+      val removed = removedByPartition.getOrDefault(
+        relKey, java.util.Collections.emptyList[String]())
       writePartitionCommittedFile(
-        partFs, partPath,
+        partFs, absPath,
         addedFiles.asScala.toSeq,
         removed.asScala.toSeq)
     }
     parallelExec(writeCommittedTasks, "step4-writeCommitted")
 
-    // ── Step 5: write root-level _committed_ ────────────────────────────────
+    // ── Step 5: write root-level _committed_ ──────────────────────────────────
     val allRemoved: Seq[String] =
       removedByPartition.values().asScala.flatMap(_.asScala).toSeq
+    writeRootCommittedFile(jobFs, outputDir,
+      new java.util.HashMap(mergedPartitionFiles), allRemoved)
 
-    writeRootCommittedFile(
-      jobFs, outputDir,
-      new java.util.HashMap(mergedPartitionFiles),
-      allRemoved)
-
-    // ── Step 6: PARALLEL delete old data (STATIC overwrite only) ────────────
-    //
-    // Two cases:
-    //   A. Partition HAS new data: delete old files by name only.
-    //      Dir has new data + _committed_ — never delete the whole dir.
-    //   B. Stale partition (no new data): delete entire dir recursively.
-    //      Then clean empty ancestor dirs iteratively.
+    // ── Step 6: PARALLEL delete old data (STATIC overwrite only) ─────────────
     if (!dynamicPartitionOverwrite) {
 
-      // Separate written vs stale
-      val fileDeleteTargets = new java.util.concurrent.ConcurrentLinkedQueue[(FileSystem, Path)]()
-      val staleDirs         = mutable.ArrayBuffer.empty[(FileSystem, Path)]
+      val fileDeleteTargets =
+        new java.util.concurrent.ConcurrentLinkedQueue[(FileSystem, Path)]()
+      val staleDirs = mutable.ArrayBuffer.empty[(FileSystem, Path)]
 
-      pendingDeleteDirs.asScala.foreach { qualDir =>
-        val dirPath = new Path(qualDir)
-        val dirFs   = dirPath.getFileSystem(jobContext.getConfiguration)
+      pendingDeleteRelDirs.asScala.foreach { relKey =>
+        val absPath = toAbsPath(relKey)
+        val dirFs   = absPath.getFileSystem(jobContext.getConfiguration)
 
-        if (mergedPartitionFiles.containsKey(qualDir)) {
-          // Case A: written partition — delete old filenames only
+        if (mergedPartitionFiles.containsKey(relKey)) {
+          // ── Case A: written partition ─────────────────────────────────────
+          // Delete only the specific OLD file names captured in step 2.
+          // Dir contains new data + _committed_ — never delete the whole dir.
           removedByPartition
-            .getOrDefault(qualDir, java.util.Collections.emptyList())
-            .forEach { name => fileDeleteTargets.add((dirFs, new Path(dirPath, name))) }
+            .getOrDefault(relKey, java.util.Collections.emptyList[String]())
+            .forEach { name => fileDeleteTargets.add((dirFs, new Path(absPath, name))) }
+
         } else {
-          // Case B: stale partition — full dir delete
-          staleDirs += ((dirFs, dirPath))
+          // ── Case B: stale partition ───────────────────────────────────────
+          // FIX #3: before recursive delete, check if this stale dir is an
+          // ANCESTOR of any written partition. If so, do NOT recursively
+          // delete — that would wipe new data in the written child dirs.
+          //
+          // Example: pendingDeleteRelDirs has "p=1" (has data files directly)
+          //   AND mergedPartitionFiles has "p=1/q=a" (written child).
+          // Without this check, deleting "p=1" recursively kills "p=1/q=a".
+          //
+          // In practice this only occurs for tables with data at intermediate
+          // partition levels (rare but must be handled correctly).
+          val keyPrefix = if (relKey.isEmpty) "" else relKey + "/"
+          val hasWrittenDescendant = mergedPartitionFiles.keySet().asScala
+            .exists(k => k.startsWith(keyPrefix) || k == relKey)
+
+          if (hasWrittenDescendant) {
+            // Do NOT recursively delete — only delete old files at this level
+            logWarning(
+              s"ManifestCommitProtocol: stale dir $relKey has written descendants; " +
+                s"deleting old files by name only (not recursively)")
+            removedByPartition
+              .getOrDefault(relKey, java.util.Collections.emptyList[String]())
+              .forEach { name => fileDeleteTargets.add((dirFs, new Path(absPath, name))) }
+          } else {
+            staleDirs += ((dirFs, absPath))
+          }
         }
       }
 
-      // Parallel delete individual old files
-      val fileDeleteCount = new AtomicLong(0)
+      // Parallel delete of old individual files in written partitions
+      val fileCount = new AtomicLong(0)
       val fileTasks: Seq[() => Unit] = fileDeleteTargets.asScala.toSeq.map {
         case (fs, path) => () =>
           try {
             if (fs.exists(path)) {
-              fs.delete(path, false); fileDeleteCount.incrementAndGet()
+              fs.delete(path, false);
+              fileCount.incrementAndGet()
               logInfo("")
             }
           } catch { case e: Exception =>
@@ -888,69 +783,61 @@ class ManifestFileCommitProtocolV6(
       }
       parallelExec(fileTasks, "step6-fileDelete")
       logInfo(
-        s"ManifestCommitProtocol.commitJob step6: deleted " +
-          s"${fileDeleteCount.get}/${fileDeleteTargets.size()} old data files")
+        s"ManifestCommitProtocol step6: deleted ${fileCount.get}/${fileDeleteTargets.size()} " +
+          s"old files (parallelism=$deleteParallelism)")
 
-      // Parallel delete stale partition dirs
-      val dirDeleteCount = new AtomicLong(0)
+      // Parallel delete of stale partition dirs
+      val dirCount = new AtomicLong(0)
       val dirTasks: Seq[() => Unit] = staleDirs.toSeq.map {
         case (fs, path) => () =>
           try {
             if (fs.exists(path)) {
-              fs.delete(path, true); dirDeleteCount.incrementAndGet()
+              fs.delete(path, true);
+              dirCount.incrementAndGet()
               logInfo("")
             }
           } catch { case e: Exception =>
-            logWarning(s"ManifestCommitProtocol: cannot delete stale dir $path: ${e.getMessage}") }
+            logWarning(s"ManifestCommitProtocol: cannot delete stale $path: ${e.getMessage}") }
       }
-      parallelExec(dirTasks, "step6-staleDirDelete")
+      parallelExec(dirTasks, "step6-staleDelete")
       logInfo(
-        s"ManifestCommitProtocol.commitJob step6: deleted " +
-          s"${dirDeleteCount.get}/${staleDirs.size} stale partition dirs")
+        s"ManifestCommitProtocol step6: deleted ${dirCount.get}/${staleDirs.size} stale dirs")
 
-      // Clean empty ancestors (serial — small number of dirs, parent scan cheap)
+      // Clean empty ancestor dirs (serial — few ancestors, cheap listStatus)
       staleDirs.foreach { case (fs, dirPath) =>
         cleanupEmptyAncestorsBFS(fs, dirPath.getParent, rootPath)
       }
 
-      pendingDeleteDirs.clear()
+      pendingDeleteRelDirs.clear()
     }
 
-    // ── Step 7: PARALLEL delete _started_ + _pending_ (transaction closed) ──
+    // ── Step 7: PARALLEL delete _started_ + _pending_ ────────────────────────
     val cleanupTargets =
       new java.util.concurrent.ConcurrentLinkedQueue[(FileSystem, Path)]()
 
-    // Root _started_ always deleted
     cleanupTargets.add((jobFs, new Path(outputDir, s"_started_$jobId")))
 
     if (dynamicPartitionOverwrite) {
-      // Dynamic: super deleted old partition dirs entirely.
-      // Partition-level _started_ gone with them.
-      // Clean residual old manifests in newly renamed dirs.
       val cleanOldTasks: Seq[() => Unit] =
-      mergedPartitionFiles.keySet().asScala.toSeq.map { pDir => () =>
-        val p   = new Path(pDir)
-        val pFs = p.getFileSystem(jobContext.getConfiguration)
-        cleanupOldManifestsInDir(p, pFs)
-      }
+        mergedPartitionFiles.keySet().asScala.toSeq.map { relKey => () =>
+          val p   = toAbsPath(relKey)
+          val pFs = p.getFileSystem(jobContext.getConfiguration)
+          cleanupOldManifestsInDir(p, pFs)
+        }
       parallelExec(cleanOldTasks, "step7-cleanOldManifests")
-
     } else {
-      // Static: collect _started_ + all _pending_<jobId>_* from written partitions
-      // (stale partition dirs were deleted entirely in step 6)
       val collectTasks: Seq[() => Unit] =
-      mergedPartitionFiles.keySet().asScala.toSeq.map { pDir => () =>
-        val p   = new Path(pDir)
-        val pFs = p.getFileSystem(jobContext.getConfiguration)
+        mergedPartitionFiles.keySet().asScala.toSeq.map { relKey => () =>
+          val p   = toAbsPath(relKey)
+          val pFs = p.getFileSystem(jobContext.getConfiguration)
 
-        cleanupTargets.add((pFs, new Path(p, s"_started_$jobId")))
-
-        try {
-          pFs.listStatus(p)
-            .withFilter(_.getPath.getName.startsWith(s"_pending_${jobId}_"))
-            .foreach(s => cleanupTargets.add((pFs, s.getPath)))
-        } catch { case _: Exception => }
-      }
+          cleanupTargets.add((pFs, new Path(p, s"_started_$jobId")))
+          try {
+            pFs.listStatus(p)
+              .withFilter(_.getPath.getName.startsWith(s"_pending_${jobId}_"))
+              .foreach(s => cleanupTargets.add((pFs, s.getPath)))
+          } catch { case _: Exception => }
+        }
       parallelExec(collectTasks, "step7-collectCleanup")
     }
 
@@ -958,7 +845,6 @@ class ManifestFileCommitProtocolV6(
       cleanupTargets.asScala.toSeq.map { case (fs, path) => () => safeDelete(fs, path) }
     parallelExec(cleanTasks, "step7-cleanup")
 
-    // Shutdown pool — all work complete
     sharedPool.shutdown()
     sharedPool.awaitTermination(5, TimeUnit.MINUTES)
 
@@ -971,19 +857,16 @@ class ManifestFileCommitProtocolV6(
   }
 
   override def abortJob(jobContext: JobContext): Unit = {
-    pendingDeleteDirs.clear()
+    pendingDeleteRelDirs.clear()
     try {
       if (sharedPool != null && !sharedPool.isShutdown) sharedPool.shutdownNow()
     } catch { case _: Exception => }
     super.abortJob(jobContext)
-    // Leave _started_ in place — signals failed write to ManifestAwareFileIndex
     logInfo(s"ManifestCommitProtocol.abortJob: old data preserved at $outputPath")
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  TASK LIFECYCLE — EXECUTOR
-  //  Object arrives here after Java deserialization — @transient fields = null.
-  //  setupTask() is the ONLY safe place to initialize executor-side state.
   // ═══════════════════════════════════════════════════════════════════════════
 
   override def setupTask(taskContext: TaskAttemptContext): Unit = {
@@ -992,11 +875,6 @@ class ManifestFileCommitProtocolV6(
     seenPartitionDirs  = new java.util.concurrent.ConcurrentHashMap()
   }
 
-  /**
-   * Spark 3.5 calls the FileNameSpec variant ONLY.
-   * Overriding the deprecated (ext: String) variant does nothing — partition
-   * _started_ would never be written and taskPartitionFiles would stay empty.
-   */
   override def newTaskTempFile(
                                 taskContext: TaskAttemptContext,
                                 dir:         Option[String],
@@ -1005,27 +883,22 @@ class ManifestFileCommitProtocolV6(
     ensureTaskState(taskContext)
     val stagingPath = super.newTaskTempFile(taskContext, dir, spec)
 
-    // Compute QUALIFIED final partition dir — must match pendingDeleteDirs keys
-    val rawPartDir = dir match {
-      case Some(d) => new Path(outputPath, d)
-      case None    => new Path(outputPath)
-    }
-    val partFs  = rawPartDir.getFileSystem(taskContext.getConfiguration)
-    val partDir = partFs.makeQualified(rawPartDir).toString
+    // FIX #2: key = RELATIVE path, matching pendingDeleteRelDirs keys.
+    // dir is already relative to outputPath (e.g. "year=2024/month=01/day=15").
+    val relKey = dir.getOrElse("")
 
-    // Write partition-level _started_ (lock signal) once per partition per task
-    if (seenPartitionDirs.putIfAbsent(partDir, java.lang.Boolean.TRUE) == null) {
-      val partPath = new Path(partDir)
-      writeStartedFile(partFs, new Path(partPath, s"_started_$jobId"),
-        partitionPath = partDir,
-        pendingFiles  = Seq.empty)   // pendingFiles filled in at commitTask
+    if (seenPartitionDirs.putIfAbsent(relKey, java.lang.Boolean.TRUE) == null) {
+      val absPath = new Path(outputPath, relKey)
+      val partFs  = absPath.getFileSystem(taskContext.getConfiguration)
+      writeStartedFile(partFs, new Path(absPath, s"_started_$jobId"),
+        partitionPath = relKey, pendingFiles = Seq.empty)
       logDebug(
-        s"ManifestCommitProtocol: wrote _started_(empty) at $partDir " +
+        s"ManifestCommitProtocol: wrote _started_(empty) relKey='$relKey' " +
           s"task=${taskContext.getTaskAttemptID}")
     }
 
     taskPartitionFiles
-      .computeIfAbsent(partDir, _ => new java.util.concurrent.CopyOnWriteArrayList())
+      .computeIfAbsent(relKey, _ => new java.util.concurrent.CopyOnWriteArrayList())
       .add(new Path(stagingPath).getName)
 
     stagingPath
@@ -1038,57 +911,46 @@ class ManifestFileCommitProtocolV6(
 
     ensureTaskState(taskContext)
     val stagingPath = super.newTaskTempFileAbsPath(taskContext, absoluteDir, spec)
-    val raw         = new Path(absoluteDir)
-    val qualDir     = raw.getFileSystem(taskContext.getConfiguration)
-      .makeQualified(raw).toString
+    // For abs-path writes, use the relative form of absoluteDir as key
+    val relKey = toRelKeyExec(new Path(absoluteDir), taskContext)
     taskPartitionFiles
-      .computeIfAbsent(qualDir, _ => new java.util.concurrent.CopyOnWriteArrayList())
+      .computeIfAbsent(relKey, _ => new java.util.concurrent.CopyOnWriteArrayList())
       .add(new Path(stagingPath).getName)
     stagingPath
   }
 
-  /**
-   * Three-phase commitTask:
-   *
-   *   Phase 1 — update partition _started_ with actual file list (BEFORE rename).
-   *             If cluster crashes after rename but before _pending_ is written,
-   *             recovery PATH A reads _started_ and finds every file to delete.
-   *
-   *   Phase 2 — super.commitTask(): staging → final rename.
-   *             Files are now at final location on disk.
-   *
-   *   Phase 3 — write _pending_<jobId>_<taskAttemptId>: authoritative per-task record.
-   *             One file per task; never overwritten by other tasks.
-   *             Recovery PATH A unions all _pending_ files to get complete list.
-   */
   override def commitTask(taskContext: TaskAttemptContext): TaskCommitMessage = {
     ensureTaskState(taskContext)
 
     val taskAttemptId = taskContext.getTaskAttemptID.toString
 
-    // Snapshot partition → files for this task
+    // Snapshot — keys are RELATIVE paths
     val snapshot = new java.util.HashMap[String, java.util.List[String]]()
-    taskPartitionFiles.forEach { (pDir, files) =>
-      snapshot.put(pDir, new java.util.ArrayList[String](files))
+    taskPartitionFiles.forEach { (relKey, files) =>
+      snapshot.put(relKey, new java.util.ArrayList[String](files))
     }
 
-    // ── Phase 1: update _started_ with file list BEFORE rename ──────────────
-    snapshot.forEach { (pDir, files) =>
-      updatePartitionStarted(pDir, files.asScala.toSeq, taskContext)
+    // Phase 1: update partition _started_ with file list BEFORE staging→final rename.
+    // If cluster crashes after rename but before _pending_ is written, recovery
+    // PATH A reads _started_ and finds these filenames to clean up.
+    snapshot.forEach { (relKey, files) =>
+      val absPath = new Path(outputPath, relKey)
+      updatePartitionStarted(absPath.toString, relKey, files.asScala.toSeq, taskContext)
     }
 
-    // ── Phase 2: staging → final rename ─────────────────────────────────────
+    // Phase 2: staging → final rename
     val superMsg = super.commitTask(taskContext)
-    // Files are now at final location.
+    // Files are now at final location on disk.
 
-    // ── Phase 3: write _pending_<jobId>_<taskAttemptId> per partition ────────
-    snapshot.forEach { (pDir, files) =>
-      val partPath = new Path(pDir)
-      val partFs   = partPath.getFileSystem(taskContext.getConfiguration)
-      writePendingFile(partFs, partPath, taskAttemptId, files.asScala.toSeq)
+    // Phase 3: write _pending_<jobId>_<taskAttemptId> per partition (authoritative).
+    // One file per task — never overwritten by other tasks.
+    snapshot.forEach { (relKey, files) =>
+      val absPath = new Path(outputPath, relKey)
+      val partFs  = absPath.getFileSystem(taskContext.getConfiguration)
+      writePendingFile(partFs, absPath, taskAttemptId, files.asScala.toSeq)
       logDebug(
         s"ManifestCommitProtocol: wrote _pending_ ${files.size()} files " +
-          s"at $pDir task=$taskAttemptId")
+          s"relKey='$relKey' task=$taskAttemptId")
     }
 
     taskPartitionFiles.clear()
@@ -1101,12 +963,9 @@ class ManifestFileCommitProtocolV6(
     if (taskPartitionFiles != null) taskPartitionFiles.clear()
     if (seenPartitionDirs  != null) seenPartitionDirs.clear()
     super.abortTask(taskContext)
-    // Leave _started_ and _pending_ — recovery PATH A cleans them next setupJob
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  //  UTILITIES
-  // ═══════════════════════════════════════════════════════════════════════════
+  // ── Utilities ──────────────────────────────────────────────────────────────
 
   private def ensureTaskState(taskContext: TaskAttemptContext): Unit = {
     if (taskPartitionFiles == null || seenPartitionDirs == null) {
@@ -1129,4 +988,62 @@ class ManifestFileCommitProtocolV6(
         .foreach(s => safeDelete(fs, s.getPath))
     } catch { case _: Exception => }
 }
-
+//```
+//
+//---
+//
+//## Three bugs — exact traces
+//  ```
+//BUG 1: FileOutputCommitter v2 "same file" (default in Hadoop 3.x)
+//─────────────────────────────────────────────────────────────────
+//commitTask() with v2:
+//  super.commitTask() renames files to FINAL location immediately
+//e.g. p=1/q=a/part-NEW-tid-JOBID.parquet is at final loc
+//
+//commitJob() step 2 (BEFORE fix):
+//  listDataFileNames(p=1/q=a) → [part-OLD.parquet, part-NEW-tid-JOBID.parquet]
+//  removedByPartition["p=1/q=a"] = [OLD, NEW]  ← NEW wrongly included
+//
+//step 6:
+//  fileDeleteTargets includes part-NEW-tid-JOBID.parquet
+//fs.delete(part-NEW-tid-JOBID.parquet) → NEW DATA DELETED!
+//
+//FIX: val newFileSet = mergedPartitionFiles.getOrDefault(relKey, empty).toSet
+//val oldFiles = allFiles.filterNot(newFileSet.contains)
+//
+//
+//BUG 2: Path normalization — "files not getting deleted"
+//───────────────────────────────────────────────────────
+//pendingDeleteDirs key:  "s3a://bucket/table/year=2024/month=01"  (from fs.listStatus)
+//mergedPartitionFiles key: "s3://bucket/table/year=2024/month=01" (from outputPath + dir)
+//^^ different scheme!
+//
+//containsKey("s3a://...") on map with key "s3://" → FALSE
+//ALL written partitions treated as Case B (stale) → recursive delete
+//  ALL new data deleted!
+//
+//  FIX: Use RELATIVE keys ("year=2024/month=01") everywhere.
+//dir parameter in newTaskTempFile is already relative.
+//  toRelKey() strips the outputPath prefix from absolute paths.
+//
+//
+//BUG 3: Stale ancestor wipes written descendant
+//────────────────────────────────────────────────
+//Table has data at multiple levels:
+//  p=1/part-old.parquet           ← intermediate level data
+//p=1/q=a/part-old.parquet       ← leaf level data
+//
+//pendingDeleteRelDirs = {"p=1", "p=1/q=a"}
+//mergedPartitionFiles = {"p=1/q=a"}
+//
+//Step 6 (BEFORE fix):
+//  "p=1"     NOT in mergedPartitionFiles → Case B: fs.delete(p=1/, recursive=true)
+//  This deletes p=1/q=a/ and ALL NEW DATA inside it!
+//    "p=1/q=a" IS in mergedPartitionFiles → Case A: try delete old files from p=1/q=a/
+//    p=1/q=a/ was already deleted! "trying to delete same file" = fs.exists(p) = false
+//
+//  FIX: Before Case B recursive delete, check:
+//  val hasWrittenDescendant = mergedPartitionFiles.keySet()
+//    .exists(k => k.startsWith(relKey + "/"))
+//  if (hasWrittenDescendant) → Case A behavior (delete only old files at this level)
+//  else → Case B behavior (recursive delete)
