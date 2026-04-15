@@ -624,13 +624,13 @@ class ManifestFileCommitProtocolV5(
     // STATIC:  re-list dirs recorded in deleteWithJob (FIX #5: lazy listing).
     val removedByPartition = new java.util.concurrent.ConcurrentHashMap[
       String, java.util.List[String]]()
-
+    val newFileSet = mergedPartitionFiles.asScala.flatMap(f => f._2.asScala).toSet
     if (dynamicPartitionOverwrite) {
       // Parallel listing of old files in each partition being overwritten
       val listTasks: Seq[() => Unit] = mergedPartitionFiles.keySet().asScala.toSeq.map { partDir => () =>
         val p      = new Path(partDir)
         val partFs = p.getFileSystem(jobContext.getConfiguration)
-        val old    = listDataFileNames(partFs, partFs.makeQualified(p))
+        val old    = listDataFileNames(partFs, partFs.makeQualified(p)).filterNot(newFileSet.contains(_))
         if (old.nonEmpty) removedByPartition.put(partDir, old.asJava)
 
         println("inside dynamic partition overwrite")
@@ -643,7 +643,7 @@ class ManifestFileCommitProtocolV5(
       val listTasks: Seq[() => Unit] = pendingDeleteDirs.toSeq.map { qualDir => () =>
         val p      = new Path(qualDir)
         val dirFs  = p.getFileSystem(jobContext.getConfiguration)
-        val old    = listDataFileNames(dirFs, p)
+        val old    = listDataFileNames(dirFs, p).filterNot(newFileSet.contains)
         if (old.nonEmpty) removedByPartition.put(qualDir, old.asJava)
 
         println("inside static partition overwrite")
