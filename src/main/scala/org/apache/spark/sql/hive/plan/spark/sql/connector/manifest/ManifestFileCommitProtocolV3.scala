@@ -215,12 +215,13 @@ class ManifestFileCommitProtocolV3(
     val removedByPartition =
     new java.util.HashMap[String, java.util.List[String]]()
 
+    val newFileSet = mergedPartitionFiles.asScala.flatMap(f => f._2.asScala).toSet
     if (dynamicPartitionOverwrite) {
       mergedPartitionFiles.keySet().forEach { partDir =>
         val p = new Path(partDir)
         val partFs = p.getFileSystem(jobContext.getConfiguration)
         val qualifiedDir = partFs.makeQualified(p) // ensure qualified
-        val old = listDataFileNames(partFs, qualifiedDir)
+        val old = listDataFileNames(partFs, qualifiedDir).filterNot(newFileSet.contains)
         if (old.nonEmpty) {
           removedByPartition.put(partDir, old.asJava)
           logInfo(

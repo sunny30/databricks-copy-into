@@ -630,7 +630,7 @@ class ManifestFileCommitProtocolV5(
       val listTasks: Seq[() => Unit] = mergedPartitionFiles.keySet().asScala.toSeq.map { partDir => () =>
         val p      = new Path(partDir)
         val partFs = p.getFileSystem(jobContext.getConfiguration)
-        val old    = listDataFileNames(partFs, partFs.makeQualified(p)).filterNot(newFileSet.contains(_))
+        val old    = listDataFileNames(partFs, partFs.makeQualified(p)).filterNot(newFileSet.contains)
         if (old.nonEmpty) removedByPartition.put(partDir, old.asJava)
 
         println("inside dynamic partition overwrite")
