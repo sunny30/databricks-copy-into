@@ -172,7 +172,7 @@ case class CustomCreateDataSourceTableAsSelectCommand(
       None,
       None,
       outputColumnNames
-    ).run(sparkSession,qe.sparkPlan)
+    ).run(sparkSession,qe.executedPlan)
 
     Seq.empty[Row]
   }
