@@ -33,7 +33,11 @@ object ErrorApp {
       )
 
 
-    joinedQuery.write.partitionBy("label").format("parquet").mode(SaveMode.Overwrite).saveAsTable("ine003")
+    joinedQuery.write.partitionBy("label").format("parquet").mode(SaveMode.Append).saveAsTable("ine005")
+    spark.sql("select count(*) from ine005").show()
+    joinedQuery.write.partitionBy("label").format("parquet").mode(SaveMode.Append).saveAsTable("ine005")
+    spark.sql("select count(*) from ine005").show()
+    spark.read.table("ine005").show()
   }
 
   }
