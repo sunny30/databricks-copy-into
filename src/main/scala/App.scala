@@ -67,6 +67,8 @@ object App {
       getOrCreate()
 
 
+
+
     /** Custom data format  write options* */
 
     import spark.implicits._
@@ -78,6 +80,7 @@ object App {
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    ErrorApp.reproduce(spark)
     var df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
@@ -95,11 +98,11 @@ object App {
       (5, "Alan", 34, "B")).
     toDF("id", "name", "age", "category")
 
-    df.write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
-    spark.read.parquet("/tmp/prt").filter("age = 29 or (age=45 and category='A')").
-      write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
-
-    spark.read.parquet("/tmp/prt").show()
+//    df.write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
+//    spark.read.parquet("/tmp/prt").filter("age = 29 or (age=45 and category='A')").
+//      write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
+//
+//    spark.read.parquet("/tmp/prt").show()
    // spark.sql("""create table singlet03(id int) using parquet""")
     //location '/tmp/etbl'
 //    spark.sql("""create database if not exists cat.pdb3""")
