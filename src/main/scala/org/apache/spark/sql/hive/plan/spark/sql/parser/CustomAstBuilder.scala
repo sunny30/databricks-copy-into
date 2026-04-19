@@ -390,7 +390,8 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
   override def visitTableName(ctx: SqlBaseParser.TableNameContext): LogicalPlan = {
     val tablePlan = super.visitTableName(ctx)
     println("parser table plan is "+ tablePlan.toString())
-   CLSUtils.getProjectedTable(tablePlan,ctx)
+   //CLSUtils.getProjectedTable(tablePlan,ctx)
+    tablePlan
     //tablePlan
   }
 

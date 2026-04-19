@@ -54,7 +54,8 @@ object App {
       .set("spark.sql.cbo.enabled", "true")
       .set("spark.sql.cbo.planStats.enabled", "true")
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
-      .set("spark.sql.parquet.aggregatePushdown", "true").set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.ptotocol.ManifestCommitProtocol")
+      .set("spark.sql.parquet.aggregatePushdown", "true")
+      .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV5")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -66,16 +67,21 @@ object App {
       getOrCreate()
 
 
+
+
     /** Custom data format  write options* */
 
     import spark.implicits._
+    //spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
-    val df3 = Seq(
+    spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    ErrorApp.reproduce_zip(spark)
+    var df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
       (9, "Xiaoyu", 4.0),
@@ -83,6 +89,87 @@ object App {
       (11, "Bharath", 6.0),
       (12, "Vivek", 7.0)
     ).toDF("col1", "col2", "col3")
+
+    val df = Seq(
+      (1, "Alice", 34, "A"),
+      (2, "Bob", 45,"A"),
+      (3, "Charlie", 29,"B"),
+      (4, "Clair", 29, "A"),
+      (5, "Alan", 34, "B")).
+    toDF("id", "name", "age", "category")
+
+//    df.write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
+//    spark.read.parquet("/tmp/prt").filter("age = 29 or (age=45 and category='A')").
+//      write.mode("overwrite").partitionBy("age", "name", "category").parquet("/tmp/prt")
+//
+//    spark.read.parquet("/tmp/prt").show()
+   // spark.sql("""create table singlet03(id int) using parquet""")
+    //location '/tmp/etbl'
+//    spark.sql("""create database if not exists cat.pdb3""")
+//    //spark.sql("create table cat.ddb.dt04(col1 int, col3 double, col2 string) using parquet partitioned by(col2) ")
+//    df3 = df3.select("col1", "col3", "col2")
+//    df3.write.format("parquet").mode(SaveMode.Overwrite).partitionBy("col2").saveAsTable("cat.pdb3.ptb05")
+//    df3 = df3.filter("col1>9")
+//    df3.write.format("parquet").mode(SaveMode.Overwrite).partitionBy("col2").saveAsTable("cat.pdb3.ptb05")
+//    spark.read.table("cat.pdb3.ptb05").show()
+   // spark.sql("update cat.ddb.dt04 SET col2 = 'Satish' where col1 = 10")
+   // spark.read.table("cat.ddb.dt04").show()
+
+   // df3.write.insertInto("in04")
+    //df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("int05")
+//    df3.write.partitionBy("col2").format("parquet").mode(SaveMode.Append).saveAsTable("in80")
+//    df3.write.mode(SaveMode.Append).saveAsTable("in80")
+//    spark.read.table("in80").show()
+
+   //spark.sql("create table ht2(id int) using hive options('fileformat' = 'textfile', 'field.delim' = ';')")
+
+//    df3.write.partitionBy("col2").format("hive").option("fileformat", "parquet").mode(SaveMode.Overwrite).saveAsTable("in006")
+//    df3.write.mode(SaveMode.Append).saveAsTable("in006")
+//    df3.write.insertInto("in006")
+//    spark.sql("insert into in006 values (14,8.0,'satish'), (15,8.0,'pandeyCentr')")
+//    spark.read.table("in006").show()
+    //
+
+    //df3.write.partitionBy("col2").option("path", "/tmp/etbl").format("parquet").mode(SaveMode.Overwrite).saveAsTable("in0")
+   // spark.read.table("in0").show()
+
+//    df3 = df3.select("col1", "col3", "col2")
+//    df3.write.partitionBy("col2").format("delta").mode(SaveMode.Overwrite).saveAsTable("single04")
+
+//    val data = Seq(
+//      (101, "A", "2025-01-15"),
+//      (102, "B", "2025-01-20"),
+//      (103, "C", "2025-01-25")
+//    )
+//
+//    val data1 = Seq(
+//      (102, "A", "2025-01-15"),
+//      (103, "B", "2025-01-20"),
+//      (104, "C", "2025-01-25")
+//    )
+
+//    spark.sql("""create table singlet01(id int) using parquet""")
+//    spark.sql("insert into singlet01 values(1), (2)")
+//
+//    spark.sql("select * from singlet01").show()
+
+//   df3 = df3.select("col1", "col3", "col2")
+//   df3.write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
+//   df3.filter("col1>9").write.partitionBy("col2").format("parquet").mode("overwrite").save("/tmp/pt")
+
+
+//// //   spark.read.format("parquet").load("/Users/sharadsingh/Dev/databricks-copy-into/spark-warehouse/cat.cat/manifest_db.db/tbl/").show()
+////
+//    spark.sql("""create database if not exists cat.manifest_db""")
+//    df3.write.option("path", "/tmp/mtbl").partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+//    df3.filter("col1 > 9").write.partitionBy("col2").format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl")
+////
+//
+//    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
+//    df3.write.format("parquet").mode("overwrite").saveAsTable("cat.manifest_db.tbl1")
+
+
+
 
 //    val df2 = df3.select("col1", "col3", "col2")
 //    /**write begins**/
@@ -189,12 +276,12 @@ object App {
     /**ends with delta convert and cdc changes for three part name**/
 
 
-    spark.sql("""create database if not exists cat.ddb4""")
-    spark.sql("create table cat.ddb4.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
-    spark.sql("insert into cat.ddb4.ppt values(1,'1'), (2, '2')")
-
-    spark.conf.set("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
-    spark.sql("select distinct name1 from cat.ddb4.ppt").show()
+//    spark.sql("""create database if not exists cat.ddb4""")
+//    spark.sql("create table cat.ddb4.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
+//    spark.sql("insert into cat.ddb4.ppt values(1,'1'), (2, '2')")
+//
+//    spark.conf.set("spark.sql.sources.partitionColumnTypeInference.enabled", "false")
+//    spark.sql("select distinct name1 from cat.ddb4.ppt").show()
 
 //    spark.sql("""create database if not exists cat.ddb3""")
 //    spark.sql("create table cat.ddb3.ppt(id int, name1 string) using parquet PARTITIONED BY (name1)")
@@ -260,20 +347,10 @@ object App {
     import spark.implicits._
 
     // 1. Define your data as a Sequence of Tuples
-    val data = Seq(
-      (101, "A", "2025-01-15"),
-      (102, "B", "2025-01-20"),
-      (103, "C", "2025-01-25")
-    )
 
-    val data1 = Seq(
-      (102, "A", "2025-01-15"),
-      (103, "B", "2025-01-20"),
-      (104, "C", "2025-01-25")
-    )
 
     // 2. Convert to DataFrame and name the columns
-    val replaceData1 = data1.toDF("id", "status", "start_date")
+  //  val replaceData1 = data1.toDF("id", "status", "start_date")
 //    spark.sql("""create database if not exists cat.idb9""")
 //    spark.sql("create table cat.idb9.tbl(id int) using delta")
 //    replaceData1.write

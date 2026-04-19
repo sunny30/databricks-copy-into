@@ -58,7 +58,8 @@ object CustomSparkSQLParser extends SparkSqlParser{
           case _ =>  ListenerUtil.setSQLText(plan, sqlText)
         }
 
-        tranformUnResolvedRelationWithThreePartName(plan)
+        plan
+        //tranformUnResolvedRelationWithThreePartName(plan)
       case _ => throw new IllegalArgumentException("Invalid SQL")
     }
   }

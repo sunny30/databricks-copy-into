@@ -32,7 +32,7 @@ object ManifestState {
  * Parsed content of one _committed_<tid> file.
  * addedFiles contains bare filenames only — NOT full paths.
  */
-case class CommittedManifest(
+final case class CommittedManifestV1(
                               tid:        String,
                               addedFiles: Seq[String],
                               removedFiles: Seq[String]
@@ -254,7 +254,7 @@ class ManifestAwareFileIndex(
   private val failOnIncomplete: Boolean =
     sparkSession.conf.get("spark.sql.manifest.failOnIncompleteWrite", "true").toBoolean
 
-  private val hadoopConf = sparkSession.sessionState.newHadoopConf()
+   override val hadoopConf = sparkSession.sessionState.newHadoopConf()
 
   // ═══════════════════════════════════════════════════════════════════════════
   //  PARTITION SCHEMA OVERRIDE

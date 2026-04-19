@@ -240,8 +240,11 @@ class FSMetaStoreCatalog(
             throw QueryExecutionErrors.unableToCreateTableAsFailedToCreateDirectoryError(
               table, defaultTableLocation, e)
         }
-
-        tableDefinition.withNewStorage(locationUri = Some(defaultTableLocation.toUri))
+        if(catalogName.equalsIgnoreCase("spark_catalog") && tableDefinition.storage.locationUri.isDefined){
+          tableDefinition
+        }else {
+          tableDefinition.withNewStorage(locationUri = Some(defaultTableLocation.toUri))
+        }
 
       } else {
           tableDefinition
@@ -310,7 +313,7 @@ class FSMetaStoreCatalog(
     if(tableExists(db, table)) {
       val location = getTable(db, table).location
       val path = new Path(location)
-      fs.delete(path)
+     // fs.delete(path)
       FSMetaStoreCatalog.catalog(db).tables.remove(table)
       println("drop completed")
     }else{

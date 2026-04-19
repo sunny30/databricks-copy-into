@@ -14,7 +14,7 @@ import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
 import org.apache.spark.sql.hive.plan.spark.sql.execution.IcebergStrategy
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
-import org.apache.spark.sql.hive.plan.{CLSSecRule, CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, RowLevelFilter}
+import org.apache.spark.sql.hive.plan.{CLSSecRule, CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, RowLevelFilter, TwoToThreePartRule}
 
 class CustomExtensionSuite extends DeltaSparkSessionExtension {
 
@@ -28,6 +28,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
       CustomSparkSQLParser
     }
     extensions.injectResolutionRule(session => new ResolveCatalogViews(session))
+    extensions.injectOptimizerRule(session => new TwoToThreePartRule(session))
     extensions.injectResolutionRule(session => new ResolveProcedures(session))
     extensions.injectResolutionRule(session => new DescribeUnResolvedRelation(session))
     extensions.injectResolutionRule(session => new DescribeViewRelationRule(session))
