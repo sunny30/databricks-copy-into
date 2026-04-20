@@ -55,7 +55,7 @@ object ErrorApp {
     val LEFT_PARTITIONS = 47244 // matches List(24722, **47244**)
     val RIGHT_PARTITIONS = 24722 // matches List(**24722**, 47244)
 
-    val left = spark.range(0, 100000L)
+    val left = spark.range(0, 10000)
       .toDF("id")
       .withColumn("category",
         (org.apache.spark.sql.functions.col("id") % 5)
@@ -63,7 +63,7 @@ object ErrorApp {
       .withColumn("left_value",
         org.apache.spark.sql.functions.col("id") * 2.0).repartition(LEFT_PARTITIONS)
 
-    val right = spark.range(0, 100000L)
+    val right = spark.range(0, 10000)
       .toDF("id")
       .withColumn("category",
         (org.apache.spark.sql.functions.col("id") % 5)
@@ -81,11 +81,14 @@ object ErrorApp {
 
     joinedQuery = joinedQuery.select("id", "left_value", "right_value", "category")
 
-    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0003")
-    spark.sql("select count(*) from ine0003").show()
-    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0003")
-    spark.sql("select count(*) from ine0003").show()
-    spark.read.table("ine0003").show()
+    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0004")
+    spark.sql("select count(*) from ine0004").show()
+    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0004")
+    spark.sql("select count(*) from ine0004").show()
+   // spark.read.table("ine0004").show()
+    joinedQuery.write.mode(SaveMode.Append).saveAsTable("ine0004")
+    spark.sql("select count(*) from ine0004").show()
+    spark.read.table("ine0004").show()
 
 
   }
