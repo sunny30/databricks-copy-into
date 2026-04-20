@@ -10,7 +10,7 @@ import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.TreePattern.DYNAMIC_PRUNING_SUBQUERY
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
-import org.apache.spark.sql.connector.catalog.{Identifier, SupportsNamespaces, Table, TableSchemaChangeCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, SupportsNamespaces, Table, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.CommandExecutionMode
 import org.apache.spark.sql.execution.command.LeafRunnableCommand
@@ -19,6 +19,8 @@ import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.orc.OrcFileFormat
 import org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat
 import org.apache.spark.sql.execution.datasources.{FileFormat, InsertIntoHadoopFsRelationCommand}
+import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.types.StructType
 
 import scala.collection.JavaConverters._
 import java.net.URI
@@ -90,6 +92,7 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     val dynamicPartitonPruningExists = qe.optimizedPlan.exists(pl => pl.expressions.exists(e => e.containsAnyPattern(DYNAMIC_PRUNING_SUBQUERY)))
 
 
+    logInfo(s"CustomCreateDataSourceTableAsSelectCommand Input catalogTable: ${table.toString()}")
 
     //  spark.conf.set("spark.sql.optimizer.dynamicPartitionPruning.enabled", "false")
     val writePlan = if (dynamicPartitonPruningExists) {
@@ -100,6 +103,9 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     val tableCatalog = sparkSession.sessionState.catalogManager.catalog(catalogName).asTableCatalog
     val ident = Identifier.of(Seq(table.identifier.database.getOrElse("default")).toArray, table.identifier.table)
     val tableExists = tableCatalog.tableExists(ident)
+
+    logInfo(s"CustomCreateDataSourceTableAsSelectCommand tableExists: ${tableExists}")
+
     if(tableExists && mode == SaveMode.ErrorIfExists){
       throw QueryCompilationErrors.tableAlreadyExistsError(table.identifier.quotedString)
     }
@@ -127,7 +133,8 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     }else if(mode == SaveMode.Append){
 
       if(tableExists){
-        (table.schema, table.schema.map(f=>f.name), table.partitionColumnNames)
+        val (existingSchema, existingPartitionNames) = getExistingTableSchemaAndPartition(tableCatalog,ident)
+        (existingSchema, existingSchema.map(f => f.name), existingPartitionNames)
       }else{
         (writePlan.schema, writePlan.output.map(at=>at.name), table.partitionColumnNames)
       }
@@ -140,11 +147,20 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     }
 
     val ps = if(!tableExists) {
+
       val newTable = table.copy(schema = schema,storage = table.storage.copy(locationUri = Some(outPutPath)))
+      logInfo(s"CustomCreateDataSourceTableAsSelectCommand New Table creation is ${newTable.toString()}")
       CreateCatalogTable(catalogName,newTable, false).run(sparkSession)
+      logInfo(s"CustomCreateDataSourceTableAsSelectCommand New Table creation is done")
       getPartitionAttributeFromTable(writePlan,newTable,sparkSession)
     }else{
-      getPartitionAttributeFromTable(writePlan, table, sparkSession)
+      var ct = getExistingCatalogTable(tableCatalog, ident)
+      ct = if(ct == null){
+        table
+      }else{
+        ct
+      }
+      getPartitionAttributeFromTable(writePlan, ct, sparkSession)
     }
 
     val fileFormat = if (table.provider.getOrElse("csv").equalsIgnoreCase("hive")) {
@@ -159,6 +175,10 @@ case class CustomCreateDataSourceTableAsSelectCommand(
     }else{
       mode
     }
+
+    val psInfo = ps.map(a => a.name).mkString(",")
+    logInfo(s"""OutputColumnName ${outputColumnNames.mkString(",")}, path: ${outPutPath.toString}, provider: ${fileFormat} Partition column info: ${psInfo}""")
+
     InsertIntoHadoopFsRelationCommand(
       outputPath = new Path(outPutPath.toString),
       staticPartitions = Map.empty,
@@ -212,6 +232,19 @@ case class CustomCreateDataSourceTableAsSelectCommand(
 
     }
 
+  def getExistingTableSchemaAndPartition(tableCatalog:TableCatalog, ident: Identifier):(StructType, Seq[String]) = {
+    tableCatalog.loadTable(ident) match {
+      case V2Table(v1Table) => (v1Table.schema, v1Table.partitionColumnNames)
+      case table:Table  => (table.schema() , table.partitioning().map(t => t.name()))
+    }
+  }
+
+  def getExistingCatalogTable(tableCatalog: TableCatalog, ident: Identifier):CatalogTable = {
+    tableCatalog.loadTable(ident) match {
+      case V2Table(v1Table) => v1Table
+      case table: Table => null
+    }
+  }
 
 
 }

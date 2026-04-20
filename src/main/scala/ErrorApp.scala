@@ -72,19 +72,20 @@ object ErrorApp {
         org.apache.spark.sql.functions.col("id") * 3.0).repartition(RIGHT_PARTITIONS)
 
 
-    val joinedQuery = left.join(right, Seq("id"), "inner")
+    var joinedQuery = left.join(right, Seq("id"), "inner")
       .select(
         left("id"),
         left("category"),
         left("left_value"),
         right("right_value"))
 
+    joinedQuery = joinedQuery.select("id", "left_value", "right_value", "category")
 
-    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0002")
-    spark.sql("select count(*) from ine0002").show()
-    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0002")
-    spark.sql("select count(*) from ine0002").show()
-    spark.read.table("ine0002").show()
+    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0003")
+    spark.sql("select count(*) from ine0003").show()
+    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0003")
+    spark.sql("select count(*) from ine0003").show()
+    spark.read.table("ine0003").show()
 
 
   }
