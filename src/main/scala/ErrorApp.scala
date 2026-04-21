@@ -128,14 +128,19 @@ object ErrorApp {
 
     joinedQuery = joinedQuery.select("id", "left_value", "right_value", "category")
 
-    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0006")
-  //  spark.sql("select count(*) from ine0006").show()
-    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0006")
-  //  spark.sql("select count(*) from ine0005").show()
-    // spark.read.table("ine0004").show()
-    joinedQuery.write.mode(SaveMode.Append).saveAsTable("ine0006")
-    spark.sql("select count(*) from ine0006").show()
-    spark.read.table("ine0006").show()
+//    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0007")
+//  //  spark.sql("select count(*) from ine0006").show()
+//    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0007")
+//  //  spark.sql("select count(*) from ine0005").show()
+//    // spark.read.table("ine0004").show()
+//    joinedQuery.write.mode(SaveMode.Append).saveAsTable("ine0007")
+//    spark.sql("select count(*) from ine0007").show()
+//    spark.read.table("ine0007").show()
+
+
+    spark.sql("create table tid_e1(id int, pid string) using parquet partitioned by(pid)")
+    spark.sql("insert into tid_e1 values(1,'1'),(2,'2'),(3,'1')")
+    spark.sql("select distinct pid from tid_e1").show()
 
 
   }

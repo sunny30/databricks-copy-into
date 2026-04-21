@@ -13,7 +13,7 @@ import org.apache.spark.sql.execution.datasources.v2.{FileDataSourceV2, FileTabl
 import org.apache.spark.sql.execution.datasources.v2.csv.{CSVDataSourceV2, CSVTable}
 import org.apache.spark.sql.execution.datasources.v2.json.{JsonDataSourceV2, JsonTable}
 import org.apache.spark.sql.execution.datasources.v2.orc.{OrcDataSourceV2, OrcTable}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.execution.datasources.v2.parquet.{ParquetDataSourceV2, ParquetTable}
 import org.apache.spark.sql.execution.datasources.v2.text.{TextDataSourceV2, TextTable}
@@ -61,8 +61,12 @@ case class V2CustomTable(name: String,
     val readSchema = catalogTable.schema
 
     val paths = getPaths(options)
-    val customFileTable = new V2CustomFileTable(sparkSession = sparkSession, options = options, paths = paths, userSpecifiedSchema = Some(readSchema), fileTable = fileTable, catalogTable = catalogTable)
+   // val customFileTable = new V2CustomFileTable(sparkSession = sparkSession, options = options, paths = paths, userSpecifiedSchema = Some(readSchema), fileTable = fileTable, catalogTable = catalogTable)
     //fileIndex = customFileTable.fileIndex
+    if(validateAllPartitionColumns(catalogTable)){
+      println(s"setting spark conf spark.sql.sources.partitionColumnTypeInference.enabled to false for ${catalogTable.identifier.quotedString}")
+      sparkSession.conf.set("spark.sql.sources.partitionColumnTypeInference.enabled", false)
+    }
     V2CustomTableScanBuilder(multiPartName,provider, sparkSession, fileIndex,readSchema, dataSchema, options)
 
 
@@ -73,6 +77,10 @@ case class V2CustomTable(name: String,
       FileDataSourceV2.readPathsToSeq(pathStr)
     }.getOrElse(Seq.empty)
     paths ++ Option(map.get("path")).toSeq
+  }
+
+  private def validateAllPartitionColumns(catalogTable: CatalogTable): Boolean = {
+    catalogTable.partitionSchema.fields.count(f => f.dataType.sameType(StringType)) == catalogTable.partitionSchema.fields.length
   }
 
   override def schema(): StructType = catalogTable.schema
