@@ -118,7 +118,7 @@ case class CustomCreateDataSourceTableAsSelectCommand(
 
 
     val outPutPath = if(tableExists){
-      table.storage.locationUri.get
+      getExistingTableLocation(tableCatalog, ident).get
     }else{
       if(table.storage.locationUri.isDefined){
         table.storage.locationUri.get
@@ -244,6 +244,14 @@ case class CustomCreateDataSourceTableAsSelectCommand(
       case V2Table(v1Table) => v1Table
       case table: Table => null
     }
+  }
+
+  def getExistingTableLocation(tableCatalog: TableCatalog, ident: Identifier):Option[URI]={
+    val ct  = getExistingCatalogTable(tableCatalog, ident)
+    if(ct == null){
+      throw new IllegalArgumentException(s"${ident.name()} is not V2Table")
+    }
+    ct.storage.locationUri
   }
 
 

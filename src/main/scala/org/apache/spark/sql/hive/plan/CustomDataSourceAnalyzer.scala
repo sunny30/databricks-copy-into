@@ -42,6 +42,8 @@ import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ViewUnresolv
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
+import org.apache.spark.sql.execution.datasources.CreateTable
+import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.CustomCreateDataSourceTableAsSelectCommand
 
 import java.util.Locale
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
@@ -698,6 +700,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         println("Default plan is " + p.toString())
 
         p match {
+
+          case c@CreateTable(tabledesc, SaveMode.Append, Some(query)) =>
+            CustomCreateDataSourceTableAsSelectCommand(
+              tabledesc.identifier.catalog.getOrElse(session.sessionState.catalogManager.currentCatalog.name()),
+              tabledesc,
+              c.mode,
+              query = query,
+              query.output.map(a => a.name)
+            )
 
           case tc@TableChanges(child, fnName, cdcAttr) if tc.child.resolved =>
             println("tc child plan is "+child.toString())

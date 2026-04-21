@@ -48,7 +48,9 @@ object ErrorApp {
     spark.read.table("ine007").show()
   }
 
-  def reproduce_zip(spark: SparkSession):Unit={
+
+
+  def reproduce_zip(spark: SparkSession): Unit = {
     setErrorConf(spark)
     import spark.implicits._
 
@@ -85,7 +87,7 @@ object ErrorApp {
     spark.sql("select count(*) from ine0004").show()
     joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0004")
     spark.sql("select count(*) from ine0004").show()
-   // spark.read.table("ine0004").show()
+    // spark.read.table("ine0004").show()
     joinedQuery.write.mode(SaveMode.Append).saveAsTable("ine0004")
     spark.sql("select count(*) from ine0004").show()
     spark.read.table("ine0004").show()
@@ -93,4 +95,48 @@ object ErrorApp {
 
   }
 
+  def reproduce_zip_short(spark: SparkSession): Unit = {
+    setErrorConf(spark)
+    import spark.implicits._
+
+    val LEFT_PARTITIONS = 5 // matches List(24722, **47244**)
+    val RIGHT_PARTITIONS = 10 // matches List(**24722**, 47244)
+
+    val left = spark.range(0, 100)
+      .toDF("id")
+      .withColumn("category",
+        (org.apache.spark.sql.functions.col("id") % 5)
+          .cast("string"))
+      .withColumn("left_value",
+        org.apache.spark.sql.functions.col("id") * 2.0).repartition(LEFT_PARTITIONS)
+
+    val right = spark.range(0, 100)
+      .toDF("id")
+      .withColumn("category",
+        (org.apache.spark.sql.functions.col("id") % 5)
+          .cast("string"))
+      .withColumn("right_value",
+        org.apache.spark.sql.functions.col("id") * 3.0).repartition(RIGHT_PARTITIONS)
+
+
+    var joinedQuery = left.join(right, Seq("id"), "inner")
+      .select(
+        left("id"),
+        left("category"),
+        left("left_value"),
+        right("right_value"))
+
+    joinedQuery = joinedQuery.select("id", "left_value", "right_value", "category")
+
+    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0006")
+  //  spark.sql("select count(*) from ine0006").show()
+    joinedQuery.write.partitionBy("category").format("parquet").mode(SaveMode.Append).saveAsTable("ine0006")
+  //  spark.sql("select count(*) from ine0005").show()
+    // spark.read.table("ine0004").show()
+    joinedQuery.write.mode(SaveMode.Append).saveAsTable("ine0006")
+    spark.sql("select count(*) from ine0006").show()
+    spark.read.table("ine0006").show()
+
+
+  }
 }
