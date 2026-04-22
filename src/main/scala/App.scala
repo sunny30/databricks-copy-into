@@ -80,7 +80,7 @@ object App {
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
-    ErrorApp.reproduce_zip(spark)
+    ErrorApp.reproduce_zip_short(spark)
     var df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
