@@ -138,6 +138,13 @@
             <groupId>org.apache.hudi</groupId>
             <artifactId>hudi-spark3.5-bundle_2.12</artifactId>
             <version>1.0.1</version>
+<!--            <scope>compile</scope>-->
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.hudi</groupId>
+            <artifactId>hudi-common</artifactId>
+            <version>1.0.1</version>
         </dependency>
 
         <dependency>
@@ -319,25 +326,25 @@
 
         <sourceDirectory>src/main/scala</sourceDirectory>
         <plugins>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <configuration>
-                    <argLine>
-                        --add-opens=java.base/sun.nio.ch=ALL-UNNAMED
-                        --add-opens=java.base/java.nio=ALL-UNNAMED
-                        --add-opens=java.base/java.lang=ALL-UNNAMED
-                        --add-opens=java.base/java.util=ALL-UNNAMED
-                        --add-opens=java.base/java.lang.invoke=ALL-UNNAMED
-                        --add-opens=java.base/java.lang.reflect=ALL-UNNAMED
-                        --add-opens=java.base/java.io=ALL-UNNAMED
-                        --add-opens=java.base/java.net=ALL-UNNAMED
-                        --add-opens=java.base/java.util.concurrent=ALL-UNNAMED
-                        --add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED
-                        -Dio.netty.tryReflectionSetAccessible=true
-                    </argLine>
-                </configuration>
-            </plugin>
+<!--            <plugin>-->
+<!--                <groupId>org.apache.maven.plugins</groupId>-->
+<!--                <artifactId>maven-surefire-plugin</artifactId>-->
+<!--                <configuration>-->
+<!--                    <argLine>-->
+<!--                        &#45;&#45;add-opens=java.base/sun.nio.ch=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.nio=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.lang=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.util=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.lang.invoke=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.lang.reflect=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.io=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.net=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.util.concurrent=ALL-UNNAMED-->
+<!--                        &#45;&#45;add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED-->
+<!--                        -Dio.netty.tryReflectionSetAccessible=true-->
+<!--                    </argLine>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
@@ -365,6 +372,20 @@
                 </execution>
             </executions>
             </plugin>
+
+<!--            <plugin>-->
+<!--                <groupId>org.codehaus.mojo</groupId>-->
+<!--                <artifactId>exec-maven-plugin</artifactId>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <phase>compile</phase> &lt;!&ndash; this will run during mvn compile &ndash;&gt;-->
+<!--                        <goals><goal>java</goal></goals>-->
+<!--                        <configuration>-->
+<!--                            <mainClass>App</mainClass>-->
+<!--                        </configuration>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--            </plugin>-->
 
 
         </plugins>
