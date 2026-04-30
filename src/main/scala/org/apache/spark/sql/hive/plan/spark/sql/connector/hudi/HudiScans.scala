@@ -69,6 +69,7 @@ class HudiCOWScan(
                  ) extends Scan with Batch with SupportsReportStatistics {
 
   private lazy val broadcastHadoopConf: Broadcast[SerializableConfiguration] =
+
     spark.sparkContext.broadcast(
       new SerializableConfiguration(spark.sessionState.newHadoopConf())
     )
