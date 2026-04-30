@@ -1,14 +1,14 @@
 package org.apache.spark.sql.hive.plan.spark.sql.connector.hudi
 
+
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.client.SparkRDDWriteClient
 import org.apache.hudi.client.WriteStatus
 import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
-import org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2
-import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline, InstantGenerator}
-import org.apache.hudi.common.util.{Option => HoodieOption}
+import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
+import org.apache.hudi.common.util.{Option, Option => HoodieOption}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.spark.sql.SparkSession
@@ -193,10 +193,11 @@ object HudiWriteConfigBuilder {
  *   read-optimised query semantics (skip this instant's files for snapshot reads).
  *   Without it, partial task output could be read before the commit completes.
  *
- * Hudi 1.0.1 HoodieInstant:
- *   org.apache.hudi.common.table.timeline.HoodieInstant
- *   new HoodieInstant(State, action, timestamp) — same as 0.x
- *   HoodieInstant.State.REQUESTED, INFLIGHT, COMPLETED
+ * Hudi 1.0.1 HoodieInstant constructors (verified from jar):
+ *   new HoodieInstant(State, action, requestTime, Comparator<HoodieInstant>)
+ *   new HoodieInstant(State, action, requestTime, completionTime, Comparator<HoodieInstant>)
+ *   new HoodieInstant(State, action, requestTime, completionTime, isLegacy, Comparator<HoodieInstant>)
+ *   Use HoodieInstant.COMPARATOR as the standard comparator.
  *
  * HoodieTimeline constants (Hudi 1.0.1):
  *   HoodieTimeline.COMMIT_ACTION        = "commit"
@@ -215,32 +216,29 @@ object HudiInstantUtils {
                              metaClient: HoodieTableMetaClient,
                              isDelta: Boolean
                            ): String = {
-    // Hudi 1.0.1: HoodieActiveTimeline.createNewInstantTime() — same as 0.x
-    val generator = new org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2()
+    // Confirmed from HoodieTableMetaClient source:
+    //   createNewInstantTime() is an INSTANCE method on HoodieTableMetaClient in 1.0.1.
+    //   It internally uses TimeGenerator with the table's timeGeneratorConfig.
+    //   No longer static on HoodieActiveTimeline.
+    val instantTime = metaClient.createNewInstantTime()
 
-    val action = if (isDelta) HoodieTimeline.DELTA_COMMIT_ACTION
+    val action   = if (isDelta) HoodieTimeline.DELTA_COMMIT_ACTION
     else HoodieTimeline.COMMIT_ACTION
     val timeline = metaClient.getActiveTimeline
 
-    val instantTime = new java.text.SimpleDateFormat("yyyyMMddHHmmssSSS")
-      .format(new java.util.Date())
-    val requestedInstant = generator.createNewInstant(
+    // Confirmed from HoodieTableMetaClient source:
+    //   createNewInstant(State, action, timestamp) is an INSTANCE method on HoodieTableMetaClient.
+    //   It delegates to getInstantGenerator().createNewInstant(...) internally.
+    //   No need to instantiate InstantGeneratorV2 directly.
+    val requestedInstant = metaClient.createNewInstant(
       HoodieInstant.State.REQUESTED, action, instantTime
     )
+
+    // Transition 1: write REQUESTED marker onto the timeline
     timeline.createNewInstant(requestedInstant)
 
-
-
-    // Transition: REQUESTED
-    timeline.createNewInstant(
-      new org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2().createNewInstant(HoodieInstant.State.REQUESTED, action, "")
-    )
-
-    // Transition: INFLIGHT
-    timeline.transitionRequestedToInflight(
-      new org.apache.hudi.common.table.timeline.versioning.v2.InstantGeneratorV2().createNewInstant(HoodieInstant.State.INFLIGHT, action, "").toString,
-      ""
-    )
+    // Transition 2: REQUESTED → INFLIGHT
+    timeline.transitionRequestedToInflight(requestedInstant, HoodieOption.empty[Array[Byte]]())
 
     instantTime
   }
