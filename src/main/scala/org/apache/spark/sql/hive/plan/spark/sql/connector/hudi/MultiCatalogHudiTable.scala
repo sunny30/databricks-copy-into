@@ -1,13 +1,11 @@
 package org.apache.spark.sql.hive.plan.spark.sql.connector.hudi
 
 
-
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.TableSchemaResolver
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.connector.read.ScanBuilder
@@ -48,33 +46,76 @@ class MultiCatalogHudiTable(
   with SupportsRead
   with SupportsWrite
   with SupportsRowLevelOperations  // Spark 3.5: org.apache.spark.sql.connector.catalog
- {
+{
 
   lazy val tableType: HoodieTableType =
     metaClient.getTableConfig.getTableType
 
   /**
    * User-visible schema — excludes Hudi metadata fields (_hoodie_commit_time etc.).
-   * Hudi 1.0.1: TableSchemaResolver.getTableAvroSchemaWithoutMetadataFields()
+   *
+   * TableSchemaResolver reads schema from commit metadata in the Hudi timeline.
+   * On a freshly created table with no commits yet, the timeline is empty and
+   * getTableAvroSchemaWithoutMetadataFields() throws schemaNotFoundError.
+   *
+   * Fallback chain:
+   *   1. Try TableSchemaResolver (timeline has at least one commit)
+   *   2. Fall back to schema stored in metastore tableProps ("spark.sql.sources.schema")
+   *      — written by MultiCatalogHoodieCatalog.createTable() before any rows are inserted
+   *   3. Fall back to empty schema (table exists on storage but metastore entry is missing)
    */
   lazy val tableSchema: StructType = {
-    val resolver = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(
-      resolver.getTableAvroSchemaWithoutMetadataFields
-    )
+    resolveSchemaFromTimeline()
+      .getOrElse(resolveSchemaFromProps())
   }
 
   /**
    * Full schema including _hoodie_* meta fields.
-   * Required by MOR merge reader and SupportsRowLevelOperations write path.
-   * Hudi 1.0.1: getTableAvroSchema(false) — false = include metadata fields.
+   * Falls back identically to tableSchema when timeline is empty.
    */
   lazy val tableSchemaWithMeta: StructType = {
-    val resolver = new TableSchemaResolver(metaClient)
-    AvroConversionUtils.convertAvroSchemaToStructType(
-      resolver.getTableAvroSchema(false)
-    )
+    resolveSchemaWithMetaFromTimeline()
+      .getOrElse(resolveSchemaFromProps())
   }
+
+  /** Try to read schema from Hudi timeline — returns None if no commits exist yet. */
+  private def resolveSchemaFromTimeline(): Option[StructType] =
+    scala.util.Try {
+      val resolver = new TableSchemaResolver(metaClient)
+      AvroConversionUtils.convertAvroSchemaToStructType(
+        resolver.getTableAvroSchemaWithoutMetadataFields
+      )
+    }.toOption
+
+  /** Try to read full schema (with meta fields) from timeline. */
+  private def resolveSchemaWithMetaFromTimeline(): Option[StructType] =
+    scala.util.Try {
+      val resolver = new TableSchemaResolver(metaClient)
+      AvroConversionUtils.convertAvroSchemaToStructType(
+        resolver.getTableAvroSchema(false)
+      )
+    }.toOption
+
+  /**
+   * Read schema from tableProps written by MultiCatalogHoodieCatalog.createTable().
+   * Key: "spark.sql.sources.schema" — stored as StructType JSON.
+   * Falls back to empty StructType if not present (should never happen in practice).
+   */
+  private def resolveSchemaFromProps(): StructType =
+    tableProps.get("spark.sql.sources.schema") match {
+      case Some(json) if json.nonEmpty =>
+        StructType.fromDDL(
+          // StructType.fromString parses the JSON written by StructType.json
+          org.apache.spark.sql.types.DataType.fromJson(json).asInstanceOf[StructType].toDDL
+        )
+      case _ =>
+        org.slf4j.LoggerFactory.getLogger(getClass).warn(
+          s"[MultiCatalogHudiTable] Schema not found in timeline or props for " +
+            s"${ident.namespace().mkString(".")}.${ident.name()}. " +
+            s"Table may have no commits yet and no cached schema in metastore."
+        )
+        StructType(Seq.empty)
+    }
 
   // ─── Table identity ────────────────────────────────────────────────────────
 
@@ -102,8 +143,10 @@ class MultiCatalogHudiTable(
 
   override def capabilities(): util.Set[TableCapability] = {
     import TableCapability._
-    // ROW_LEVEL_OPERATION_CHECK_REFERENCES — tells Spark to include metadata attributes
-    // in the MERGE target scan so requiredMetadataAttributes() can propagate
+    // ROW_LEVEL_OPERATION_CHECK_REFERENCES is not declared in Spark 3.5.0 TableCapability.
+    // It is not required — SupportsRowLevelOperations works correctly without it.
+    // requiredMetadataAttributes() on the RowLevelOperation propagates meta columns
+    // through the plan independently of this capability flag.
     util.EnumSet.of(
       BATCH_READ,
       BATCH_WRITE,
@@ -151,22 +194,4 @@ class MultiCatalogHudiTable(
   override def newRowLevelOperationBuilder(info: RowLevelOperationInfo): RowLevelOperationBuilder =
     new HudiRowLevelOperationBuilder(spark, metaClient, tableType, tableProps, info)
 
-  // ─── Partition management ──────────────────────────────────────────────────
-
-//  override def createPartition(ident: InternalRow, props: util.Map[String, String]): Unit = {
-//    // Hudi creates partitions implicitly on write — no explicit registration needed
-//  }
-
-//  neededoverride def dropPartition(ident: InternalRow): Boolean =
-//    throw new UnsupportedOperationException(
-//      "Use CALL system.drop_partition() for Hudi partition deletion"
-//    )
-
-   def replacePartitionMetadata(ident: InternalRow, props: util.Map[String, String]): Unit = {}
-
-   def loadPartitionMetadata(ident: InternalRow): util.Map[String, String] =
-    util.Collections.emptyMap()
-
-   def listPartitionIdentifiers(names: Array[String], ident: InternalRow): Array[InternalRow] =
-    Array.empty
 }
