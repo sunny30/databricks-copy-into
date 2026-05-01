@@ -2,17 +2,18 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
+import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
-import org.apache.spark.sql.connector.catalog.{Table, TableSchemaChangeCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, Table, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
+import org.apache.spark.sql.types.StructType
 
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.jdk.CollectionConverters.asScalaBufferConverter
@@ -69,6 +70,7 @@ object CLSUtils {
       case v2Table: V2Table => v2Table.v1Table
       // (ct.identifier.catalog.getOrElse("default"),ct.identifier.database.getOrElse("default"), ct.identifier.table)
       case deltaTableV2: DeltaTableV2 if deltaTableV2.catalogTable.isDefined => deltaTableV2.catalogTable.get
+//      deltaTableV2.copy()
       case sparkTable: SparkTable =>
         val multiPartName = sparkTable.name().split("\\.").toArray
         if (multiPartName.length == 3) {
@@ -228,6 +230,49 @@ object CLSUtils {
       CLSUtils.getSecureDataSource(plan)
     }
   }
+
+  def validateCreateViewPlan(plan: LogicalPlan): Boolean = {
+    !plan.collectLeaves().forall(p => validatatePartialTablePermissionOnDataSources(p))
+  }
+
+  def validatatePartialTablePermissionOnDataSources(plan:LogicalPlan):Boolean = {
+     plan match {
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) =>
+        val (catalogName, dbName, tableName) = getCatalogTableDetails(table)
+        val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+        sameFieldsUnordered(table.schema, secureTable.schema)
+
+      case lr@LogicalRelation(relation, output, Some(catalogTable), isStreaming)  =>
+        val (catalogName, dbName, tableName) = (catalogTable.identifier.catalog.getOrElse("default"), catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
+        val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+        sameFieldsUnordered(catalogTable.schema, secureTable.schema)
+
+      case u@UnresolvedRelation(multipartIdentifier, options, false) =>
+        val (catalogName, dbName, tableName) =if(multipartIdentifier.length == 3){
+          (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
+        }else if(multipartIdentifier.length == 2){
+          ("default", multipartIdentifier(0), multipartIdentifier(1))
+        }else{
+          ("default", "default", multipartIdentifier(0))
+        }
+        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+        val tableIdent = Identifier.of(Seq(dbName).toArray, tableName)
+        val ct = plugin.asInstanceOf[TableCatalog].loadTable(tableIdent)
+        val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+        sameFieldsUnordered(ct.schema, secureTable.schema)
+
+      case _ => true
+    }
+  }
+
+
+  def sameFieldsUnordered(a: StructType, b: StructType): Boolean = {
+    if (a.length != b.length) return false
+    val bByName = b.fields.map(f => f.name -> f.dataType).toMap
+    a.fields.forall(fa => bByName.get(fa.name).contains(fa.dataType))
+  }
+
+
 
 
 

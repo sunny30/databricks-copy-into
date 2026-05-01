@@ -80,17 +80,23 @@ object App {
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    spark.sql("create database cat.cls_db")
+    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
+    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")
+    spark.sql("create view cat.idb4.v2 as select id, age from cat.cls_db.ptbl1")
+    spark.sql("create view cat.idb4.v1 as select cls_id, age from cat.cls_db.ptbl")
+
     //ErrorApp.reproduce_zip_short(spark)
-    spark.sql("create database cat.hudi_db")
-    spark.sql(
-      """
-        |CREATE TABLE if not exists cat.hudi_db.hudi_table1(
-        |    id long,
-        |    city STRING
-        |) USING HUDI
-        |PARTITIONED BY (city);
-        |""".stripMargin)
-    spark.sql("describe formatted cat.hudi_db.hudi_table1").show()
+//    spark.sql("create database cat.hudi_db")
+//    spark.sql(
+//      """
+//        |CREATE TABLE if not exists cat.hudi_db.hudi_table1(
+//        |    id long,
+//        |    city STRING
+//        |) USING HUDI
+//        |PARTITIONED BY (city);
+//        |""".stripMargin)
+//    spark.sql("describe formatted cat.hudi_db.hudi_table1").show()
     var df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
