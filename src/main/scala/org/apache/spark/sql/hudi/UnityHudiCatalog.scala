@@ -34,10 +34,16 @@ class UnityHudiCatalog(metastore: ExternalCatalog, catalogName: String) extends 
     val props = properties.asScala
     val tableType = resolveTableType(props)
     val basePath = resolveBasePath(ident, props)
-    val recordKey = props.getOrElse(
-      "hoodie.datasource.write.recordkey.field",
-      throw new IllegalArgumentException("hoodie.datasource.write.recordkey.field is required")
-    )
+    val recordKey = props.get("hoodie.datasource.write.recordkey.field") match {
+      case Some(k) if k.nonEmpty => k
+      case _ =>
+        org.slf4j.LoggerFactory.getLogger(getClass).warn(
+          s"[MultiCatalogHoodieCatalog] hoodie.datasource.write.recordkey.field not set " +
+            s"for table ${ident.name()}. Falling back to empty — Hudi will auto-generate " +
+            s"UUIDs as record keys. MERGE/UPDATE/DELETE will not deduplicate correctly."
+        )
+        ""
+    }
     val preCombine = props.get("hoodie.datasource.write.precombine.field")
     val partFields = partitions.map(_.describe()).mkString(",")
 
@@ -60,7 +66,8 @@ class UnityHudiCatalog(metastore: ExternalCatalog, catalogName: String) extends 
 
     // Phase 2: metastore registration
     val finalProps = buildFinalProps(props.toMap, tableType, basePath, recordKey, partFields, schema)
-    metastore.createTable(catalogTable,true)
+    val newCatalogTable = catalogTable.copy(properties = finalProps)
+    metastore.createTable(newCatalogTable,true)
 
     loadTable(ident)
   }

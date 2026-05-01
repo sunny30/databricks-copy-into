@@ -8,7 +8,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.{Option, Option => HoodieOption}
+import org.apache.hudi.common.util.{Option => HoodieOption}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.spark.sql.SparkSession
