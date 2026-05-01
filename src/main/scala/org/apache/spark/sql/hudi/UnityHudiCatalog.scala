@@ -9,6 +9,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, ExternalCatalog}
 import org.apache.spark.sql.connector.catalog.{Identifier, Table}
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.metering.DeltaLogging
+import org.apache.spark.sql.hive.catalog.UnityCatalogUtil
 import org.apache.spark.sql.hive.plan.spark.sql.connector.hudi.MultiCatalogHudiTable
 import org.apache.spark.sql.types.StructType
 
@@ -69,9 +70,11 @@ class UnityHudiCatalog(metastore: ExternalCatalog, catalogName: String) extends 
       props.getOrElse(HoodieTableConfig.TYPE.key(), "COPY_ON_WRITE").toUpperCase
     )
 
-  private def resolveBasePath(ident: Identifier, props: mutable.Map[String, String]): String =
+  private def resolveBasePath(ident: Identifier, props: mutable.Map[String, String]): String = {
+    val dbName = ident.namespace()(0)
     props.getOrElse("location",
-      s"${ident.namespace()(0)}.db/${ident.name()}")
+      s"${new UnityCatalogUtil(SparkSession.active).getDBPath(db = dbName, catalogName = catalogName, metastore)}/${ident.name()}")
+  }
 
   private def buildFinalProps(
                                base: Map[String, String],
