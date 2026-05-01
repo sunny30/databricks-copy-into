@@ -83,8 +83,8 @@ object App {
     spark.sql("create database cat.cls_db")
     spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
     spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")
-    spark.sql("create view cat.idb4.v2 as select id, age from cat.cls_db.ptbl1")
-    spark.sql("create view cat.idb4.v1 as select cls_id, age from cat.cls_db.ptbl")
+    spark.sql("create view cat.cls_db.v2 as select id, age from cat.cls_db.ptbl1")
+    spark.sql("create view cat.cls_db.v1 as select cls_id, age from cat.cls_db.ptbl")
 
     //ErrorApp.reproduce_zip_short(spark)
 //    spark.sql("create database cat.hudi_db")
