@@ -27,6 +27,7 @@ import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.hudi.UnityHudiCatalog
 import org.apache.spark.sql.iceberg.UnityIcebergCatalog
 
 import scala.collection.JavaConverters._
@@ -387,6 +388,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           val icebergCatalog = new UnityIcebergCatalog(externalCatalog, catalogName, options)
           return icebergCatalog.createIcebergTable(ident, schema, partitions, icebergProperties.asJava, tableDesc)
         }
+        if(provider.equalsIgnoreCase("hudi")){
+          val hudiCatalog = new UnityHudiCatalog(externalCatalog, catalogName)
+          return hudiCatalog.createHudiTable(ident, schema, partitions, properties,tableDesc)
+        }
         externalCatalog.createTable(tableDesc, ignoreIfExists = true)
         if (tableType == CatalogTableType.VIEW) {
           V2Table(tableDesc)
@@ -460,7 +465,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           tableIdentifier = Some(ident.toString))
       } else if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")) {
         new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
-      } else {
+      } else if(tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("hudi")){
+        new UnityHudiCatalog(externalCatalog, catalogName).loadTable(ident)
+      } else{
         if (tt != null && tt.tableType == CatalogTableType.VIEW) {
           return null
         }

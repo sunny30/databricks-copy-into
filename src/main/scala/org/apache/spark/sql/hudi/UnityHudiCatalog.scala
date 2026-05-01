@@ -62,7 +62,7 @@ class UnityHudiCatalog(metastore: ExternalCatalog, catalogName: String) extends 
     val finalProps = buildFinalProps(props.toMap, tableType, basePath, recordKey, partFields, schema)
     metastore.createTable(catalogTable,true)
 
-    new MultiCatalogHudiTable(SparkSession.active, ident, metaClient, finalProps, catalogName)
+    loadTable(ident)
   }
 
   private def resolveTableType(props: mutable.Map[String, String]): HoodieTableType =
