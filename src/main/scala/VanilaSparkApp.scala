@@ -1,8 +1,11 @@
 import org.apache.hadoop.hive.metastore.api.FieldSchema
 import org.apache.spark.SparkConf
+import org.apache.spark.sql.catalyst.plans.logical.Project
 import org.apache.spark.sql.{SaveMode, SparkSession}
 import org.apache.spark.sql.hive.catalog.HMSCatalog
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.catalyst.analysis.{Star, UnresolvedStar}
+import org.apache.spark.sql.hive.plan.may26hack.SparkPlanToSQL
 
 object VanilaSparkApp {
 
@@ -59,9 +62,16 @@ object VanilaSparkApp {
     ).toDF("col1", "col2", "col3")
 
    // spark.sql("create table save_tbl1(id int) using parquet")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).option("path", "/tmp/vtbl").saveAsTable("save_tbl9")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("save_tbl9")
-    spark.sql("describe formatted save_tbl9").show()
+    df3.write.format("parquet").mode(SaveMode.Overwrite).option("path", "/tmp/vtbl").saveAsTable("save_tbl00")
+    df3.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("save_tbl00")
+    //spark.sql("describe formatted save_tbl9").show()
+
+    val hf = spark.read.table("save_tbl00")
+    val plan  = hf.queryExecution.analyzed
+    val p = Project(Seq(UnresolvedStar(None)), plan)
+    val s = SparkPlanToSQL.toSQL(p)
+    spark.sql(s).show()
+
 
 ////    spark.sql("create table vt1(id int) using delta")
 ////    spark.sql("insert into vt1 values(1), (2)")
