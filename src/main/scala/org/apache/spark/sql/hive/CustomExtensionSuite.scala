@@ -11,6 +11,7 @@ import org.apache.spark.sql.execution.datasources.v2.ExtendedDataSourceV2Strateg
 import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFuncIn, FiboIter, ModelFunc}
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
+import org.apache.spark.sql.hive.plan.spark.sql.connector.hudi.HoodieMultiCatalogExtension
 import org.apache.spark.sql.hive.plan.spark.sql.execution.IcebergStrategy
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
@@ -21,12 +22,14 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
   override def apply(extensions: SparkSessionExtensions): Unit = {
 
     super.apply(extensions)
+
     extensions.injectParser { (session, parser) =>
      // val delegate = new DeltaSqlParser(parser)
      // new CustomParser(delegate)
 
       CustomSparkSQLParser
     }
+    (new HoodieMultiCatalogExtension().apply(extensions))
     extensions.injectResolutionRule(session => new ResolveCatalogViews(session))
     extensions.injectOptimizerRule(session => new TwoToThreePartRule(session))
     extensions.injectResolutionRule(session => new ResolveProcedures(session))

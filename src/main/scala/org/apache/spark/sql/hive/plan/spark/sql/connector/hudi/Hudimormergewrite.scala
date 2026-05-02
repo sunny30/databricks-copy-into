@@ -1,6 +1,7 @@
 package org.apache.spark.sql.hive.plan.spark.sql.connector.hudi
 
 
+
 import org.apache.avro.generic.GenericRecord
 import org.apache.hudi.AvroConversionUtils
 import org.apache.hudi.client.SparkRDDWriteClient
@@ -93,7 +94,8 @@ class HudiMORMergeBatchWrite(
       schema         = schema,
       basePath       = metaClient.getBasePath.toString,
       hadoopConf     = spark.sessionState.newHadoopConf(),
-      recordKeyField = tableProps.getOrElse("hoodie.datasource.write.recordkey.field", "_hoodie_record_key")
+      recordKeyField = tableProps.getOrElse("hoodie.datasource.write.recordkey.field", ""),
+      partitionField = tableProps.getOrElse("hoodie.datasource.write.partitionpath.field", "")
     )
 
   /**
@@ -143,11 +145,12 @@ class HudiMORMergeWriterFactory(
                                  schema: StructType,
                                  basePath: String,
                                  hadoopConf: org.apache.hadoop.conf.Configuration,
-                                 recordKeyField: String
+                                 recordKeyField: String,
+                                 partitionField: String
                                ) extends DataWriterFactory {
 
   override def createWriter(partitionId: Int, taskId: Long): DataWriter[InternalRow] =
-    new HudiMORMergeDataWriter(instantTime, writeConfig, schema, basePath, hadoopConf, recordKeyField)
+    new HudiMORMergeDataWriter(instantTime, writeConfig, schema, basePath, hadoopConf, recordKeyField, partitionField)
 }
 
 // ─── MOR DataWriter ───────────────────────────────────────────────────────────
@@ -191,31 +194,53 @@ class HudiMORMergeDataWriter(
                               schema: StructType,
                               basePath: String,
                               hadoopConf: org.apache.hadoop.conf.Configuration,
-                              recordKeyField: String   // e.g. "hoodie.datasource.write.recordkey.field" value — passed to HoodieAvroDataBlock
+                              recordKeyField: String,  // user column name for record key, passed to HoodieAvroDataBlock
+                              partitionField: String   // user column name for partition path
                             ) extends DataWriter[InternalRow] {
 
-  private val avroSchema = AvroConversionUtils.convertStructTypeToAvroSchema(
+  private val avroSchema     = AvroConversionUtils.convertStructTypeToAvroSchema(
     schema, "hudi_record", "hoodie"
   )
   private val avroSerializer = new AvroSerializer(schema, avroSchema, nullable = false)
 
-  private val recordKeyIdx     = schema.fieldIndex("_hoodie_record_key")
-  private val partitionPathIdx = schema.fieldIndex("_hoodie_partition_path")
-  private val fileNameIdx      =
-    if (schema.fieldNames.contains("_hoodie_file_name")) schema.fieldIndex("_hoodie_file_name")
+  // ── Detect incoming row shape ─────────────────────────────────────────────
+  // INSERT INTO → user columns only (id, city) — no _hoodie_* meta fields
+  // MERGE / UPDATE / DELETE → full schema including _hoodie_* meta fields
+  private val hasMeta: Boolean = schema.fieldNames.contains("_hoodie_record_key")
+
+  // INSERT path: user column indices
+  private val userRecordKeyIdx: Option[Int] =
+    if (!hasMeta && recordKeyField.nonEmpty && schema.fieldNames.contains(recordKeyField))
+      Some(schema.fieldIndex(recordKeyField))
+    else None
+
+  private val userPartitionIdx: Option[Int] =
+    if (!hasMeta && partitionField.nonEmpty && schema.fieldNames.contains(partitionField))
+      Some(schema.fieldIndex(partitionField))
+    else None
+
+  // MERGE path: meta field indices
+  private val metaRecordKeyIdx: Option[Int] =
+    if (hasMeta) Some(schema.fieldIndex("_hoodie_record_key")) else None
+  private val metaPartitionIdx: Option[Int] =
+    if (hasMeta) Some(schema.fieldIndex("_hoodie_partition_path")) else None
+  private val fileNameIdx: Int =
+    if (hasMeta && schema.fieldNames.contains("_hoodie_file_name"))
+      schema.fieldIndex("_hoodie_file_name")
     else -1
 
-  // Ordering value column — used as the Long in Pair<DeleteRecord, Long> for delete blocks.
-  // Falls back to 0L if no precombine field is present in the schema.
+  // Ordering value — from meta field if present, else 0L
   private val orderingValIdx: Option[Int] =
-  if (schema.fieldNames.contains("_hoodie_commit_time"))
-    Some(schema.fieldIndex("_hoodie_commit_time"))
-  else None
+    if (hasMeta && schema.fieldNames.contains("_hoodie_commit_time"))
+      Some(schema.fieldIndex("_hoodie_commit_time"))
+    else None
 
   // Detect delete rows — Spark marks deleted rows with _hoodie_is_deleted = true in WriteDelta
-  private val isDeletedIdx =
-    if (schema.fieldNames.contains("_hoodie_is_deleted")) schema.fieldIndex("_hoodie_is_deleted")
-    else -1
+  // Only relevant in the MERGE path (hasMeta = true)
+  private val isDeletedIdx: Int =
+  if (hasMeta && schema.fieldNames.contains("_hoodie_is_deleted"))
+    schema.fieldIndex("_hoodie_is_deleted")
+  else -1
 
   // groupKey = "partitionPath|fileGroupId"
   // Buffer stores HoodieAvroRecord — required by HoodieAvroDataBlock(List<HoodieRecord>, header, keyField)
@@ -224,23 +249,37 @@ class HudiMORMergeDataWriter(
   private val deleteBuffer = mutable.Map.empty[String, mutable.ArrayBuffer[(String, String, Long)]]
 
   override def write(row: InternalRow): Unit = {
-    val recordKey     = row.getString(recordKeyIdx)
-    val partitionPath = row.getString(partitionPathIdx)
-    val fileGroupId   = if (fileNameIdx >= 0) fileGroupIdFromFileName(row.getString(fileNameIdx))
+    val (recordKey, partitionPath) = if (hasMeta) {
+      // MERGE / UPDATE / DELETE — meta fields already in the row
+      val rk = metaRecordKeyIdx.map(i => row.getString(i)).getOrElse("")
+      val pp = metaPartitionIdx.map(i => row.getString(i)).getOrElse("")
+      (rk, pp)
+    } else {
+      // INSERT INTO — derive from user columns
+      val rk = userRecordKeyIdx
+        .map(i => row.get(i, schema(i).dataType).toString)
+        .getOrElse(ju.UUID.randomUUID().toString)
+      val pp = userPartitionIdx
+        .map(i => row.get(i, schema(i).dataType).toString)
+        .getOrElse("")
+      (rk, pp)
+    }
+
+    val fileGroupId = if (fileNameIdx >= 0) fileGroupIdFromFileName(row.getString(fileNameIdx))
     else ju.UUID.randomUUID().toString
-    val groupKey      = s"$partitionPath|$fileGroupId"
-    val isDelete      = isDeletedIdx >= 0 && !row.isNullAt(isDeletedIdx) && row.getBoolean(isDeletedIdx)
+    val groupKey    = s"$partitionPath|$fileGroupId"
+    val isDelete    = isDeletedIdx >= 0 && !row.isNullAt(isDeletedIdx) && row.getBoolean(isDeletedIdx)
 
     if (isDelete) {
       val orderingVal = orderingValIdx.map(i => row.getLong(i)).getOrElse(0L)
       deleteBuffer.getOrElseUpdate(groupKey, mutable.ArrayBuffer.empty) +=
         ((recordKey, partitionPath, orderingVal))
     } else {
-      val avroRecord    = avroSerializer.serialize(row).asInstanceOf[GenericRecord]
-      val orderingVal   = orderingValIdx.map(i => row.getLong(i)).getOrElse(0L)
-      val hoodieKey     = new HoodieKey(recordKey, partitionPath)
-      val payload       = new OverwriteWithLatestAvroPayload(avroRecord, orderingVal)
-      val hoodieRecord  = new HoodieAvroRecord(hoodieKey, payload)
+      val avroRecord   = avroSerializer.serialize(row).asInstanceOf[GenericRecord]
+      val orderingVal  = orderingValIdx.map(i => row.getLong(i)).getOrElse(0L)
+      val hoodieKey    = new HoodieKey(recordKey, partitionPath)
+      val payload      = new OverwriteWithLatestAvroPayload(avroRecord, orderingVal)
+      val hoodieRecord = new HoodieAvroRecord[OverwriteWithLatestAvroPayload](hoodieKey, payload)
       upsertBuffer.getOrElseUpdate(groupKey, mutable.ArrayBuffer.empty) += hoodieRecord
     }
   }
@@ -273,17 +312,20 @@ class HudiMORMergeDataWriter(
     val status    = new WriteStatus()
     val logWriter = openLogWriter(partitionPath, fileGroupId)
     try {
-      val header:java.util.Map[HoodieLogBlock.HeaderMetadataType, String] = buildHeader(HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK)
+      val header = buildHeader(HoodieLogBlock.HoodieLogBlockType.AVRO_DATA_BLOCK)
       // Hudi 1.0.1 HoodieAvroDataBlock constructor (verified from jar):
       //   HoodieAvroDataBlock(List<HoodieRecord>, Map<HeaderMetadataType, String>, String keyField)
       // keyField = the record key field name (e.g. "order_id") — used by the block
       // to extract record keys when the block is read back during log scanning.
-      val recordsJavaList:java.util.List[HoodieRecord[_]] = records.map(_.asInstanceOf[HoodieRecord[_]]).asJava
-      val block = new HoodieAvroDataBlock(
-        recordsJavaList,
-        header,
-        recordKeyField
-      )
+      // java.util.List is invariant in its type parameter, so Scala cannot
+      // automatically widen List[HoodieRecord[OverwriteWithLatestAvroPayload]]
+      // to List[HoodieRecord[_]] even though the element type is a subtype.
+      // Cast explicitly at the Java API boundary — safe because generics are
+      // erased at runtime and HoodieAvroDataBlock never inspects the payload type.
+      val recordsWildcard = records.asJava
+        .asInstanceOf[java.util.List[HoodieRecord[_]]]
+
+      val block = new HoodieAvroDataBlock(recordsWildcard, header, recordKeyField)
       logWriter.appendBlock(block)
       status.setFileId(fileGroupId)
       status.setPartitionPath(partitionPath)
@@ -345,7 +387,6 @@ class HudiMORMergeDataWriter(
       .onParentPath(storagePath)                          // Hudi 1.0.1: HoodieStoragePath
       .withFileExtension(HoodieLogFile.DELTA_EXTENSION)
       .withFileId(fileGroupId)
-      .withInstantTime(instantTime)
       .withStorage(storage)                               // Hudi 1.0.1: HoodieStorage
       .build()
   }

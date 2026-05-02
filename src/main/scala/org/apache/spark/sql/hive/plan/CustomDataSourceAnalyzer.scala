@@ -277,6 +277,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                 }else{
                   println("secure child should not apply")
                   CLSUtils.tagViewPlan(ds)
+                  CLSUtils.tagViewPlan(ds)
                     ds
                 }
               } else {
