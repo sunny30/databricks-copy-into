@@ -3,6 +3,8 @@ package org.apache.spark.sql.hive.plan.spark.sql.connector.hudi
 
 import org.apache.hadoop.fs.FileStatus
 import org.apache.hudi.HoodieFileIndex
+import org.apache.hudi.client.common.HoodieSparkEngineContext
+import org.apache.hudi.common.engine.HoodieEngineContext
 import org.apache.hudi.common.model.HoodieTableType
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView
@@ -206,7 +208,10 @@ class HudiMORScan(
     val timeline = metaClient.getActiveTimeline.getCommitsTimeline.filterCompletedInstants()
 
     // Hudi 1.0.1: constructor lazily scans filesystem
-    val fsView = new HoodieTableFileSystemView(metaClient, timeline)
+    val engineContext: HoodieEngineContext = new HoodieSparkEngineContext(spark.sparkContext)
+    val fsView = HoodieTableFileSystemView.fileListingBasedFileSystemView(
+      engineContext, metaClient, timeline
+    )
 
     val catalystFilters = partFilters.map(HudiFilterConverter.toCatalyst).toSeq
     val partitionDirs   = fileIndex.listFiles(catalystFilters, Seq.empty)

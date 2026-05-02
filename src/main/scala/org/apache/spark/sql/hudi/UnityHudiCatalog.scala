@@ -15,8 +15,8 @@ import org.apache.spark.sql.types.StructType
 
 import java.util
 import scala.collection.mutable
-import scala.jdk.CollectionConverters.mapAsScalaMapConverter
-
+import scala.collection.JavaConverters._
+import scala.collection.mutable
 class UnityHudiCatalog(metastore: ExternalCatalog, catalogName: String) extends DeltaLogging {
 
 
@@ -61,7 +61,10 @@ class UnityHudiCatalog(metastore: ExternalCatalog, catalogName: String) extends 
           "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
         )
       )
-    preCombine.foreach(mcBuilder.setPreCombineField)
+    preCombine.foreach { v =>
+      mcBuilder.set(Map("hoodie.datasource.write.precombine.field" -> v)
+        .asInstanceOf[Map[String, Object]].asJava)
+    }
     val metaClient = mcBuilder.initTable(storageConf, basePath)
 
     // Phase 2: metastore registration

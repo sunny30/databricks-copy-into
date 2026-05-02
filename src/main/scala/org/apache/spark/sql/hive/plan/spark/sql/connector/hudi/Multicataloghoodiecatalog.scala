@@ -154,7 +154,7 @@ class MultiCatalogHoodieCatalog extends TableCatalog with SupportsNamespaces {
     // Phase 1: Hudi timeline init
     // Hudi 1.0.1: HadoopStorageConfiguration wraps hadoop Configuration
     val storageConf  = new HadoopStorageConfiguration(hadoopConf)
-    val mcBuilder    = HoodieTableMetaClient.newTableBuilder()
+    val mcBuilder = HoodieTableMetaClient.newTableBuilder()
       .setTableType(tableType.name())
       .setTableName(tbl)
       .setRecordKeyFields(recordKey)
@@ -165,7 +165,10 @@ class MultiCatalogHoodieCatalog extends TableCatalog with SupportsNamespaces {
           "org.apache.hudi.common.model.OverwriteWithLatestAvroPayload"
         )
       )
-    preCombine.foreach(mcBuilder.setPreCombineField)
+    preCombine.foreach { v =>
+      mcBuilder.set(Map("hoodie.datasource.write.precombine.field" -> v)
+        .asInstanceOf[Map[String, Object]].asJava)
+    }
     val metaClient = mcBuilder.initTable(storageConf, basePath)
 
     // Phase 2: metastore registration

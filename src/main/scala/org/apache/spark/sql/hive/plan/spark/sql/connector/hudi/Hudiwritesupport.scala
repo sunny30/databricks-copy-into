@@ -21,6 +21,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.{util => ju}
 import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions.`map AsScala`
 import scala.collection.mutable.ArrayBuffer
 
 // ─── Non-row-level WriteBuilder (INSERT INTO / INSERT OVERWRITE) ─────────────
@@ -183,9 +184,12 @@ object HudiWriteConfigBuilder {
         org.apache.hudi.common.config.HoodieMetadataConfig.newBuilder()
           .enable(tableProps.getOrElse("hoodie.metadata.enable", "false").toBoolean)
           .build()
-      )
-      .withAutoCommit(false)            // We commit explicitly — do NOT change this
-      .withProps(tableProps.asJava)
+      ) // We commit explicitly — do NOT change this
+      .withProps(
+      (tableProps ++ Map("hoodie.auto.commit" -> "false"))
+        .asJava
+        .asInstanceOf[java.util.Map[_, _]]
+    )
       .build()
   }
 }
@@ -233,7 +237,7 @@ object HudiInstantUtils {
     //   createNewInstantTime() is an INSTANCE method on HoodieTableMetaClient in 1.0.1.
     //   It internally uses TimeGenerator with the table's timeGeneratorConfig.
     //   No longer static on HoodieActiveTimeline.
-    val instantTime = metaClient.createNewInstantTime()
+    val instantTime = metaClient.createNewInstantTime(false)
 
     val action   = if (isDelta) HoodieTimeline.DELTA_COMMIT_ACTION
     else HoodieTimeline.COMMIT_ACTION

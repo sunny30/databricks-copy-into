@@ -56,6 +56,12 @@ object App {
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
       .set("spark.sql.parquet.aggregatePushdown", "true")
       .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV5")
+//      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+//      .set("spark.kryo.unsafe", "false")
+//      .set("spark.kryo.registrationRequired", "false")
+//      .set("spark.sql.execution.arrow.pyspark.enabled", "false")
+//      .set("spark.sql.codegen.wholeStage", "false")
+//      .set("spark.sql.codegen.factoryMode", "NO_CODEGEN")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
