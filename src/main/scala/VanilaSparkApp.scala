@@ -62,11 +62,11 @@ object VanilaSparkApp {
     ).toDF("col1", "col2", "col3")
 
    // spark.sql("create table save_tbl1(id int) using parquet")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).option("path", "/tmp/vtbl").saveAsTable("save_tbl00")
-    df3.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("save_tbl00")
+    df3.write.format("parquet").mode(SaveMode.Overwrite).option("path", "/tmp/vtbl").saveAsTable("save_tbl01")
+    df3.write.format("parquet").mode(SaveMode.Overwrite).saveAsTable("save_tbl01")
     //spark.sql("describe formatted save_tbl9").show()
 
-    val hf = spark.read.table("save_tbl00")
+    val hf = spark.read.table("save_tbl01")
     val plan  = hf.queryExecution.analyzed
     val p = Project(Seq(UnresolvedStar(None)), plan)
     val s = SparkPlanToSQL.toSQL(p)

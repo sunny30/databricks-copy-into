@@ -33,7 +33,7 @@
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-reflect</artifactId>
-            <version>2.12.12</version>
+            <version>2.12.18</version>  <!-- was 2.12.8 — too old for Spark 3.5.0 -->
         </dependency>
         <dependency>
             <groupId>org.scala-lang.modules</groupId>
@@ -120,12 +120,30 @@
         -->
         <dependency>
             <groupId>org.apache.hudi</groupId>
-            <artifactId>hudi-spark3.5-bundle_${scala.binary.version}</artifactId>
-            <version>${hudi.version}</version>
+            <artifactId>hudi-spark3.5-bundle_2.12</artifactId>
+            <version>1.1.1</version>
             <exclusions>
                 <exclusion>
                     <groupId>org.apache.avro</groupId>
                     <artifactId>avro</artifactId>
+                </exclusion>
+                <!-- Prevent Hudi from overriding Spark's own Scala runtime -->
+                <exclusion>
+                    <groupId>org.scala-lang</groupId>
+                    <artifactId>scala-library</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.scala-lang</groupId>
+                    <artifactId>scala-reflect</artifactId>
+                </exclusion>
+                <!-- Prevent Hudi from pulling in a different spark-core -->
+                <exclusion>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-core_2.12</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.apache.spark</groupId>
+                    <artifactId>spark-sql_2.12</artifactId>
                 </exclusion>
             </exclusions>
         </dependency>
