@@ -133,7 +133,9 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
           className = "hubquery",
           options = pt.getDSOptionMap(plan, sql),
           catalogTable = None)
-        pl
+
+        LogicalRelation(ds.resolveRelation(false), false)
+        //pl
       case p:LogicalPlan => p
 
     }
