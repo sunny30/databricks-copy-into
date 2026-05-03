@@ -1,10 +1,14 @@
 package org.apache.spark.sql.hive.plan.may26hack
 
+import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LeafNode, LogicalPlan, UnaryNode, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LeafNode, LogicalPlan, Project, UnaryNode, Union}
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.CatalogPlugin
+import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
@@ -95,4 +99,21 @@ class PlanTraversalAndTagging(spark:SparkSession) {
 
   }
 
+}
+
+class ExternalCatalogCutAnalyzer(session: SparkSession)
+  extends Rule[LogicalPlan] with AnalysisHelper with Logging {
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    val pt = new PlanTraversalAndTagging(session)
+    pt.abstractTraverse(plan)
+    plan transformDown{
+      case pl: LogicalPlan if pt.isPlanContainExternalCatalogTag(pl) =>
+        val prj = Project(Seq(UnresolvedStar(None)), plan)
+        val sql = SparkPlanToSQL.toSQL(prj)
+
+        pl
+      case p:LogicalPlan => p
+
+    }
+  }
 }
