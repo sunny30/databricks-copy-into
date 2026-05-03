@@ -17,13 +17,23 @@ class PlanTraversalAndTagging(spark:SparkSession) {
     plan match {
       case u:UnaryNode =>
         abstractTraverse(u.child)
+        if(isPlansBelongToSameCut(Seq(u.child))){
+          tagxternalCatalogRelationIfExists(u)
+        }
       case b:BinaryNode =>
         abstractTraverse(b.left)
         abstractTraverse(b.right)
+        if(isPlansBelongToSameCut(Seq(b.left, b.right))){
+          tagxternalCatalogRelationIfExists(b)
+        }
       case union:Union =>
         union.children.foreach(abstractTraverse)
-
+        if (isPlansBelongToSameCut(union.children)) {
+          tagxternalCatalogRelationIfExists(union)
+        }
       case l: LeafNode =>
+        tagxternalCatalogRelationIfExists(l)
+
         //put the logic of external catalog test
       case _ => println("no need to traverse")
     }
@@ -31,7 +41,7 @@ class PlanTraversalAndTagging(spark:SparkSession) {
   }
 
 
-  def checkExternalCatalogRelation(plan: LogicalPlan):Unit = {
+  def tagxternalCatalogRelationIfExists(plan: LogicalPlan):Unit = {
 
     plan match {
       case dataSourceV2Relation@DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], catalog: Option[CatalogPlugin], _, options: CaseInsensitiveStringMap)=>
@@ -81,7 +91,7 @@ class PlanTraversalAndTagging(spark:SparkSession) {
     externalStatus.distinct.length == 1 &&
       externalStatus.distinct.head &&
       catalogsInfo.distinct.length == 1 &&
-      catalogsInfo.distinct.head.isDefined 
+      catalogsInfo.distinct.head.isDefined
 
   }
 
