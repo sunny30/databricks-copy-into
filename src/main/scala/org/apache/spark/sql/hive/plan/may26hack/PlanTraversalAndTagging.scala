@@ -9,7 +9,7 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.CatalogPlugin
 import org.apache.spark.sql.delta.util.AnalysisHelper
-import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -99,6 +99,18 @@ class PlanTraversalAndTagging(spark:SparkSession) {
 
   }
 
+  def getDSOptionMap(plan: LogicalPlan, sql: String): Map[String, String] = {
+    if (isPlanContainExternalCatalogTag(plan)) {
+
+      Map(
+        "catalog.id" -> gatherCatalog(plan).get,
+        "pushdown.sql" -> sql
+      )
+    } else {
+      Map.empty[String, String]
+    }
+  }
+
 }
 
 class ExternalCatalogCutAnalyzer(session: SparkSession)
@@ -111,9 +123,21 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
         val prj = Project(Seq(UnresolvedStar(None)), plan)
         val sql = SparkPlanToSQL.toSQL(prj)
 
+        val ds  = DataSource(
+          session,
+          // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+          // inferred at runtime. We should still support it.
+          userSpecifiedSchema = Some(pl.schema),
+          partitionColumns = Seq.empty[String],
+          bucketSpec = None,
+          className = "hubquery",
+          options = pt.getDSOptionMap(plan, sql),
+          catalogTable = None)
         pl
       case p:LogicalPlan => p
 
     }
   }
+
+
 }
