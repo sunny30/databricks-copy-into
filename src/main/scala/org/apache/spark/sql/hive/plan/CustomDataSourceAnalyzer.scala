@@ -416,11 +416,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             SparkSession.active.sessionState.analyzer.execute(dd.copy(table = table1, options = newCaseOptions))
           }
           options.asScala.get("source.pushdown.enabled") match {
-            case Some("true") => val optionsMap = dataSource.options
+            case Some("true") =>
+              val optionsMap = dataSource.options
               val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = new CaseInsensitiveStringMap(optionsMap))
               ds.copy(output = dd.output)
-            case Some("false") =>  LogicalRelation(dataSource.resolveRelation(false))
-            case None =>  LogicalRelation(dataSource.resolveRelation(false))
+            case Some("false") =>
+              LogicalRelation(dataSource.resolveRelation(false),table.v1Table)
+            case None =>
+              LogicalRelation(dataSource.resolveRelation(false),table.v1Table)
 
           }
         } else {

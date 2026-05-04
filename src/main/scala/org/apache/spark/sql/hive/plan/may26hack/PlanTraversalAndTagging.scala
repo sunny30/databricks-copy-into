@@ -1,10 +1,11 @@
 package org.apache.spark.sql.hive.plan.may26hack
 
+import io.prometheus.client.Counter.Child
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, LeafNode, LogicalPlan, Project, UnaryNode, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, Filter, LeafNode, LogicalPlan, Project, UnaryNode, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.CatalogPlugin
@@ -22,18 +23,19 @@ class PlanTraversalAndTagging(spark:SparkSession) {
       case u:UnaryNode =>
         abstractTraverse(u.child)
         if(isPlansBelongToSameCut(Seq(u.child))){
-          tagxternalCatalogRelationIfExists(u)
+          val catalogName = gatherCatalog(u.child).get
+          tagPlanWithExternalCatalog(u, catalogName,true)
         }
       case b:BinaryNode =>
         abstractTraverse(b.left)
         abstractTraverse(b.right)
         if(isPlansBelongToSameCut(Seq(b.left, b.right))){
-          tagxternalCatalogRelationIfExists(b)
+          copyTagsFromChild(b.left, b)
         }
       case union:Union =>
         union.children.foreach(abstractTraverse)
         if (isPlansBelongToSameCut(union.children)) {
-          tagxternalCatalogRelationIfExists(union)
+          copyTagsFromChild(union.children(0), union)
         }
       case l: LeafNode =>
         tagxternalCatalogRelationIfExists(l)
@@ -51,11 +53,19 @@ class PlanTraversalAndTagging(spark:SparkSession) {
       case dataSourceV2Relation@DataSourceV2Relation(table: V2Table, output: Seq[AttributeReference], catalog: Option[CatalogPlugin], _, options: CaseInsensitiveStringMap)=>
         if(isExternalCatalogPlugin(catalog)){
           val catalogName = catalog.get.name()
-          tagPlanWithExternalCatalog(plan,catalogName,true)
+          tagPlanWithExternalCatalog(dataSourceV2Relation,catalogName,true)
         }
+
+      case lr@LogicalRelation(relation, output, Some(catalogTable), isStreaming)  if(isExternalCatalog(catalogTable.identifier.catalog.get)) =>
+        tagPlanWithExternalCatalog(lr,catalogTable.identifier.catalog.get,true)
 
       case _ => println("no need to tag")
     }
+  }
+
+  def copyTagsFromChild(child: LogicalPlan, parent: LogicalPlan): Unit = {
+    // tags is Map[TreeNodeTag[_], Any] on TreeNode
+    parent.copyTagsFrom(child)
   }
 
 
@@ -114,12 +124,12 @@ class PlanTraversalAndTagging(spark:SparkSession) {
 }
 
 class ExternalCatalogCutAnalyzer(session: SparkSession)
-  extends Rule[LogicalPlan] with AnalysisHelper with Logging {
+  extends Rule[LogicalPlan] with Logging {
   override def apply(plan: LogicalPlan): LogicalPlan = {
     val pt = new PlanTraversalAndTagging(session)
     pt.abstractTraverse(plan)
     plan transformDown{
-      case pl: LogicalPlan if pt.isPlanContainExternalCatalogTag(pl) =>
+      case _: Project | _: Filter if pt.isPlanContainExternalCatalogTag(plan) =>
         val prj = Project(Seq(UnresolvedStar(None)), plan)
         val sql = SparkPlanToSQL.toSQL(prj)
 
@@ -127,14 +137,18 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
           session,
           // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
           // inferred at runtime. We should still support it.
-          userSpecifiedSchema = Some(pl.schema),
+          userSpecifiedSchema = Some(plan.schema),
           partitionColumns = Seq.empty[String],
           bucketSpec = None,
           className = "hubquery",
           options = pt.getDSOptionMap(plan, sql),
           catalogTable = None)
+         // pl
+       val lr = LogicalRelation(ds.resolveRelation(false), false)
 
-        LogicalRelation(ds.resolveRelation(false), false)
+        lr.copy(output = plan.output.map(_.asInstanceOf[AttributeReference]))
+        //lr.setTagValue(TreeNodeTag[String]("cut-defined"), catalogName)
+
         //pl
       case p:LogicalPlan => p
 

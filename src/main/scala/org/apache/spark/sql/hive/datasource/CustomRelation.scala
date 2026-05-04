@@ -27,7 +27,7 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
     val spark = SparkSession.active
     import spark.implicits._
-    val results = Seq(("2", "hello", "3.0")).toDF("price", "greet", "id")
+    val results = Seq((2, "hello", 3), (3, "hello", 3), (4, "hello", 2), (5, "hello", 2)).toDF("price", "greet", "id")
 //    val p = results.select(requiredColumns.head, requiredColumns.tail:_*)
     results.rdd
   }
