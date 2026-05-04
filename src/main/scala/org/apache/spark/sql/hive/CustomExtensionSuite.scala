@@ -37,7 +37,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectResolutionRule(session => new DescribeUnResolvedRelation(session))
     extensions.injectResolutionRule(session => new DescribeViewRelationRule(session))
    // extensions.injectResolutionRule(session => new RowLevelFilter(session))
-    extensions.injectPostHocResolutionRule(session => new CustomDataSourceAnalyzer(session) )
+    extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
     extensions.injectOptimizerRule(session=> new ExternalCatalogCutAnalyzer(session))
 
     // extensions.injectResolutionRule(session => new CLSSecRule(session) )

@@ -94,8 +94,8 @@ object App {
 
     //ErrorApp.reproduce_zip_short(spark)
     spark.sql("create database ecat.customdb1")
-    spark.sql("create table ecat.customdb1.nt(col1 int, col2 string,col3 int) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    spark.read.table("ecat.customdb1.nt").filter("col1<3").show()
+    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+    spark.read.table("ecat.customdb1.nt").select("col1", "col2", "col3").filter("col1 != '3'").show()
 //    spark.sql("create database cat.hudi_db")
 //    spark.sql(
 //      """

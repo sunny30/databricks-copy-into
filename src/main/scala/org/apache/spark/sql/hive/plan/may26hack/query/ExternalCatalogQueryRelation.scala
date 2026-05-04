@@ -1,6 +1,7 @@
 package org.apache.spark.sql.hive.plan.may26hack.query
 
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.execution.CommandExecutionMode
 import org.apache.spark.sql.{DataFrame, Row, SQLContext, SparkSession}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, InsertableRelation, PrunedFilteredScan, TableScan}
@@ -34,13 +35,19 @@ case class ExternalCatalogQueryRelation(sqlContext: SQLContext, parameters: Map[
       var sql = parameters.get("pushdown.sql").get.toString
       sql = sql.replaceAll("toprettystring", "")
       println("ExternalCatalogQueryRelation sql is"+sql)
-
+      println(s"External Query Relation schema: ${schema.sql}")
       val parsedPlan = spark.sessionState.sqlParser.parsePlan(sql)
       val analyzedPlan = spark.sessionState.analyzer.execute(parsedPlan)
-      spark.internalCreateDataFrame(
-        spark.sessionState.executePlan(analyzedPlan, CommandExecutionMode.SKIP).toRdd,
-        analyzedPlan.schema
+
+      analyzedPlan.foreach(p => p.setTagValue(TreeNodeTag[String]("cut-included"), "true"))
+      val optimizedPlan = spark.sessionState.optimizer.execute(analyzedPlan)
+      optimizedPlan.foreach(p => p.setTagValue(TreeNodeTag[String]("cut-included"), "true"))
+      println(s"optimized plan schema ${optimizedPlan.schema.sql}" )
+        spark.internalCreateDataFrame(
+        spark.sessionState.executePlan(optimizedPlan, CommandExecutionMode.SKIP).toRdd,
+        optimizedPlan.schema
       )
+     //Seq((1, "success",1)).toDF("col1", "col2", "col3").toDF()
 
     }else {
      Seq((2, "hello",3)).toDF("col1", "col2", "col3").toDF()

@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, Filter, LeafNode, LogicalPlan, Project, UnaryNode, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, Filter, GlobalLimit, LeafNode, LocalLimit, LogicalPlan, Project, UnaryNode, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.CatalogPlugin
@@ -20,6 +20,7 @@ class PlanTraversalAndTagging(spark:SparkSession) {
 
   def abstractTraverse(plan: LogicalPlan):Unit={
     plan match {
+
       case u:UnaryNode =>
         abstractTraverse(u.child)
         if(isPlansBelongToSameCut(Seq(u.child))){
@@ -85,6 +86,8 @@ class PlanTraversalAndTagging(spark:SparkSession) {
 
   }
 
+
+
   def isPlanContainExternalCatalogTag(plan: LogicalPlan):Boolean={
     plan.getTagValue(TreeNodeTag[String]("is_external_catalog")).isDefined &&
     plan.getTagValue(TreeNodeTag[String]("catalog.id")).isDefined
@@ -125,19 +128,29 @@ class PlanTraversalAndTagging(spark:SparkSession) {
 
 class ExternalCatalogCutAnalyzer(session: SparkSession)
   extends Rule[LogicalPlan] with Logging {
+
+  def isPlanAlreadyTraversedAndTag(plan: LogicalPlan): Boolean = {
+    plan.getTagValue(TreeNodeTag[String]("cut-included")).isDefined
+  }
   override def apply(plan: LogicalPlan): LogicalPlan = {
     val pt = new PlanTraversalAndTagging(session)
     pt.abstractTraverse(plan)
     plan transformDown{
-      case _: Project | _: Filter if pt.isPlanContainExternalCatalogTag(plan) =>
-        val prj = Project(Seq(UnresolvedStar(None)), plan)
+//stop to recur into infinite recursion
+      case p:LogicalPlan if(isPlanAlreadyTraversedAndTag(p)) =>
+        p
+
+      case mp:UnaryNode if ((mp.isInstanceOf[Project] || mp.isInstanceOf[Filter]) && pt.isPlanContainExternalCatalogTag(mp)) =>
+        val prj = Project(Seq(UnresolvedStar(None)), mp)
         val sql = SparkPlanToSQL.toSQL(prj)
+
+
 
         val ds  = DataSource(
           session,
           // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
           // inferred at runtime. We should still support it.
-          userSpecifiedSchema = Some(plan.schema),
+          userSpecifiedSchema = Some(mp.child.schema),
           partitionColumns = Seq.empty[String],
           bucketSpec = None,
           className = "hubquery",
@@ -146,7 +159,7 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
          // pl
        val lr = LogicalRelation(ds.resolveRelation(false), false)
 
-        lr.copy(output = plan.output.map(_.asInstanceOf[AttributeReference]))
+        lr.copy(output = mp.output.map(_.asInstanceOf[AttributeReference]))
         //lr.setTagValue(TreeNodeTag[String]("cut-defined"), catalogName)
 
         //pl

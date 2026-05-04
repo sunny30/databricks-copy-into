@@ -8,6 +8,7 @@ import org.apache.spark.sql.catalyst.analysis.{Star, UnresolvedAttribute, Unreso
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.Cast._
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 
 /**
  * Converts a Spark 3.5.0 analyzed / optimized LogicalPlan to a SQL string.
@@ -73,7 +74,10 @@ class SparkPlanToSQL {
       val cols = projectList.map(namedExprToSQL).mkString(", ")
       child match {
         case _: OneRowRelation => s"SELECT $cols"
-        case _ => s"SELECT $cols FROM ${childSQL(child)}"
+        case _:Project | _:Filter =>
+          s"SELECT $cols FROM ( SELECT * FROM ( ${childSQL(child)} ))"
+        case _ =>
+          s"SELECT $cols FROM ${childSQL(child)}"
       }
 
     // ── Filter / WHERE / HAVING ──────────────────────────────────────────────────
@@ -82,15 +86,18 @@ class SparkPlanToSQL {
     case Filter(condition, w: Window) =>
       // QUALIFY is not standard SQL; emit as outer WHERE on subquery
       s"SELECT * FROM (  ${toSQL(w).replace("\n", "\n  ")}) WHERE ${exprToSQL(condition)}"
+    case Filter(condition, leafNode: LeafNode) =>
+      s"SELECT * FROM ${toSQL(leafNode).replace("\n", "\n  ")} WHERE ${exprToSQL(condition)}"
     case Filter(condition, child) =>
-      s"${childSQL(child)} WHERE ${exprToSQL(condition)}"
+      s"SELECT * FROM (  ${toSQL(child).replace("\n", "\n  ")}) WHERE ${exprToSQL(condition)}"
+     // s"${childSQL(child)} WHERE ${exprToSQL(condition)}"
 
     // ── Aggregate / GROUP BY ─────────────────────────────────────────────────────
     case Aggregate(groupingExprs, aggregateExprs, child) =>
       val cols = aggregateExprs.map(namedExprToSQL).mkString(", ")
       val groupBy = if (groupingExprs.isEmpty) ""
       else s" GROUP BY ${groupingExprs.map(exprToSQL).mkString(", ")}"
-      s"SELECT $cols FROM ${childSQL(child)}$groupBy"
+      s"SELECT $cols FROM ${childSQL(child)} $groupBy"
 
     // ── Window plan node ─────────────────────────────────────────────────────────
     case w: Window =>
@@ -118,8 +125,29 @@ class SparkPlanToSQL {
       s"${toSQL(child)} ORDER BY $orderStr"
 
     // ── Limit / Offset ───────────────────────────────────────────────────────────
-    case GlobalLimit(le, LocalLimit(_, child)) => s"${toSQL(child)} LIMIT ${exprToSQL(le)}"
-    case GlobalLimit(le, child) => s"${toSQL(child)} LIMIT ${exprToSQL(le)}"
+    case GlobalLimit(le, LocalLimit(_, child)) =>
+      val inner = child match {
+        case Filter(cond, rel: LogicalRelation) =>
+          s"SELECT * FROM ${toSQL(rel)}\nWHERE ${exprToSQL(cond)}"
+        // Filter directly over table — emit as SELECT * FROM table WHERE cond
+        case Filter(cond, rel: DataSourceV2Relation) =>
+          s"SELECT * FROM ${toSQL(rel)}\nWHERE ${exprToSQL(cond)}"
+        case Filter(cond, rel: UnresolvedRelation) =>
+          s"SELECT * FROM ${toSQL(rel)}\nWHERE ${exprToSQL(cond)}"
+        case other => toSQL(other)
+      }
+      s"$inner\nLIMIT ${exprToSQL(le)}"
+    case GlobalLimit(le, child) => val inner = child match {
+      case Filter(cond, rel: LogicalRelation) =>
+        s"SELECT * FROM ${toSQL(rel)}\nWHERE ${exprToSQL(cond)}"
+      // Filter directly over table — emit as SELECT * FROM table WHERE cond
+      case Filter(cond, rel: DataSourceV2Relation) =>
+        s"SELECT * FROM ${toSQL(rel)}\nWHERE ${exprToSQL(cond)}"
+      case Filter(cond, rel: UnresolvedRelation) =>
+        s"SELECT * FROM ${toSQL(rel)}\nWHERE ${exprToSQL(cond)}"
+      case other => toSQL(other)
+    }
+      s"$inner\nLIMIT ${exprToSQL(le)}"
     case LocalLimit(le, child) => s"${toSQL(child)} LIMIT ${exprToSQL(le)}"
     case Limit(le, child) => s"${toSQL(child)} LIMIT ${exprToSQL(le)}"
     case Offset(oe, child) => s"${toSQL(child)} OFFSET ${exprToSQL(oe)}"
@@ -140,7 +168,10 @@ class SparkPlanToSQL {
 
     // ── SubqueryAlias ─────────────────────────────────────────────────────────────
     case SubqueryAlias(identifier, child) =>
-      s"(${toSQL(child)}) AS ${identifier.name}"
+      child match {
+        case _: DataSourceV2Relation => s"${toSQL(child)} AS ${identifier.name}"
+        case _ => s"(\n  ${toSQL(child)}) AS ${identifier.name}"
+      }
 
     // ── Table references ──────────────────────────────────────────────────────────
     case UnresolvedRelation(parts, _, _) => parts.mkString(".")
@@ -170,9 +201,12 @@ class SparkPlanToSQL {
   private def namedExprToSQL(expr: NamedExpression): String = expr match {
     case Alias(WindowExpression(wf, ws), name) =>
       s"${windowFuncToSQL(wf)} OVER ${windowSpecToSQL(ws)} AS ${quoteAlias((name))}"
-    case Alias(child, name) => s"${exprToSQL(child)} AS ${quoteAlias(name)}"
-    case a: Attribute => a.name
-    case other => exprToSQL(other)
+    case Alias(child, name) =>
+      s"${exprToSQL(child)} AS ${quoteAlias(name)}"
+    case a: Attribute =>
+      a.name
+    case other =>
+      exprToSQL(other)
   }
 
   // ── Window function ───────────────────────────────────────────────────────────
@@ -444,7 +478,14 @@ class SparkPlanToSQL {
 
     case _: Star => "*"
 
-    case other => scala.util.Try(other.sql).getOrElse(s"/* ${other.getClass.getSimpleName} */")
+
+
+    case other =>
+      if(other.isInstanceOf[ToPrettyString]){
+        exprToSQL(other.asInstanceOf[ToPrettyString].child)
+      }else {
+        scala.util.Try(other.sql).getOrElse(s"/* ${other.getClass.getSimpleName} */")
+      }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -455,7 +496,8 @@ class SparkPlanToSQL {
     case _: CTERelationRef => toSQL(plan)
     case s: SubqueryAlias => toSQL(s)
     case _: OneRowRelation => toSQL(plan)
-    case _ => s"(  ${toSQL(plan).replace("\n", "\n  ")})"
+    case l:LogicalRelation => toSQL(l)
+    case _ => s" ${toSQL(plan).replace("\n", "\n  ")}"
   }
 
   private def joinTypeToSQL(jt: JoinType): String = jt match {

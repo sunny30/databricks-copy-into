@@ -17,17 +17,20 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
   override def schema: StructType = this._schema
 
   override def buildScan(): RDD[Row] = {
+    println("this is build schema")
     val spark = SparkSession.active
     import spark.implicits._
-    val results = Seq(("2", "hello","3")).toDF("price","greet", "id")
+    val results = Seq(("2", "hello", "3"), ("3", "hello", "3"), ("4", "hello", "2"), ("5", "hello", "2")).toDF("col1", "col2", "col3")
     results.rdd
 
   }
 
   override def buildScan(requiredColumns: Array[String], filters: Array[Filter]): RDD[Row] = {
+    println("this is build schema with parameters")
+    println(s"schema json ${schema.sql}")
     val spark = SparkSession.active
     import spark.implicits._
-    val results = Seq((2, "hello", 3), (3, "hello", 3), (4, "hello", 2), (5, "hello", 2)).toDF("price", "greet", "id")
+    val results = Seq(("2", "hello", "3"), ("3", "hello", "3"), ("4", "hello", "2"), ("5", "hello", "2")).toDF("col1", "col2", "col3")
 //    val p = results.select(requiredColumns.head, requiredColumns.tail:_*)
     results.rdd
   }
