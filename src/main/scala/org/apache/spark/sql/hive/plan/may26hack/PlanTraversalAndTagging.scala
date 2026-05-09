@@ -31,12 +31,14 @@ class PlanTraversalAndTagging(spark:SparkSession) {
         abstractTraverse(b.left)
         abstractTraverse(b.right)
         if(isPlansBelongToSameCut(Seq(b.left, b.right))){
-          copyTagsFromChild(b.left, b)
+          val catalogName = gatherCatalog(b.left).get
+          tagPlanWithExternalCatalog(b, catalogName, true)
         }
       case union:Union =>
         union.children.foreach(abstractTraverse)
         if (isPlansBelongToSameCut(union.children)) {
-          copyTagsFromChild(union.children(0), union)
+          val catalogName = gatherCatalog(union.children(0)).get
+          tagPlanWithExternalCatalog(union, catalogName, true)
         }
       case l: LeafNode =>
         tagxternalCatalogRelationIfExists(l)

@@ -97,11 +97,16 @@ object App {
     //ErrorApp.reproduce_zip_short(spark)
     spark.sql("create database ecat.customdb1")
     spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+    val leftdf = spark.read.table("ecat.customdb1.nt")
+    val rightdf = spark.read.table("ecat.customdb1.nt1")
+    val resultdf = leftdf.join(rightdf, leftdf("col3") === rightdf("col6"))
+    resultdf.show()
 
-    val resultDF = spark.read.table("ecat.customdb1.nt")
-    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
-    val finalDF = resultDF.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
-    finalDF.show()
+//    val resultDF = spark.read.table("ecat.customdb1.nt")
+//    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
+//    val finalDF = resultDF.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
+//    finalDF.show()
 
 //    spark.sql("create database cat.hudi_db")
 //    spark.sql(
