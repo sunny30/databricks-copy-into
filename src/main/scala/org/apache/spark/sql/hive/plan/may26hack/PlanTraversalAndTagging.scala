@@ -5,7 +5,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedStar
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, Filter, GlobalLimit, LeafNode, LocalLimit, LogicalPlan, Project, UnaryNode, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{BinaryNode, Filter, GlobalLimit, Join, LeafNode, LocalLimit, LogicalPlan, Project, UnaryNode, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.connector.catalog.CatalogPlugin
@@ -163,6 +163,42 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
         //lr.setTagValue(TreeNodeTag[String]("cut-defined"), catalogName)
 
         //pl
+      case join: Join =>
+        val prj = Project(Seq(UnresolvedStar(None)), join)
+        val sql = SparkPlanToSQL.toSQL(prj)
+        val ds = DataSource(
+          session,
+          // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+          // inferred at runtime. We should still support it.
+          userSpecifiedSchema = Some(join.schema),
+          partitionColumns = Seq.empty[String],
+          bucketSpec = None,
+          className = "hubquery",
+          options = pt.getDSOptionMap(plan, sql),
+          catalogTable = None)
+        val lr = LogicalRelation(ds.resolveRelation(false), false)
+
+        lr.copy(output = join.output.map(_.asInstanceOf[AttributeReference]))
+
+
+
+      case union: Union =>
+        val prj = Project(Seq(UnresolvedStar(None)), union)
+        val sql = SparkPlanToSQL.toSQL(prj)
+        val ds = DataSource(
+          session,
+          // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+          // inferred at runtime. We should still support it.
+          userSpecifiedSchema = Some(union.schema),
+          partitionColumns = Seq.empty[String],
+          bucketSpec = None,
+          className = "hubquery",
+          options = pt.getDSOptionMap(plan, sql),
+          catalogTable = None)
+        val lr = LogicalRelation(ds.resolveRelation(false), false)
+
+        lr.copy(output = union.output.map(_.asInstanceOf[AttributeReference]))
+
       case p:LogicalPlan => p
 
     }

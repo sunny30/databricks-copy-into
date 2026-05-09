@@ -14,6 +14,8 @@ import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.spark.sql.stat.AnalyzeCommandUtil
 import org.apache.spark.sql.types.DecimalType
+import org.apache.spark.sql.expressions.Window
+
 
 
 object App {
@@ -95,7 +97,12 @@ object App {
     //ErrorApp.reproduce_zip_short(spark)
     spark.sql("create database ecat.customdb1")
     spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    spark.read.table("ecat.customdb1.nt").select("col1", "col2", "col3").filter("col1 != '3'").show()
+
+    val resultDF = spark.read.table("ecat.customdb1.nt")
+    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
+    val finalDF = resultDF.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
+    finalDF.show()
+
 //    spark.sql("create database cat.hudi_db")
 //    spark.sql(
 //      """
