@@ -99,9 +99,16 @@ object App {
     spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
     spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
     val leftdf = spark.read.table("ecat.customdb1.nt")
-    val rightdf = spark.read.table("ecat.customdb1.nt1")
-    val resultdf = leftdf.join(rightdf, leftdf("col3") === rightdf("col6"))
-    resultdf.show()
+//    val rightdf = spark.read.table("ecat.customdb1.nt1")
+//    val resultdf = leftdf.join(rightdf, leftdf("col3") === rightdf("col6"))
+//    resultdf.show()
+
+    val windowSpec = Window.partitionBy("col1").orderBy("col2")
+    val resultDF1 = leftdf.withColumn("running_total", count("col3").over(windowSpec))
+      .withColumn("rank", rank().over(windowSpec))
+
+
+    resultDF1.show()
 
 //    val resultDF = spark.read.table("ecat.customdb1.nt")
 //    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)

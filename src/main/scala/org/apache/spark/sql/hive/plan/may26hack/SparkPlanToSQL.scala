@@ -76,6 +76,8 @@ class SparkPlanToSQL {
         case _: OneRowRelation => s"SELECT $cols"
         case _:Project | _:Filter =>
           s"SELECT $cols FROM ( SELECT * FROM ( ${childSQL(child)} ))"
+        case _: Window => s"SELECT  $cols FROM ( ${toSQL(child).replace("\n", "\n  ")})"
+
         case _ =>
           s"SELECT $cols FROM ${childSQL(child)}"
       }
@@ -101,9 +103,9 @@ class SparkPlanToSQL {
 
     // ── Window plan node ─────────────────────────────────────────────────────────
     case w: Window =>
-      val winCols = w.windowExpressions.map(namedExprToSQL).mkString(", ")
-      val baseCols = w.child.output.map(_.name).mkString(", ")
-      val allCols = if (baseCols.isEmpty) winCols else s"$baseCols, $winCols"
+      val winCols = w.windowExpressions.map(namedExprToSQL).mkString(", ") // ← separator changed
+      val baseCols = w.child.output.map(_.name).mkString(", ") // ← separator changed
+      val allCols = if (baseCols.isEmpty) winCols else s"$baseCols,  $winCols"
       s"SELECT $allCols FROM ${childSQL(w.child)}"
 
     // ── Join ─────────────────────────────────────────────────────────────────────

@@ -34,7 +34,7 @@ case class ExternalCatalogQueryRelation(sqlContext: SQLContext, parameters: Map[
     val results = if(parameters.contains("pushdown.sql")){
       var sql = parameters.get("pushdown.sql").get.toString
       sql = sql.replaceAll("toprettystring", "")
-      println("ExternalCatalogQueryRelation sql is"+sql)
+      println("ExternalCatalogQueryRelation sql is "+sql)
       println(s"External Query Relation schema: ${schema.sql}")
       val parsedPlan = spark.sessionState.sqlParser.parsePlan(sql)
       val analyzedPlan = spark.sessionState.analyzer.execute(parsedPlan)
