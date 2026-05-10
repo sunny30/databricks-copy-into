@@ -83,7 +83,7 @@ object App {
     //spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
     spark.sql("create database cat.cls_db1")
-    spark.sql("create table cat.cls_db1.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
+    spark.sql("create table cat.cls_db1.ptbl(cls_id int, age int) using iceberg  PARTITIONED BY (age)")
     spark.sql("describe extended cat.cls_db1.ptbl").show()
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
