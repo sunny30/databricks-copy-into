@@ -165,7 +165,8 @@ class FSMetaStoreCatalog(
 
   private def getSecureColumnsTable(catalogTable: CatalogTable):CatalogTable={
     val secureSchema = StructType(catalogTable.schema.fields.toSeq.filter(f => f.name.startsWith("cls_")))
-    catalogTable.copy(schema = secureSchema)
+    val securePartitionColumns =  catalogTable.partitionColumnNames.filter(_.startsWith("cls_"))
+    catalogTable.copy(schema = secureSchema, partitionColumnNames = securePartitionColumns)
   }
 
   override def getTablesByName(db: String, tables: Seq[String]): Seq[CatalogTable] = {

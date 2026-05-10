@@ -82,6 +82,9 @@ object App {
     import spark.implicits._
     //spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
+    spark.sql("create database cat.cls_db1")
+    spark.sql("create table cat.cls_db1.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
+    spark.sql("describe extended cat.cls_db1.ptbl").show()
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
     // spark.sql("select * from cat.customdb.tbl").show()
@@ -95,32 +98,32 @@ object App {
 //    spark.sql("create view cat.cls_db.v1 as select cls_id, age from cat.cls_db.ptbl")
 
     //ErrorApp.reproduce_zip_short(spark)
-    spark.sql("create database ecat.customdb1")
-    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    val leftdf = spark.read.table("ecat.customdb1.nt")
-    val rightdf = spark.read.table("ecat.customdb1.nt1")
-      .selectExpr("col4 as col1", "col5 as col2", "col6 as col3")
-
-    var resultdf = leftdf.union(rightdf)
-    resultdf.show()
-    val countDF = leftdf.groupBy("col3").count()
-    countDF.show()
-    resultdf = leftdf.join(rightdf, leftdf("col3") === rightdf("col6"))
-    resultdf = resultdf.selectExpr("col1 as c1", "col2 as c2", "col3 as c3", "col4 as c4", "col5 as c5", "col6 as c6")
-    resultdf.show()
-
-    val windowSpec = Window.partitionBy("col1").orderBy("col2")
-    val resultDF1 = leftdf.withColumn("running_total", count("col3").over(windowSpec))
-      .withColumn("rank", rank().over(windowSpec))
-
-
-    resultDF1.show()
-
-    val resultDF = spark.read.table("ecat.customdb1.nt")
-    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
-    val finalDF = resultDF.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
-    finalDF.show()
+//    spark.sql("create database ecat.customdb1")
+//    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    val leftdf = spark.read.table("ecat.customdb1.nt")
+//    val rightdf = spark.read.table("ecat.customdb1.nt1")
+//      .selectExpr("col4 as col1", "col5 as col2", "col6 as col3")
+//
+//    var resultdf = leftdf.union(rightdf)
+//    resultdf.show()
+//    val countDF = leftdf.groupBy("col3").count()
+//    countDF.show()
+//    resultdf = leftdf.join(rightdf, leftdf("col3") === rightdf("col6"))
+//    resultdf = resultdf.selectExpr("col1 as c1", "col2 as c2", "col3 as c3", "col4 as c4", "col5 as c5", "col6 as c6")
+//    resultdf.show()
+//
+//    val windowSpec = Window.partitionBy("col1").orderBy("col2")
+//    val resultDF1 = leftdf.withColumn("running_total", count("col3").over(windowSpec))
+//      .withColumn("rank", rank().over(windowSpec))
+//
+//
+//    resultDF1.show()
+//
+//    val resultDF = spark.read.table("ecat.customdb1.nt")
+//    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
+//    val finalDF = resultDF.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
+//    finalDF.show()
 
 //    spark.sql("create database cat.hudi_db")
 //    spark.sql(
