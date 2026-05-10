@@ -5,6 +5,7 @@ import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.analysis.{Star, UnresolvedAttribute, UnresolvedFunction, UnresolvedRelation}
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.catalyst.expressions.Cast._
@@ -79,7 +80,12 @@ class SparkPlanToSQL {
         case _: Window => s"SELECT  $cols FROM ( ${toSQL(child).replace("\n", "\n  ")})"
 
         case _ =>
-          s"SELECT $cols FROM ${childSQL(child)}"
+          child match {
+            case l: LeafNode => s"SELECT $cols FROM ${childSQL(child)}"
+            case _ => s"SELECT $cols FROM ( ${childSQL(child)} )"
+
+          }
+
       }
 
     // ── Filter / WHERE / HAVING ──────────────────────────────────────────────────
@@ -99,7 +105,11 @@ class SparkPlanToSQL {
       val cols = aggregateExprs.map(namedExprToSQL).mkString(", ")
       val groupBy = if (groupingExprs.isEmpty) ""
       else s" GROUP BY ${groupingExprs.map(exprToSQL).mkString(", ")}"
-      s"SELECT $cols FROM ${childSQL(child)} $groupBy"
+      child match {
+        case l: LeafNode => s"SELECT $cols FROM ${childSQL(child)} $groupBy"
+        case _ => s"SELECT $cols FROM ( ${childSQL(child)} ) $groupBy"
+      }
+
 
     // ── Window plan node ─────────────────────────────────────────────────────────
     case w: Window =>
@@ -179,7 +189,7 @@ class SparkPlanToSQL {
     case UnresolvedRelation(parts, _, _) => parts.mkString(".")
     case relation: DataSourceV2Relation => relation.name
     case relation: org.apache.spark.sql.execution.datasources.LogicalRelation =>
-      relation.catalogTable.map(_.identifier.quotedString).getOrElse("/* LogicalRelation */")
+      relation.catalogTable.map(twoPartQuoteName).getOrElse("/* LogicalRelation */")
 
     // ── LocalRelation (inline VALUES) ─────────────────────────────────────────────
     case LocalRelation(output, rows, _) =>
@@ -196,6 +206,18 @@ class SparkPlanToSQL {
 
     case other =>
       s"/* ${other.getClass.getSimpleName} */\n${scala.util.Try(other.treeString.take(200)).getOrElse("")}"
+  }
+
+  private def quoteIdentifier(name: String): String = name.replace("`", "``")
+
+
+  private def twoPartQuoteName(ct: CatalogTable):String = {
+    val dbName = ct.identifier.database.getOrElse("default")
+    val tableName = ct.identifier.table
+
+    val replacedDb = quoteIdentifier(dbName)
+    val replacedId = quoteIdentifier(tableName)
+    s"`${replacedDb}`.`$replacedId`"
   }
 
   // ── Named expression (SELECT list) ───────────────────────────────────────────
@@ -280,9 +302,12 @@ class SparkPlanToSQL {
   // ── Aggregate function ────────────────────────────────────────────────────────
 
   private def aggFuncToSQL(agg: AggregateFunction): String = agg match {
-    case Count(Nil) => "COUNT(*)"
-    case Count(Seq(Literal(1, _))) => "COUNT(*)" // Fix #5: no Wildcard()
-    case Count(children) => s"COUNT(${children.map(exprToSQL).mkString(", ")})"
+    case Count(Nil) =>
+      "COUNT(*)"
+    case Count(Seq(Literal(1, _))) =>
+      "COUNT(*)" // Fix #5: no Wildcard()
+    case Count(children) =>
+      s"COUNT(${children.map(exprToSQL).mkString(", ")})"
     case Sum(child, _) => s"SUM(${exprToSQL(child)})"
     case Average(child, _) => s"AVG(${exprToSQL(child)})"
     case Min(child) => s"MIN(${exprToSQL(child)})"

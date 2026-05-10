@@ -37,6 +37,7 @@ case class ExternalCatalogQueryRelation(sqlContext: SQLContext, parameters: Map[
       println("ExternalCatalogQueryRelation sql is "+sql)
       println(s"External Query Relation schema: ${schema.sql}")
       val parsedPlan = spark.sessionState.sqlParser.parsePlan(sql)
+      println("** Parsing Successful **")
       val analyzedPlan = spark.sessionState.analyzer.execute(parsedPlan)
 
       analyzedPlan.foreach(p => p.setTagValue(TreeNodeTag[String]("cut-included"), "true"))

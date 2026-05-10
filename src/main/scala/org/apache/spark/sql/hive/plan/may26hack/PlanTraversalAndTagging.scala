@@ -142,7 +142,13 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
       case p:LogicalPlan if(isPlanAlreadyTraversedAndTag(p)) =>
         p
 
-      case mp:UnaryNode if ((mp.isInstanceOf[Project] || mp.isInstanceOf[Filter]) && pt.isPlanContainExternalCatalogTag(mp)) =>
+      case lm:LocalLimit =>
+        lm
+
+      case gm: GlobalLimit =>
+        gm
+
+      case mp:UnaryNode if (pt.isPlanContainExternalCatalogTag(mp)) =>
         val prj = Project(Seq(UnresolvedStar(None)), mp)
         val sql = SparkPlanToSQL.toSQL(prj)
 
@@ -156,7 +162,7 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
           partitionColumns = Seq.empty[String],
           bucketSpec = None,
           className = "hubquery",
-          options = pt.getDSOptionMap(plan, sql),
+          options = pt.getDSOptionMap(mp, sql),
           catalogTable = None)
          // pl
        val lr = LogicalRelation(ds.resolveRelation(false), false)
@@ -176,7 +182,7 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
           partitionColumns = Seq.empty[String],
           bucketSpec = None,
           className = "hubquery",
-          options = pt.getDSOptionMap(plan, sql),
+          options = pt.getDSOptionMap(join, sql),
           catalogTable = None)
         val lr = LogicalRelation(ds.resolveRelation(false), false)
 
@@ -195,7 +201,7 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
           partitionColumns = Seq.empty[String],
           bucketSpec = None,
           className = "hubquery",
-          options = pt.getDSOptionMap(plan, sql),
+          options = pt.getDSOptionMap(union, sql),
           catalogTable = None)
         val lr = LogicalRelation(ds.resolveRelation(false), false)
 
