@@ -113,10 +113,11 @@ object App {
 //      .withColumn("avg_amount_by_status", count("col3").over(statusWindow))
 //
 //    cdf.show()
-    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
 //    val leftdf = spark.read.table("ecat.customdb1.nt").as("base")
 //    val rightdf = spark.read.table("ecat.customdb1.nt1").as("detail")
+//      .selectExpr("col4 as col1", "col5 as col2", "col6 as col3")
 //
 //
 //    val jdf = leftdf.join(rightdf, col("col1") === col("col4")).filter("col3 == '3'").select("col1", "col4")
@@ -382,7 +383,7 @@ object App {
 ////  //  spark.read.table(" cat.idb4.ptbl").show()
 ////    spark.sql("select * from cat.idb4.ptbl").show()
 ////
-////    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
+    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
 ////    spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
 ////    spark.sql("describe formatted cat.idb4.v1").show()
 ////    spark.sql("select * from cat.idb4.v1").show()

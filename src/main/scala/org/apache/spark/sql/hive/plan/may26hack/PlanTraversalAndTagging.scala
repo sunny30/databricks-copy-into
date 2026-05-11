@@ -191,7 +191,8 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
 
 
       case union: Union =>
-        val prj = Project(Seq(UnresolvedStar(None)), union)
+        val newUnion = removeLimitFromChildrens(union)
+        val prj = Project(Seq(UnresolvedStar(None)), newUnion)
         val sql = SparkPlanToSQL.toSQL(prj)
         val ds = DataSource(
           session,
@@ -209,6 +210,16 @@ class ExternalCatalogCutAnalyzer(session: SparkSession)
 
       case p:LogicalPlan => p
 
+    }
+  }
+
+  def removeLimitFromChildrens(plan: LogicalPlan): LogicalPlan ={
+    plan.transformUp{
+      case limit: GlobalLimit =>
+        limit.child
+      case localLimit: LocalLimit =>
+        localLimit.child
+      case pl: LogicalPlan => pl
     }
   }
 
