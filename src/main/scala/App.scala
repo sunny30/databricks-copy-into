@@ -99,24 +99,30 @@ object App {
 
     //ErrorApp.reproduce_zip_short(spark)
     spark.sql("create database ecat.customdb1")
+  //  spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    val statusWindow = Window
+//      .partitionBy("col1")
+//      .orderBy("col2")
+//      .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+//
+//    val cdf = spark.table("ecat.customdb1.nt")
+//      .filter(col("col1") === '3')
+//      .select("col1", "col2", "col3")
+//      .withColumn("min_amount_by_status", min("col1").over(statusWindow))
+//      .withColumn("max_amount_by_status", max("col2").over(statusWindow))
+//      .withColumn("avg_amount_by_status", count("col3").over(statusWindow))
+//
+//    cdf.show()
     spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-    val statusWindow = Window
-      .partitionBy("col1")
-      .orderBy("col2")
-      .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    val leftdf = spark.read.table("ecat.customdb1.nt").as("base")
+//    val rightdf = spark.read.table("ecat.customdb1.nt1").as("detail")
+//
+//
+//    val jdf = leftdf.join(rightdf, col("col1") === col("col4")).filter("col3 == '3'").select("col1", "col4")
+//    jdf.show()
+   // spark.sql("SELECT * FROM ( SELECT * FROM (  SELECT col1 AS col1, col4 AS col4 FROM (  (  SELECT col1 FROM ( SELECT * FROM (  SELECT * FROM `ecat`.`customdb1`.`nt` WHERE col3 = '3' )) )  INNER JOIN (  SELECT col4 FROM `ecat`.`customdb1`.`nt1` )     ON col1 = col4 ) ))").show()
 
-    val cdf = spark.table("ecat.customdb1.nt")
-      .filter(col("col1") === '3')
-      .select("col1", "col2", "col3")
-      .withColumn("min_amount_by_status", min("col1").over(statusWindow))
-      .withColumn("max_amount_by_status", max("col2").over(statusWindow))
-      .withColumn("avg_amount_by_status", count("col3").over(statusWindow))
-
-    cdf.show()
-//    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-//    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
-//    val leftdf = spark.read.table("ecat.customdb1.nt")
-//    val rightdf = spark.read.table("ecat.customdb1.nt1")
 //      .selectExpr("col4 as col1", "col5 as col2", "col6 as col3")
 //
 //    var resultdf = leftdf.union(rightdf)
@@ -130,13 +136,14 @@ object App {
 //    val windowSpec = Window.partitionBy("col1").orderBy("col2")
 //    val resultDF1 = leftdf.withColumn("running_total", count("col3").over(windowSpec))
 //      .withColumn("rank", rank().over(windowSpec))
-//
+//    resultDF1.show()
+
 //
 //    resultDF1.show()
 //
 //    val resultDF = spark.read.table("ecat.customdb1.nt")
 //    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
-//    val finalDF = resultDF.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
+//    val finalDF = leftdf.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
 //    finalDF.show()
 
 //    spark.sql("create database cat.hudi_db")

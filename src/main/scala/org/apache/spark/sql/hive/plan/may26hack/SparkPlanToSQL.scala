@@ -126,7 +126,16 @@ class SparkPlanToSQL {
     case Join(left, right, joinType, condition, _) =>
       val joinStr = joinTypeToSQL(joinType)
       val on = condition.map(c => s"   ON ${exprToSQL(c)}").getOrElse("")
-      s"${childSQL(left)} $joinStr JOIN ${childSQL(right)} $on"
+      val leftSql = left match {
+        case l:LeafNode => s"${childSQL(left)}"
+        case _ =>   s"( ${childSQL(left)} ) "
+      }
+
+      val rightSql = right match {
+        case l: LeafNode => s"${childSQL(right)}"
+        case _ => s"( ${childSQL(right)} ) "
+      }
+      s"${leftSql} $joinStr JOIN ${rightSql} $on"
 
     // ── Sort / ORDER BY ──────────────────────────────────────────────────────────
     case Sort(order, _, child) =>
