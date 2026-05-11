@@ -116,7 +116,11 @@ class SparkPlanToSQL {
       val winCols = w.windowExpressions.map(namedExprToSQL).mkString(", ") // ← separator changed
       val baseCols = w.child.output.map(_.name).mkString(", ") // ← separator changed
       val allCols = if (baseCols.isEmpty) winCols else s"$baseCols,  $winCols"
-      s"SELECT $allCols FROM ${childSQL(w.child)}"
+      w.child match {
+        case l: LeafNode => s"SELECT $allCols FROM ${childSQL(w.child)}"
+        case _ => s"SELECT $allCols FROM ( ${childSQL(w.child)} )"
+      }
+    //  s"SELECT $allCols FROM ${childSQL(w.child)}"
 
     // ── Join ─────────────────────────────────────────────────────────────────────
     case Join(left, right, joinType, condition, _) =>

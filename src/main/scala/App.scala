@@ -82,9 +82,9 @@ object App {
     import spark.implicits._
     //spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
-    spark.sql("create database cat.cls_db1")
-    spark.sql("create table cat.cls_db1.ptbl(cls_id int, age int) using iceberg  PARTITIONED BY (age)")
-    spark.sql("describe extended cat.cls_db1.ptbl").show()
+//    spark.sql("create database cat.cls_db1")
+//    spark.sql("create table cat.cls_db1.ptbl(cls_id int, age int) using iceberg  PARTITIONED BY (age)")
+//    spark.sql("describe extended cat.cls_db1.ptbl").show()
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
     // spark.sql("select * from cat.customdb.tbl").show()
@@ -98,7 +98,21 @@ object App {
 //    spark.sql("create view cat.cls_db.v1 as select cls_id, age from cat.cls_db.ptbl")
 
     //ErrorApp.reproduce_zip_short(spark)
-//    spark.sql("create database ecat.customdb1")
+    spark.sql("create database ecat.customdb1")
+    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+    val statusWindow = Window
+      .partitionBy("col1")
+      .orderBy("col2")
+      .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+
+    val cdf = spark.table("ecat.customdb1.nt")
+      .filter(col("col1") === '3')
+      .select("col1", "col2", "col3")
+      .withColumn("min_amount_by_status", min("col1").over(statusWindow))
+      .withColumn("max_amount_by_status", max("col2").over(statusWindow))
+      .withColumn("avg_amount_by_status", count("col3").over(statusWindow))
+
+    cdf.show()
 //    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
 //    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
 //    val leftdf = spark.read.table("ecat.customdb1.nt")
