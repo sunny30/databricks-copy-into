@@ -33,7 +33,8 @@ class CLSSecRule(session: SparkSession)
       proj.unsetTagValue(TreeNodeTag[String]("custom-view-projection"))
       changeViewProjectionForCustomAttributes(proj)
 
-    case prj:Project if CLSUtils.isViewsPlan(prj) && isViewPlanContainsStar(prj) && prj.child.resolved =>  descomposeStarInViewTextPlan(prj)
+    case prj:Project if CLSUtils.isViewsPlan(prj) && isViewPlanContainsStar(prj) && prj.child.resolved =>
+      descomposeStarInViewTextPlan(prj)
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) if CLSUtils.isViewsPlan(u)=>
       //CLSUtils.tagViewPlan(u)
@@ -69,3 +70,5 @@ class CLSSecRule(session: SparkSession)
   }
 
 }
+
+

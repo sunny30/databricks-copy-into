@@ -91,6 +91,7 @@ object App {
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
+    CLSApp.viewCLSApp(spark)
 //    spark.sql("create database cat.cls_db")
 //    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 //    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")
@@ -98,7 +99,7 @@ object App {
 //    spark.sql("create view cat.cls_db.v1 as select cls_id, age from cat.cls_db.ptbl")
 
     //ErrorApp.reproduce_zip_short(spark)
-    spark.sql("create database ecat.customdb1")
+   // spark.sql("create database ecat.customdb1")
   //  spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
 //    val statusWindow = Window
 //      .partitionBy("col1")
@@ -383,7 +384,7 @@ object App {
 ////  //  spark.read.table(" cat.idb4.ptbl").show()
 ////    spark.sql("select * from cat.idb4.ptbl").show()
 ////
-    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
+   // spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
 ////    spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
 ////    spark.sql("describe formatted cat.idb4.v1").show()
 ////    spark.sql("select * from cat.idb4.v1").show()

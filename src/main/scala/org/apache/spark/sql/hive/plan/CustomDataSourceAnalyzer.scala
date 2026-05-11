@@ -11,7 +11,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubquer
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -155,6 +155,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     projectList
   }
 
+
   private def buildViewDDL(metadata: CatalogTable, isTempView: Boolean): Option[String] = {
     if (isTempView) {
       None
@@ -192,6 +193,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
     }
     val projectList = getViewColumns(table.v1Table)
+    //val secureProjection = getSecureProjectList(projectList, table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
     val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
     val child = Project(projectList, parsedPlanWithoutSecureAttribute)
@@ -208,10 +210,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     CLSUtils.tagViewPlan(plan = newPlan)
     val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
-    //val resolvedPlan = session.sharedState.sparkContext.
-    CLSUtils.tagViewPlan(plan = newChild)
+    val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
+    CLSUtils.tagViewPlan(plan = secureViewPlan)
     println("Returning View")
-    CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
+    CustomView(desc = table.v1Table,secureViewPlan )
+    //val resolvedPlan = session.sharedState.sparkContext.
+
+
+
+    //secureViewPlan
   }
 
 
