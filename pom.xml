@@ -29,6 +29,32 @@
 
     <dependencies>
 
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-all</artifactId>
+            <version>4.1.96.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-buffer</artifactId>
+            <version>4.1.96.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-common</artifactId>
+            <version>4.1.96.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-handler</artifactId>
+            <version>4.1.96.Final</version>
+        </dependency>
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-transport</artifactId>
+            <version>4.1.96.Final</version>
+        </dependency>
+
         <!-- ── Scala ──────────────────────────────────────────────────────── -->
         <dependency>
             <groupId>org.scala-lang</groupId>
@@ -164,12 +190,12 @@
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-spark-runtime-3.5_${scala.binary.version}</artifactId>
-            <version>1.5.0</version>
+            <version>1.9.2</version>
         </dependency>
         <dependency>
             <groupId>org.apache.iceberg</groupId>
             <artifactId>iceberg-arrow</artifactId>
-            <version>1.5.0</version>
+            <version>1.9.2</version>
         </dependency>
 
         <!-- ── Arrow ─────────────────────────────────────────────────────── -->
@@ -294,45 +320,45 @@
         <plugins>
 
             <!-- ── Scala compiler ────────────────────────────────────────── -->
-            <plugin>
-                <groupId>net.alchim31.maven</groupId>
-                <artifactId>scala-maven-plugin</artifactId>
-                <version>4.8.1</version>
-                <executions>
-                    <execution>
-                        <id>scala-compile</id>
-                        <goals><goal>compile</goal></goals>
-                    </execution>
-                    <execution>
-                        <id>scala-test-compile</id>
-                        <goals><goal>testCompile</goal></goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <scalaVersion>2.12.18</scalaVersion>
-                    <jvmArgs>
-                        <jvmArg>--add-opens=java.base/sun.nio.ch=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.nio=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.lang=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.util=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.lang.invoke=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.io=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.net=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.util.concurrent=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/sun.util.calendar=ALL-UNNAMED</jvmArg>
-                        <jvmArg>--add-opens=java.base/sun.security.action=ALL-UNNAMED</jvmArg>
-                        <jvmArg>-Dio.netty.tryReflectionSetAccessible=true</jvmArg>
-                    </jvmArgs>
-                    <args>
-                        <arg>-target:jvm-1.8</arg>
-                        <arg>-deprecation</arg>
-                        <arg>-unchecked</arg>
-                        <arg>-feature</arg>
-                    </args>
-                </configuration>
-            </plugin>
+<!--            <plugin>-->
+<!--                <groupId>net.alchim31.maven</groupId>-->
+<!--                <artifactId>scala-maven-plugin</artifactId>-->
+<!--                <version>4.8.1</version>-->
+<!--                <executions>-->
+<!--                    <execution>-->
+<!--                        <id>scala-compile</id>-->
+<!--                        <goals><goal>compile</goal></goals>-->
+<!--                    </execution>-->
+<!--                    <execution>-->
+<!--                        <id>scala-test-compile</id>-->
+<!--                        <goals><goal>testCompile</goal></goals>-->
+<!--                    </execution>-->
+<!--                </executions>-->
+<!--                <configuration>-->
+<!--                    <scalaVersion>2.12.18</scalaVersion>-->
+<!--                    <jvmArgs>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/sun.nio.ch=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.nio=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.lang=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.util=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.lang.invoke=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.lang.reflect=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.io=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.net=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.util.concurrent=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/java.util.concurrent.atomic=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/sun.util.calendar=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>&#45;&#45;add-opens=java.base/sun.security.action=ALL-UNNAMED</jvmArg>-->
+<!--                        <jvmArg>-Dio.netty.tryReflectionSetAccessible=true</jvmArg>-->
+<!--                    </jvmArgs>-->
+<!--                    <args>-->
+<!--                        <arg>-target:jvm-1.8</arg>-->
+<!--                        <arg>-deprecation</arg>-->
+<!--                        <arg>-unchecked</arg>-->
+<!--                        <arg>-feature</arg>-->
+<!--                    </args>-->
+<!--                </configuration>-->
+<!--            </plugin>-->
 
             <!-- ── Fat jar ───────────────────────────────────────────────── -->
             <!--

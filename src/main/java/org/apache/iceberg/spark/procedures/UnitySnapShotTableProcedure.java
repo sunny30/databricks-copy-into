@@ -3,8 +3,8 @@ package org.apache.iceberg.spark.procedures;
 
 import avro.shaded.com.google.common.base.Preconditions;
 import org.apache.iceberg.actions.SnapshotTable;
-import org.apache.iceberg.spark.actions.SparkActions;
 import org.apache.iceberg.spark.actions.UnitySparkActions;
+
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.connector.catalog.TableCatalog;
 import org.apache.spark.sql.connector.iceberg.catalog.ProcedureParameter;
