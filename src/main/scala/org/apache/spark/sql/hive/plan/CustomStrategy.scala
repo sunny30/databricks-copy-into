@@ -3,10 +3,10 @@ package org.apache.spark.sql.hive.plan
 import org.apache.spark.sql.{SparkSession, Strategy}
 import org.apache.spark.sql.catalyst.analysis.{ResolvedNamespace, ResolvedTable}
 import org.apache.spark.sql.catalyst.expressions.Attribute
-import org.apache.spark.sql.catalyst.plans.logical.{DescribeRelation, LogicalPlan, ShowTables, ShowViews}
+import org.apache.spark.sql.catalyst.plans.logical.{DescribeColumn, DescribeRelation, LogicalPlan, ShowTables, ShowViews}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.execution.SparkPlan
-import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, RenameCatalogViewExec, SecureDescribeTableExec, ShowCatalogViews, ShowViewsExec}
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, RenameCatalogViewExec, SecureDescribeColumnExec, SecureDescribeTableExec, ShowCatalogViews, ShowViewsExec}
 
 import scala.collection.JavaConverters._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
@@ -31,6 +31,10 @@ object CustomStrategy extends Strategy with Serializable  {
 
       case d:DescribeRelation=>
         SecureDescribeTableExec(d)::Nil
+
+      case dc@DescribeColumn(r: ResolvedTable, column: Attribute, isExtended, output) =>
+        SecureDescribeColumnExec(output, column, isExtended, r.table) :: Nil
+
 
       case _ => Nil
     }
