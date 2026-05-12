@@ -147,13 +147,27 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
     if (catalogTable.provider.isDefined) {
       if (catalogTable.provider.get.equalsIgnoreCase("delta")) {
-        return (new UnityDeltaCatalog(externalCatalog,catalogName)).alterTable(ident, changes)
+        val dt =  (new UnityDeltaCatalog(externalCatalog,catalogName)).alterTable(ident, changes)
+        alterTableV2Table(catalogTable, ident, changes)
+        dt
       }
       else if (catalogTable.provider.get.equalsIgnoreCase("iceberg")) {
-        return (new UnityIcebergCatalog(externalCatalog, catalogName, options)).alterTable(ident, changes: _*)
+        val tbl  = (new UnityIcebergCatalog(externalCatalog, catalogName, options)).alterTable(ident, changes: _*)
+        alterTableV2Table(catalogTable, ident, changes)
+        tbl
+      } else {
+        alterTableV2Table(catalogTable, ident, changes)
       }
+    }else{
+      alterTableV2Table(catalogTable, ident, changes)
     }
 
+
+
+  }
+
+
+  private def alterTableV2Table(catalogTable: CatalogTable, ident: Identifier, changes: Seq[TableChange]):Table ={
     val properties = CatalogV2Util.applyPropertiesChanges(catalogTable.properties, changes)
     val schema = CatalogV2Util.applySchemaChanges(
       catalogTable.schema, changes, catalogTable.provider, "ALTER TABLE")
@@ -186,8 +200,6 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           throw QueryCompilationErrors.noSuchTableError(ident)
       }
     }
-
-
   }
 
   override def dropTable(ident: Identifier): Boolean = {
