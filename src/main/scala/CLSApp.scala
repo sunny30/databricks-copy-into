@@ -6,10 +6,15 @@ object CLSApp {
   def viewCLSApp(spark: SparkSession):Unit = {
 
     spark.sql("""create database if not exists cat.cls_db2""")
-    spark.sql("create table cat.cls_db2.ppt(cls_id int, name string) using delta PARTITIONED BY (name)")
+    spark.sql("create table cat.cls_db2.ppt(cls_id int, name string) using parquet PARTITIONED BY (name)")
     spark.sql("insert into cat.cls_db2.ppt values(1,'sh'), (3, 'su')")
+    val cteQuery =
+      s"""WITH cte_data AS (SELECT * FROM cat.cls_db2.ppt)
+         |SELECT * FROM cte_data""".stripMargin
+    spark.sql(cteQuery).show()
+   // spark.sql("SELECT * FROM cte_data").show()
    // spark.sql("truncate table cat.cls_db2.ppt")
-    spark.sql("select * from cat.cls_db2.ppt").show()
+   // spark.sql("select * from cat.cls_db2.ppt").show()
 
 //    spark.sql(
 //      """
