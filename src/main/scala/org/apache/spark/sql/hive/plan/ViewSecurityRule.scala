@@ -1,16 +1,21 @@
 package org.apache.spark.sql.hive.plan
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.catalyst.analysis.ResolvedTable
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.catalog.CatalogTable.VIEW_STORING_ANALYZED_PLAN
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Cast}
-import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, UnaryNode, View}
+import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, ShowColumns, UnaryNode, View}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog
-import org.apache.spark.sql.delta.commands.{DeltaCommand, ShowDeltaTableColumnsCommand}
+import org.apache.spark.sql.delta.catalog.DeltaTableV2
+import org.apache.spark.sql.delta.commands.{DeltaCommand, ShowDeltaTableColumnsCommand, TableColumns}
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.execution.command.{LeafRunnableCommand, RunnableCommand}
+import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 
 class ViewSecurityRule(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
@@ -22,6 +27,9 @@ class ViewSecurityRule(session: SparkSession)
 
     case showDeltaTableColumnsCommand: ShowDeltaTableColumnsCommand =>
         SecureShowDeltaColumnCommand(showDeltaTableColumnsCommand)
+
+    case cmd @ ShowColumns(child @ ResolvedTable(_, _, table: V2Table, _), namespace, _)  =>
+      SecureShowColumnsCommand(cmd, table)
 
     case pl: LogicalPlan =>
         pl
@@ -85,4 +93,17 @@ case class SecureShowDeltaColumnCommand(s:ShowDeltaTableColumnsCommand) extends 
   }
 
 
+}
+
+case class SecureShowColumnsCommand(plan: ShowColumns, v2Table: V2Table) extends LeafRunnableCommand{
+  override val output: Seq[Attribute] = toAttributes(ExpressionEncoder[TableColumns]().schema)
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val tid = v2Table.v1Table.identifier
+    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
+    val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+    val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(dbName, tableName)
+    val secureColumns = secureCatalogTable.schema.map(f => f.name)
+    secureColumns.map{ x => Row(x) }
+  }
 }
