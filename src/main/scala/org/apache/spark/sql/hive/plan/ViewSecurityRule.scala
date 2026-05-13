@@ -1,13 +1,16 @@
 package org.apache.spark.sql.hive.plan
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.catalog.CatalogTable.VIEW_STORING_ANALYZED_PLAN
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Cast}
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, UnaryNode, View}
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog
+import org.apache.spark.sql.delta.commands.{DeltaCommand, ShowDeltaTableColumnsCommand}
 import org.apache.spark.sql.delta.util.AnalysisHelper
+import org.apache.spark.sql.execution.command.{LeafRunnableCommand, RunnableCommand}
 
 class ViewSecurityRule(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
@@ -16,6 +19,9 @@ class ViewSecurityRule(session: SparkSession)
 
     case c:CustomView =>
       c.member
+
+    case showDeltaTableColumnsCommand: ShowDeltaTableColumnsCommand =>
+        SecureShowDeltaColumnCommand(showDeltaTableColumnsCommand)
 
     case pl: LogicalPlan =>
         pl
@@ -55,4 +61,28 @@ case class CustomView(
 
 //  override protected def withNewChildInternal(newChild: LogicalPlan): CustomView =
 //    copy(child = newChild)
+}
+
+
+case class SecureShowDeltaColumnCommand(s:ShowDeltaTableColumnsCommand) extends LeafRunnableCommand with DeltaCommand{
+
+  override val output: Seq[Attribute] = s.output
+
+  override def run(sparkSession: SparkSession): Seq[Row] = {
+    val rows = s.run(sparkSession)
+    val deltaTable = getDeltaTable(s.child, "SHOW COLUMNS")
+    try {
+      val tid = deltaTable.v1Table.identifier
+      val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
+      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+      val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(dbName, tableName)
+      val secureColumns = secureCatalogTable.schema.map(f => f.name).toSet
+      val secureRows = rows.filter(r => (secureColumns).contains(r.get(0).toString))
+      secureRows
+    }catch {
+      case e:Exception => return rows
+    }
+  }
+
+
 }
