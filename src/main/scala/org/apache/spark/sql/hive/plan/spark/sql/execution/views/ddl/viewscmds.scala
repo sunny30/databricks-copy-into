@@ -8,7 +8,7 @@ import org.apache.spark.sql.catalyst.plans.DescribeCommandSchema
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ShowViews, UnaryCommand}
 import org.apache.spark.sql.catalyst.trees.TreePattern.{TreePattern, UNRESOLVED_RELATION}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
-import org.apache.spark.sql.connector.catalog.Identifier
+import org.apache.spark.sql.connector.catalog.{Identifier, TableSchemaChangeCatalog}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.command.LeafRunnableCommand
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
@@ -55,7 +55,7 @@ case class CatalogDescribeViewCmd(
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableIdent = Identifier.of(Seq(databaseName).toArray, tableName)
-    val table = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asTableCatalog.loadTable(tableIdent, null)
+    val table = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(databaseName, tableName)
     val result = new ArrayBuffer[Row]
     val metadata= table match {
       case v2Table:V2Table =>
@@ -67,6 +67,8 @@ case class CatalogDescribeViewCmd(
           partitionColumnNames = dt.deltaLog.snapshot.metadata.partitionColumns,
           properties = dt.catalogTable.get.properties ++ dt.deltaLog.snapshot.getProperties
         )
+
+      case ct: CatalogTable => ct
     }
     describeSchema(metadata.schema, result, header = false)
     if (isExtended) {
