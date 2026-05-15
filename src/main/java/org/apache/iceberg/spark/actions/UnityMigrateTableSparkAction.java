@@ -2,14 +2,12 @@ package org.apache.iceberg.spark.actions;
 
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.actions.ImmutableMigrateTable;
-import org.apache.iceberg.actions.ImmutableMigrateTable.Result;
 
 import org.apache.iceberg.Table;
 import org.apache.iceberg.actions.MigrateTable;
 import org.apache.iceberg.exceptions.AlreadyExistsException;
 import org.apache.iceberg.relocated.com.google.common.collect.Maps;
 import org.apache.iceberg.spark.JobGroupInfo;
-import org.apache.iceberg.spark.SparkTableUtil;
 import org.apache.iceberg.spark.actions.util.UnitySparkTableUtil;
 import org.apache.iceberg.spark.source.StagedSparkTable;
 import org.apache.spark.sql.SparkSession;

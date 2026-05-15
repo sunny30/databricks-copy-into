@@ -24,9 +24,6 @@ import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.SupportsNamespaces;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.*;
-import org.apache.iceberg.hadoop.HadoopCatalog;
-import org.apache.iceberg.hadoop.HadoopTableOperations;
-import org.apache.iceberg.hadoop.Util;
 import org.apache.iceberg.io.CloseableGroup;
 import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.InputFile;
@@ -290,10 +287,10 @@ public class UnityHadoopCatalog extends HadoopCatalog
         }
     }
 
-    private boolean isValidMetadataIdentifier(TableIdentifier identifier) {
-        return MetadataTableType.from(identifier.name()) != null
-                && isValidIdentifier(TableIdentifier.of(identifier.namespace().levels()));
-    }
+//    private boolean isValidMetadataIdentifier(TableIdentifier identifier) {
+//        return MetadataTableType.from(identifier.name()) != null
+//                && isValidIdentifier(TableIdentifier.of(identifier.namespace().levels()));
+//    }
 
     @Override
     protected String defaultWarehouseLocation(TableIdentifier tableIdentifier) {

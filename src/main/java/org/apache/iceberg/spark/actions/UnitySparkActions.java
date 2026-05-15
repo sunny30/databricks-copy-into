@@ -2,7 +2,6 @@ package org.apache.iceberg.spark.actions;
 
 import org.apache.iceberg.Table;
 import org.apache.iceberg.actions.*;
-import org.apache.iceberg.hadoop.UnityHadoopCatalog;
 import org.apache.iceberg.spark.Spark3Util;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.connector.catalog.CatalogPlugin;

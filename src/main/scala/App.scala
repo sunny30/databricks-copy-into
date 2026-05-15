@@ -14,6 +14,8 @@ import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.hive.plan.spark.sql.stat.AnalyzeCommandUtil
 import org.apache.spark.sql.types.DecimalType
+import org.apache.spark.sql.expressions.Window
+
 
 
 object App {
@@ -56,6 +58,12 @@ object App {
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
       .set("spark.sql.parquet.aggregatePushdown", "true")
       .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV5")
+//      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
+//      .set("spark.kryo.unsafe", "false")
+//      .set("spark.kryo.registrationRequired", "false")
+//      .set("spark.sql.execution.arrow.pyspark.enabled", "false")
+//      .set("spark.sql.codegen.wholeStage", "false")
+//      .set("spark.sql.codegen.factoryMode", "NO_CODEGEN")
     //   .set("spark.sql.parquet.enableVectorizedReader","false")
     //   .set("parquet.strict.typing","false")
   }
@@ -74,13 +82,84 @@ object App {
     import spark.implicits._
     //spark.sql("create table db.t1(id int) using parquet")
   //  spark.sql("create database cat.hivedb")
+//    spark.sql("create database cat.cls_db1")
+//    spark.sql("create table cat.cls_db1.ptbl(cls_id int, age int) using iceberg  PARTITIONED BY (age)")
+//    spark.sql("describe extended cat.cls_db1.ptbl").show()
     //spark.sql("CREATE TABLE cat.hivedb.student_text1 (id INT, name STRING) ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' STORED AS TEXTFILE")
    // spark.sql("create table cat.customdb.tbl(price int,greet string, id double ) using custom options('k'='v', 'k1' = 'v1')")
     // spark.sql("select * from cat.customdb.tbl").show()
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
-    ErrorApp.reproduce_zip_short(spark)
+    CLSApp.viewCLSApp(spark)
+//    spark.sql("create database cat.cls_db")
+//    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
+//    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")
+//    spark.sql("create view cat.cls_db.v2 as select id, age from cat.cls_db.ptbl1")
+//    spark.sql("create view cat.cls_db.v1 as select cls_id, age from cat.cls_db.ptbl")
+
+    //ErrorApp.reproduce_zip_short(spark)
+   // spark.sql("create database ecat.customdb1")
+  //  spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    val statusWindow = Window
+//      .partitionBy("col1")
+//      .orderBy("col2")
+//      .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+//
+//    val cdf = spark.table("ecat.customdb1.nt")
+//      .filter(col("col1") === '3')
+//      .select("col1", "col2", "col3")
+//      .withColumn("min_amount_by_status", min("col1").over(statusWindow))
+//      .withColumn("max_amount_by_status", max("col2").over(statusWindow))
+//      .withColumn("avg_amount_by_status", count("col3").over(statusWindow))
+//
+//    cdf.show()
+//    spark.sql("create table ecat.customdb1.nt(col1 string, col2 string,col3 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    spark.sql("create table ecat.customdb1.nt1(col4 string, col5 string,col6 string) using custom  options('table' = 'NT', 'schema' = 'CUSTOMDB')")
+//    val leftdf = spark.read.table("ecat.customdb1.nt").as("base")
+//    val rightdf = spark.read.table("ecat.customdb1.nt1").as("detail")
+//      .selectExpr("col4 as col1", "col5 as col2", "col6 as col3")
+//
+//
+//    val jdf = leftdf.join(rightdf, col("col1") === col("col4")).filter("col3 == '3'").select("col1", "col4")
+//    jdf.show()
+   // spark.sql("SELECT * FROM ( SELECT * FROM (  SELECT col1 AS col1, col4 AS col4 FROM (  (  SELECT col1 FROM ( SELECT * FROM (  SELECT * FROM `ecat`.`customdb1`.`nt` WHERE col3 = '3' )) )  INNER JOIN (  SELECT col4 FROM `ecat`.`customdb1`.`nt1` )     ON col1 = col4 ) ))").show()
+
+//      .selectExpr("col4 as col1", "col5 as col2", "col6 as col3")
+//
+//    var resultdf = leftdf.union(rightdf)
+//    resultdf.show()
+//    val countDF = leftdf.groupBy("col3").count()
+//    countDF.show()
+//    resultdf = leftdf.join(rightdf, leftdf("col3") === rightdf("col6"))
+//    resultdf = resultdf.selectExpr("col1 as c1", "col2 as c2", "col3 as c3", "col4 as c4", "col5 as c5", "col6 as c6")
+//    resultdf.show()
+//
+//    val windowSpec = Window.partitionBy("col1").orderBy("col2")
+//    val resultDF1 = leftdf.withColumn("running_total", count("col3").over(windowSpec))
+//      .withColumn("rank", rank().over(windowSpec))
+//    resultDF1.show()
+
+//
+//    resultDF1.show()
+//
+//    val resultDF = spark.read.table("ecat.customdb1.nt")
+//    val movingAvgSpec = Window.partitionBy("col3").orderBy("col1").rowsBetween(-2, Window.currentRow)
+//    val finalDF = leftdf.withColumn("moving_avg", avg("amount").over(movingAvgSpec))
+//    finalDF.show()
+
+//    spark.sql("create database cat.hudi_db")
+//    spark.sql(
+//      """
+//        |CREATE TABLE if not exists cat.hudi_db.hudi_table1(
+//        |    id long,
+//        |    city STRING
+//        |) USING HUDI
+//        |PARTITIONED BY (city);
+//        |""".stripMargin)
+//    spark.sql("describe formatted cat.hudi_db.hudi_table1").show()
+//    spark.sql("insert into cat.hudi_db.hudi_table1 values(1,'ss'), (2, 'sh')")
+//    spark.sql("select * from cat.hudi_db.hudi_table1").show()
     var df3 = Seq(
       (7, "John", 2.0),
       (8, "Sunny", 3.0),
@@ -305,7 +384,7 @@ object App {
 ////  //  spark.read.table(" cat.idb4.ptbl").show()
 ////    spark.sql("select * from cat.idb4.ptbl").show()
 ////
-////    spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
+   // spark.sql("create view cat.idb4.v1(id , cls_age) as select *  from cat.idb4.ptbl")
 ////    spark.sql("create view cat.idb4.v1(a,cls_b) as select cls_id, age from cat.idb4.ptbl")
 ////    spark.sql("describe formatted cat.idb4.v1").show()
 ////    spark.sql("select * from cat.idb4.v1").show()

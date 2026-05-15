@@ -11,7 +11,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubquer
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -43,7 +43,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.sql.execution.datasources.CreateTable
-import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.CustomCreateDataSourceTableAsSelectCommand
+import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.{CustomCreateDataSourceTableAsSelectCommand, DeltaTruncateUtils}
 
 import java.util.Locale
 import scala.collection.JavaConverters.{asJavaIterableConverter, mapAsScalaMapConverter}
@@ -57,6 +57,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging {
 
   session.listenerManager.register(new CatalogQueryExecutionListener)
+  private val resolverTag = TreeNodeTag[String]("centrify-resolver")
+
 
 
   def getFileFormat(formatName: String): FileFormat = {
@@ -155,6 +157,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     projectList
   }
 
+
   private def buildViewDDL(metadata: CatalogTable, isTempView: Boolean): Option[String] = {
     if (isTempView) {
       None
@@ -192,6 +195,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
     }
     val projectList = getViewColumns(table.v1Table)
+    //val secureProjection = getSecureProjectList(projectList, table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
     val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
     val child = Project(projectList, parsedPlanWithoutSecureAttribute)
@@ -208,10 +212,15 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     CLSUtils.tagViewPlan(plan = newPlan)
     val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
-    //val resolvedPlan = session.sharedState.sparkContext.
-    CLSUtils.tagViewPlan(plan = newChild)
+    val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
+    CLSUtils.tagViewPlan(plan = secureViewPlan)
     println("Returning View")
-    CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
+    CustomView(desc = table.v1Table,secureViewPlan )
+    //val resolvedPlan = session.sharedState.sparkContext.
+
+
+
+    //secureViewPlan
   }
 
 
@@ -221,6 +230,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     //    case c:CustomInsertIntoHadoopFsRelationCommand =>
     //      c.setAnalyzed()
     //      c
+
+
+    case truncate: TruncateTable =>
+      DeltaTruncateUtils.rewriteTruncate(session, resolverTag, truncate)
+
+    case truncatePartition: TruncatePartition =>
+      DeltaTruncateUtils.rewritePartitionTruncate(session, resolverTag, truncatePartition)
 
 
 
@@ -276,6 +292,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                   CLSUtils.getSecureDataSource(ds)
                 }else{
                   println("secure child should not apply")
+                  CLSUtils.tagViewPlan(ds)
                   CLSUtils.tagViewPlan(ds)
                     ds
                 }
@@ -415,11 +432,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             SparkSession.active.sessionState.analyzer.execute(dd.copy(table = table1, options = newCaseOptions))
           }
           options.asScala.get("source.pushdown.enabled") match {
-            case Some("true") => val optionsMap = dataSource.options
+            case Some("true") =>
+              val optionsMap = dataSource.options
               val ds = DataSourceV2Relation.create(table = table.getV2CustomTable, catalog = Some(plugin), identifier = Some(Identifier.of(Seq(table.v1Table.identifier.database.getOrElse("default")).toArray, table.v1Table.identifier.table)), options = new CaseInsensitiveStringMap(optionsMap))
               ds.copy(output = dd.output)
-            case Some("false") =>  LogicalRelation(dataSource.resolveRelation(false))
-            case None =>  LogicalRelation(dataSource.resolveRelation(false))
+            case Some("false") =>
+              LogicalRelation(dataSource.resolveRelation(false),table.v1Table)
+            case None =>
+              LogicalRelation(dataSource.resolveRelation(false),table.v1Table)
 
           }
         } else {
@@ -655,7 +675,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
               d
             }
           } else {
-            if(CDCReader.isCDCRead(d.options)){
+            if(CDCReader.isCDCRead(d.options)) {
               d
             }else {
               CLSUtils.getSecureRelation(d)
@@ -718,7 +738,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + relation.toString)
-            if(lr.relation.isInstanceOf[DeltaCDFRelation]) {
+            if(lr.relation.isInstanceOf[DeltaCDFRelation] || lr.getTagValue(resolverTag).isDefined) {
               lr
             } else {
               lr

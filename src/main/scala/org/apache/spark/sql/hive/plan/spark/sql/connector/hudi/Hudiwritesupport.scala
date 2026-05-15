@@ -8,7 +8,7 @@ import org.apache.hudi.client.common.HoodieSparkEngineContext
 import org.apache.hudi.common.model._
 import org.apache.hudi.common.table.HoodieTableMetaClient
 import org.apache.hudi.common.table.timeline.{HoodieActiveTimeline, HoodieInstant, HoodieTimeline}
-import org.apache.hudi.common.util.{Option, Option => HoodieOption}
+import org.apache.hudi.common.util.{Option => HoodieOption}
 import org.apache.hudi.config.{HoodieIndexConfig, HoodieWriteConfig}
 import org.apache.hudi.index.HoodieIndex
 import org.apache.spark.sql.SparkSession
@@ -21,6 +21,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.{util => ju}
 import scala.collection.JavaConverters._
+import scala.collection.convert.ImplicitConversions.`map AsScala`
 import scala.collection.mutable.ArrayBuffer
 
 // ─── Non-row-level WriteBuilder (INSERT INTO / INSERT OVERWRITE) ─────────────
@@ -90,7 +91,13 @@ class HudiInsertBatchWrite(
     HudiWriteConfigBuilder.build(metaClient, tableProps, schema)
 
   override def createBatchWriterFactory(info: PhysicalWriteInfo): DataWriterFactory =
-    new HudiInsertWriterFactory(instantTime, writeConfig, schema)
+    new HudiInsertWriterFactory(
+      instantTime    = instantTime,
+      writeConfig    = writeConfig,
+      schema         = schema,
+      recordKeyField = tableProps.getOrElse("hoodie.datasource.write.recordkey.field", ""),
+      partitionField = tableProps.getOrElse("hoodie.datasource.write.partitionpath.field", "")
+    )
 
   override def commit(messages: Array[WriterCommitMessage]): Unit = {
     val allStatuses = messages
@@ -105,6 +112,7 @@ class HudiInsertBatchWrite(
       val rdd = spark.sparkContext.parallelize(allStatuses)
       writeClient.commit(instantTime, rdd, HoodieOption.empty(), action,
         ju.Collections.emptyMap[String, ju.List[String]]())
+
     } finally {
       writeClient.close()
     }
@@ -120,10 +128,12 @@ class HudiInsertBatchWrite(
 class HudiInsertWriterFactory(
                                instantTime: String,
                                writeConfig: HoodieWriteConfig,
-                               schema: StructType
+                               schema: StructType,
+                               recordKeyField: String,
+                               partitionField: String
                              ) extends DataWriterFactory {
   override def createWriter(partitionId: Int, taskId: Long): DataWriter[InternalRow] =
-    new HudiCOWMergeDataWriter(instantTime, writeConfig, schema)
+    new HudiCOWMergeDataWriter(instantTime,  schema, recordKeyField, partitionField)
 }
 
 // ─── Shared: HoodieWriteConfig builder ───────────────────────────────────────
@@ -170,9 +180,16 @@ object HudiWriteConfigBuilder {
             )
           )
           .build()
-      )
-      .withAutoCommit(false)            // We commit explicitly — do NOT change this
-      .withProps(tableProps.asJava)
+      ).withMetadataConfig(
+        org.apache.hudi.common.config.HoodieMetadataConfig.newBuilder()
+          .enable(tableProps.getOrElse("hoodie.metadata.enable", "false").toBoolean)
+          .build()
+      ) // We commit explicitly — do NOT change this
+      .withProps(
+      (tableProps ++ Map("hoodie.auto.commit" -> "false"))
+        .asJava
+        .asInstanceOf[java.util.Map[_, _]]
+    )
       .build()
   }
 }
@@ -220,7 +237,7 @@ object HudiInstantUtils {
     //   createNewInstantTime() is an INSTANCE method on HoodieTableMetaClient in 1.0.1.
     //   It internally uses TimeGenerator with the table's timeGeneratorConfig.
     //   No longer static on HoodieActiveTimeline.
-    val instantTime = metaClient.createNewInstantTime()
+    val instantTime = metaClient.createNewInstantTime(false)
 
     val action   = if (isDelta) HoodieTimeline.DELTA_COMMIT_ACTION
     else HoodieTimeline.COMMIT_ACTION

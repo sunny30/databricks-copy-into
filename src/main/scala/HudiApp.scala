@@ -15,7 +15,7 @@ object HudiApp {
 
     spark.sql(
       """
-        |CREATE TABLE if not exists hudi_table7(
+        |CREATE TABLE if not exists hudi_table02(
         |    id long,
         |    city STRING
         |) USING HUDI
@@ -23,8 +23,8 @@ object HudiApp {
         |""".stripMargin)
 
 
-    spark.sql("""insert into hudi_table7 values (1, "mum"),(2, "mum") , (4, "bng"), (5, "bng"),(6, "bng") , (3, "mum")""")
-    spark.sql("select id from hudi_table7 where city = 'bng'").show
+    spark.sql("""insert into hudi_table02 values (1, "mum"),(2, "mum") , (4, "bng"), (5, "bng"),(6, "bng") , (3, "mum")""")
+    spark.sql("select id from hudi_table02 where city = 'bng'").show
 
 
   }
