@@ -55,6 +55,9 @@ object CLSUtils {
   //covers Iceberg and V2Table
   def getSecurePlanFromDataSourceV2(ds: DataSourceV2Relation, table: Table): LogicalPlan = {
     val (catalogName, dbName, tableName) = getCatalogTableDetails(table)
+    if(catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty){
+      return ds
+    }
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
     getSecureLeafPlan(secureTable, ds)
   }
@@ -68,7 +71,10 @@ object CLSUtils {
 
 
   def getCatalogTableDetails(table: Table): (String, String, String) = {
+    println("{}", table.toString)
     val ct = table match {
+      case c: CatalogTable => c
+
       case v2CustomTable: V2CustomTable =>
         v2CustomTable.catalogTable
 
@@ -96,7 +102,11 @@ object CLSUtils {
 
     }
 
-    (ct.identifier.catalog.getOrElse("default"), ct.identifier.database.getOrElse("default"), ct.identifier.table)
+    if(ct == null){
+      ("","","")
+    }else {
+      (ct.identifier.catalog.getOrElse("default"), ct.identifier.database.getOrElse("default"), ct.identifier.table)
+    }
 
   }
 
