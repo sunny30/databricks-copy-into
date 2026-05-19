@@ -40,7 +40,12 @@ object CLSUtils {
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) => getSecurePlanFromDataSourceV2(ds, table)
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
+        if(table!=null) {
+          getSecurePlanFromDataSourceV2(ds, table)
+        }else{
+          ds
+        }
       case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr, catalogTable.get)
       case _ => plan
 
