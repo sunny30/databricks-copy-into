@@ -54,6 +54,22 @@ object CLSApp {
 //    spark.sql("show columns in cat.cls_db2.v1").show()
 
 
+
+
+
+  }
+
+  def normalPathApp(spark: SparkSession):Unit ={
+    spark.read.format("csv").option("inferSchema","true").option("header", "true").load("/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data").show()
+  }
+
+  def dataframeWriteOperation(spark: SparkSession):Unit ={
+    spark.sql("""create database if not exists cat.cls_db3""")
+    val df =  spark.read.format("csv").option("inferSchema","true").option("header", "true").load("/Users/sharadsingh/Dev/databricks-copy-into/src/main/resources/data")
+    df.write.format("parquet").saveAsTable("cat.cls_db3.ptbl")
+    df.write.format("delta").saveAsTable("cat.cls_db3.dtbl")
+    df.write.format("iceberg").saveAsTable("cat.cls_db3.itbl")
+
   }
 
 }
