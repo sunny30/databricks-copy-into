@@ -58,6 +58,10 @@ object CLSUtils {
     if(catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty){
       return ds
     }
+    if(isExternalCatalog(catalogName)){
+      return ds
+    }
+
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
     getSecureLeafPlan(secureTable, ds)
   }
@@ -65,6 +69,10 @@ object CLSUtils {
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
     println("Inside getSecurePlanFromLogicalRelation")
     val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
+
+    if(isExternalCatalog(catalogName)){
+      return ds
+    }
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
     getSecureLeafPlan(secureTable, ds)
   }
@@ -181,6 +189,9 @@ object CLSUtils {
       (catalogName, "default", multipartIdentifier(0))
     }
     try {
+      if(isExternalCatalog(res._1)){
+        return None
+      }
       val ct = getSecureTableFrom(res._1, res._2, res._3)
       Some(ct.schema.fields.map(f => f.name).toSeq)
     }catch {
@@ -283,8 +294,21 @@ object CLSUtils {
 
   def sameFieldsUnordered(a: StructType, b: StructType): Boolean = {
     if (a.length != b.length) return false
-    val bByName = b.fields.map(f => f.name -> f.dataType).toMap
-    a.fields.forall(fa => bByName.get(fa.name).contains(fa.dataType))
+    val bByName = b.fields.map(f => f.name.toLowerCase() -> f.dataType).toMap
+    a.fields.forall(fa => bByName.get(fa.name.toLowerCase()).contains(fa.dataType))
+  }
+
+
+  def isExternalCatalog(catalogName:String):Boolean = {
+    if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+      if(catalogName.equalsIgnoreCase("ecat")){
+        true
+      }else{
+        false
+      }
+    }else{
+      false//Here we need to put HMSUtils code
+    }
   }
 
 

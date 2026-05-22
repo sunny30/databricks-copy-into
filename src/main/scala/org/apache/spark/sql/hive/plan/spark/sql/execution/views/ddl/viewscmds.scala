@@ -8,9 +8,10 @@ import org.apache.spark.sql.catalyst.plans.DescribeCommandSchema
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, ShowViews, UnaryCommand}
 import org.apache.spark.sql.catalyst.trees.TreePattern.{TreePattern, UNRESOLVED_RELATION}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
-import org.apache.spark.sql.connector.catalog.{Identifier, TableSchemaChangeCatalog}
+import org.apache.spark.sql.connector.catalog.{Identifier, TableCatalog, TableSchemaChangeCatalog}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.command.LeafRunnableCommand
+import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.types.{BooleanType, StringType, StructType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -56,6 +57,8 @@ case class CatalogDescribeViewCmd(
   override def run(sparkSession: SparkSession): Seq[Row] = {
     val tableIdent = Identifier.of(Seq(databaseName).toArray, tableName)
     val table = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(databaseName, tableName)
+    val fullViewTable = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableCatalog].loadTable(tableIdent,null)
+    val isfullTableAccess = CLSUtils.sameFieldsUnordered(fullViewTable.schema(), table.schema)
     val result = new ArrayBuffer[Row]
     val metadata= table match {
       case v2Table:V2Table =>
@@ -72,7 +75,7 @@ case class CatalogDescribeViewCmd(
     }
     describeSchema(metadata.schema, result, header = false)
     if (isExtended) {
-      describeFormattedTableInfo(metadata, result)
+      describeFormattedTableInfo(metadata, result, isfullTableAccess)
       //describeFormattedTableDescription(metadata, result)
     }
     result
@@ -87,12 +90,13 @@ case class CatalogDescribeViewCmd(
     }
   }
 
-  private def describeFormattedTableInfo(table: CatalogTable, buffer: ArrayBuffer[Row]): Unit = {
+  private def describeFormattedTableInfo(table: CatalogTable, buffer: ArrayBuffer[Row], isfullTableAccess:Boolean = true): Unit = {
     // The following information has been already shown in the previous outputs
-    val excludedTableInfo = Seq(
-      "Partition Columns",
-      "Schema"
-    )
+    val excludedTableInfo = isfullTableAccess match {
+      case true => Seq("Partition Columns", "Schema")
+      case false => Seq("Partition Columns", "Schema", "View Text", "View Original Text", "View Query Output Columns")
+
+    }
     append(buffer, "", "", "")
     append(buffer, "# Detailed Table Information", "", "")
     table.toLinkedHashMap.filterKeys(!excludedTableInfo.contains(_)).foreach {

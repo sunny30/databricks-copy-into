@@ -91,7 +91,7 @@ object App {
     // spark.sql("select greet from cat.customdb.tbl").show()
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
-    CLSApp.dataframeWriteOperation(spark)
+    CLSApp.viewCLSApp(spark)
 //    spark.sql("create database cat.cls_db")
 //    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 //    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")
