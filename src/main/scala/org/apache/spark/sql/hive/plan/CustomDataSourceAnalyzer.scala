@@ -643,7 +643,6 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         val newQuery = CLSUtils.removeSecureProjection(replaceData.query)
         replaceData.copy(query = newQuery)
 
-      case MergeIntoTable(targetTable, sourceTable, mergeCondition, matchedActions, notMatchedActions, notMatchedBySourceActions)
 
       case vu:ViewUnresolvedRelation =>
         println("For ViewUnresolvedRelation")
