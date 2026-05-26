@@ -72,4 +72,35 @@ object CLSApp {
 
   }
 
+
+  def icebergApp(spark:SparkSession):Unit={
+    spark.sql("""create database if not exists cat.cls_db4""")
+
+    spark.sql("create table cat.cls_db4.it(id int, name string) using iceberg PARTITIONED BY (name)")
+    spark.sql("insert into cat.cls_db4.it values(1,'sh'), (2, 'su')")
+
+    spark.sql(
+      """
+        |UPDATE cat.cls_db4.it
+        |SET id = 3
+        |WHERE name = 'sh';
+        |""".stripMargin)
+    println("**** first read after update ****")
+    spark.read.table("cat.cls_db4.it").show()
+
+    spark.sql(
+      """
+        |DELETE FROM cat.cls_db4.it
+        |WHERE id = 3;
+        |
+        |""".stripMargin)
+
+
+    println("**** second read after delete ****")
+    spark.read.table("cat.cls_db4.it").show()
+
+
+
+  }
+
 }
