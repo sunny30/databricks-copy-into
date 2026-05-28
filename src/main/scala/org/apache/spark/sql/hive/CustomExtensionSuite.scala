@@ -16,12 +16,13 @@ import org.apache.spark.sql.hive.plan.spark.sql.connector.hudi.HoodieMultiCatalo
 import org.apache.spark.sql.hive.plan.spark.sql.execution.IcebergStrategy
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
-import org.apache.spark.sql.hive.plan.{CLSSecRule, CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, RowLevelFilter, TwoToThreePartRule, ViewSecurityRule}
+import org.apache.spark.sql.hive.plan.{CLSSecRule, CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, ResolveDeltaCrudOperation, RowLevelFilter, TwoToThreePartRule, ViewSecurityRule}
 
 class CustomExtensionSuite extends DeltaSparkSessionExtension {
 
   override def apply(extensions: SparkSessionExtensions): Unit = {
 
+    extensions.injectResolutionRule(session => new ResolveDeltaCrudOperation(session))
     super.apply(extensions)
 
     extensions.injectParser { (session, parser) =>

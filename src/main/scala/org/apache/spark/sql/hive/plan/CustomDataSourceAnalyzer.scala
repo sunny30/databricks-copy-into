@@ -11,7 +11,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubquer
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, OverwriteByExpression, Project, ReplaceData, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeleteFromTable, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, MergeIntoTable, OverwriteByExpression, Project, ReplaceData, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -638,6 +638,14 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case p: LogicalPlan => p resolveOperatorsUp {
 
+      case d: DeleteFromTable =>
+        val newQuery = CLSUtils.removeSecureProjection(d.table)
+        d.copy(table = newQuery)
+
+      case mergeIntoTable: MergeIntoTable =>
+        val newSource = CLSUtils.removeSecureProjection(mergeIntoTable.sourceTable)
+        val newTarget = CLSUtils.removeSecureProjection(mergeIntoTable.targetTable)
+        mergeIntoTable.copy(sourceTable = newSource, targetTable = newTarget)
 
       case replaceData:ReplaceData =>
         val newQuery = CLSUtils.removeSecureProjection(replaceData.query)
