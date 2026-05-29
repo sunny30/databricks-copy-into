@@ -140,6 +140,7 @@ object CLSUtils {
       "col-table-sec"
     }
 
+    val resolver  = SparkSession.active.sessionState.conf.resolver
     if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
       val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
       println("***Secure fields name***"+secureFields.mkString(","))
@@ -147,13 +148,20 @@ object CLSUtils {
       leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
       val prj = Project(secureAttributes, leafPlan)
       prj.setTagValue(TreeNodeTag[String](tagKey), "true")
-//      if(tagKey.equalsIgnoreCase("col-view-sec")){
-//        println("returning leaf")
-//        return leafPlan
-//      }
-      val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
-      //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
-      analyzed
+
+      val sameOutput =
+        secureAttributes.size == leafPlan.output.size &&
+          secureAttributes.zip(leafPlan.output).forall { case (secureAttr, outputAttr) =>
+            resolver(secureAttr.name, outputAttr.name)
+          }
+
+     if(sameOutput){
+       leafPlan
+     }else {
+       val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
+       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
+       analyzed
+     }
     } else {
       leafPlan
     }

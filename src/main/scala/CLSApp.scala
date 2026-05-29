@@ -1,4 +1,8 @@
-import org.apache.spark.sql.SparkSession
+import io.delta.tables.hc.DeltaTable
+import org.apache.hadoop.fs.Path
+import org.apache.spark.sql.delta.catalog.DeltaTableV2
+import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 
 object CLSApp {
 
@@ -101,6 +105,59 @@ object CLSApp {
 
 
 
+  }
+
+
+  def deltaforNameApp(spark: SparkSession):Unit = {
+
+    import spark.implicits._
+    spark.sql("create database db")
+    spark.sql("create table db.dt(id int, name string) using delta")
+    spark.sql("insert into db.dt values (1, 'ss'), (2,'sh')")
+//     var df3 = Seq(
+//  (7, "John", 2.0),
+//  (8, "Sunny", 3.0),
+//  (9, "Xiaoyu", 4.0),
+//  (10, "Shashi", 5.0),
+//  (11, "Bharath", 6.0),
+//  (12, "Vivek", 7.0)
+//   ).toDF("col1", "col2", "col3")
+//    spark.sql("create database default")
+
+   // df3.write.partitionBy("col2").format("delta").mode(SaveMode.Overwrite).saveAsTable("dt")
+
+    val dt = io.delta.tables.hc.DeltaTable.getDeltaTable(spark, "db.dt", "/tmp/dt")
+
+   // dt.delete("id = 1")
+
+  //  dt.toDF.show()
+
+  //  spark.sql("select * from db.dt").show()
+
+    val sourceDf = createMergeSourceDF(spark)
+    dt.as("target").merge(sourceDf.as("source"),
+      "target.id = source.id").whenMatched()
+      .updateExpr(Map(
+        "name" -> "source.name"
+      )).execute()
+
+    spark.sql("select * from db.dt").show()
+
+  }
+
+  def createMergeSourceDF(spark: SparkSession): DataFrame = {
+    val schema = StructType(Seq(
+      StructField("id", IntegerType, nullable = false),
+      StructField("name", StringType, nullable = false)
+
+    ))
+
+    val data = Seq(
+      Row(2, "Bob Updated"), // matched row -> update
+      Row(4, "David") // new row -> insert
+    )
+
+    spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
   }
 
 }
