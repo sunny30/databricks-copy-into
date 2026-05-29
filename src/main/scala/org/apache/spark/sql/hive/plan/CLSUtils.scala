@@ -156,15 +156,12 @@ object CLSUtils {
           }
 
      if(sameOutput){
-       return leafPlan
+       leafPlan
+     }else {
+       val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
+       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
+       analyzed
      }
-//      if(tagKey.equalsIgnoreCase("col-view-sec")){
-//        println("returning leaf")
-//        return leafPlan
-//      }
-      val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
-      //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
-      analyzed
     } else {
       leafPlan
     }
