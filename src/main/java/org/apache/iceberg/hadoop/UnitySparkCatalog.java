@@ -904,7 +904,7 @@ public class UnitySparkCatalog
     }
 
     @SuppressWarnings("CyclomaticComplexity")
-    private Table loadFromPathIdentifier(PathIdentifier ident) {
+    Table loadFromPathIdentifier(PathIdentifier ident) {
         Pair<String, List<String>> parsed = parseLocationString(ident.location());
 
         String metadataTableName = null;

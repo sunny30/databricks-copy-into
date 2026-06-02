@@ -158,15 +158,22 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
     val databaseName = tableIdentifier.namespace().level(0) ;
     val tableName = tableIdentifier.name()
     if(!plugin.tableExists(databaseName, tableName)) {
-      val ct = getMetastoreTable(databaseName,tableName)
+      val ct = getMetastoreTable(databaseName,tableName, metadataFileLocation)
       SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].registerTableInMetastore(ct)
-      icebergCatalog.registerTable(tableIdentifier,metadataFileLocation)
+      val registeredTable = icebergCatalog.registerTable(tableIdentifier,metadataFileLocation)
+      val ident = Identifier.of(Array(databaseName), tableName)
+      val icebergTable = loadTable(ident)
+      val schema = icebergTable.schema()
+
+      SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].alterTable(ident, schema)
+      registeredTable
     }else{
       throw new AnalysisException("Table already exists")
     }
   }
 
-  private def getMetastoreTable(databaseName:String, tableName:String):CatalogTable={
+  private def getMetastoreTable(databaseName:String, tableName:String, location:String):CatalogTable={
+
 
     val storage: CatalogStorageFormat = CatalogStorageFormat(None, None, None, None, false, Map.empty[String,String])
     val ct = CatalogTable(
