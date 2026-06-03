@@ -306,6 +306,16 @@ object CLSUtils {
     a.fields.forall(fa => bByName.get(fa.name.toLowerCase()).contains(fa.dataType))
   }
 
+  def syncSchemaAtLoadAndOverWrite(table:Table, ct:CatalogTable, catalogName:String):Unit ={
+    val trueSchema = table.schema()
+    val msSchema = ct.schema
+    if(!sameFieldsUnordered(trueSchema,msSchema)){
+      val newCt = ct.copy(schema = trueSchema)
+      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+      plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+    }
+  }
+
 
   def isExternalCatalog(catalogName:String):Boolean = {
     if(SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
