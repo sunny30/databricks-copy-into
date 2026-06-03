@@ -5,4 +5,6 @@ trait ExternalSecureCatalog extends ExternalCatalog{
 
   def getSecureTable(db: String, table: String): CatalogTable
 
+  def alterUnsafeCatalogTable(ct: CatalogTable):Unit
+
 }

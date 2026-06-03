@@ -245,6 +245,11 @@ class HMSCatalog(
     msClient.alter_table(catalogName, tableDefinition.database, tableDefinition.identifier.table,convertedHiveTable)
   }
 
+
+  override def alterUnsafeCatalogTable(ct: CatalogTable): Unit = {
+    alterTable(ct)
+  }
+
   override def alterTableDataSchema(db: String, table: String, newDataSchema: StructType): Unit = {
     val ct = getTable(db, table)
     val newCt = ct.copy(schema = newDataSchema)
