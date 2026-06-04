@@ -98,7 +98,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
 
-  override def alterUnsafeCatalogTable(ct: CatalogTable): Unit = ???
+  override def alterUnsafeCatalogTable(ct: CatalogTable): Unit = {
+    externalCatalog.alterUnsafeCatalogTable(ct)
+  }
 
 
   override def listTables(namespace: Array[String]): Array[Identifier] = {
