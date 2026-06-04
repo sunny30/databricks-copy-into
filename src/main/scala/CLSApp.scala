@@ -160,4 +160,15 @@ object CLSApp {
     spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
   }
 
+
+  def syncSchema(spark:SparkSession): Unit = {
+    spark.sql("create database cat.ddb11")
+    spark.sql("create table cat.ddb11.t1(id int) using delta location '/tmp/ddt'")
+    spark.sql("insert into cat.ddb11.t1 values (1), (2), (3)")
+
+    spark.sql("create table cat.ddb11.t2 using delta location '/tmp/ddt'")
+    spark.sql("describe formatted cat.ddb11.t2").show()
+
+  }
+
 }
