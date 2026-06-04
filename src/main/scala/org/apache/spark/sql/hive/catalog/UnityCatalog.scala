@@ -24,6 +24,7 @@ import org.apache.spark.sql.delta.sources.DeltaSourceUtils
 import org.apache.spark.sql.errors.{QueryCompilationErrors, QueryExecutionErrors}
 import org.apache.spark.sql.execution.datasources.DataSource
 import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
+import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
@@ -472,7 +473,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
       if (tt == null)
         return null
-      if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
+      var resultTable: Table = null
+      resultTable = if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
         DeltaTableV2(
           SparkSession.active,
           new Path(tt.location),
@@ -492,6 +494,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
           null
         }
       }
+      CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable, loadSecureTable(dbName,tableName),catalogName)
+      resultTable
     }
   }
 
