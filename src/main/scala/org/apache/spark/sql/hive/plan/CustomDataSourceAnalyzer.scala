@@ -751,7 +751,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
           case lr@LogicalRelation(relation, output, catalogTable, isStreaming) =>
             println("Inside Logical Relation " + relation.toString)
-            if(lr.relation.isInstanceOf[DeltaCDFRelation] || lr.getTagValue(resolverTag).isDefined) {
+            if(lr.relation.isInstanceOf[DeltaCDFRelation] || lr.getTagValue(resolverTag).isDefined || CLSUtils.isTimeTravelTagPresentAtLogicalRelation(lr)) {
               lr
             } else {
               lr

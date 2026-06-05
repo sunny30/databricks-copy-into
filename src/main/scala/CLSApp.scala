@@ -171,4 +171,16 @@ object CLSApp {
 
   }
 
+
+  def timeTravel(spark: SparkSession): Unit ={
+    spark.sql("create database cat.ddb12")
+    spark.sql("create table cat.ddb12.t1(id int, cls_a int, cls_b int ) using delta")
+    spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+    spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+    spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+
+    spark.sql("SELECT * FROM cat.ddb12.t1 VERSION AS OF 1").show()
+    spark.sql("SELECT * FROM cat.ddb12.t1").show()
+  }
+
 }

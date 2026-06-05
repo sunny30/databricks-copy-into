@@ -516,6 +516,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         null
       }
     } else {
+      val trueTable = loadTable(ident)
+      val secureTable = loadSecureTable(dbName, tableName)
+      if(!CLSUtils.sameFieldsUnordered(trueTable.schema(), secureTable.schema)){
+        throw new IllegalArgumentException("User with partial permission, not allowed for time travel")
+      }
       tt.provider match {
         case Some(value) => if(value.equalsIgnoreCase("delta")){
           new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(ident, timestamp)

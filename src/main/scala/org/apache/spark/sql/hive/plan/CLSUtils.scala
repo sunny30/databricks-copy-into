@@ -31,6 +31,10 @@ object CLSUtils {
     plan.setTagValue(TreeNodeTag[String](tagKey), "true")
   }
 
+  def isTimeTravelTagPresentAtLogicalRelation(plan: LogicalPlan):Boolean ={
+    plan.getTagValue(TreeNodeTag[String]("delta-time-travel-read")).isDefined
+  }
+
   def tagViewPlan(plan: LogicalPlan):Unit={
     plan.foreach(tagSingleViewPlan)
   }
@@ -140,6 +144,10 @@ object CLSUtils {
       "col-table-sec"
     }
 
+    if (isTimeTravelTagPresentAtLogicalRelation(leafPlan)) {
+      return leafPlan
+    }
+
     val resolver  = SparkSession.active.sessionState.conf.resolver
     if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
       val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
@@ -155,8 +163,8 @@ object CLSUtils {
             resolver(secureAttr.name, outputAttr.name)
           }
 
-     if(sameOutput){
-       leafPlan
+     if(sameOutput || isTimeTravelTagPresentAtLogicalRelation(leafPlan)){
+       return leafPlan
      }else {
        val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
        //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
