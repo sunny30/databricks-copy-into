@@ -330,7 +330,7 @@ class UnityDeltaCatalog(plugin: ExternalSecureCatalog, catalogName: String) exte
         null
       }
     }
-    CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable, plugin.getSecureTable(dbName, tableName), catalogName)
+   // CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable, plugin.getSecureTable(dbName, tableName), catalogName)
     resultTable
   }
 
