@@ -31,6 +31,8 @@ import scala.collection.JavaConverters._
 import org.apache.spark.sql.delta.skipping.clustering.temp.{ClusterByTransform => TempClusterByTransform}
 import org.apache.spark.sql.sources.InsertableRelation
 import org.apache.spark.sql.connector.catalog.TableCapability._
+import org.apache.spark.sql.hive.catalog.cls.ExternalSecureCatalog
+import org.apache.spark.sql.hive.plan.CLSUtils
 
 import java.net.URI
 import java.sql.Timestamp
@@ -41,7 +43,7 @@ import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
-class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends DeltaLogging {
+class UnityDeltaCatalog(plugin: ExternalSecureCatalog, catalogName: String) extends DeltaLogging {
 
 
   def createDeltaTable(
@@ -313,7 +315,9 @@ class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends De
     val tt = plugin.getTable(table = tableName, db = dbName)
     if (tt == null)
       return null
-    if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
+
+    var resultTable: Table =null
+    resultTable = if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
       DeltaTableV2(
         SparkSession.active,
         new Path(tt.location),
@@ -326,6 +330,8 @@ class UnityDeltaCatalog(plugin: ExternalCatalog, catalogName: String) extends De
         null
       }
     }
+   // CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable, plugin.getSecureTable(dbName, tableName), catalogName)
+    resultTable
   }
 
   def loadTable(ident: Identifier, timestamp: Long): Table = {

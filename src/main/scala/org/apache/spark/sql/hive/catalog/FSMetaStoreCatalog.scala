@@ -159,6 +159,13 @@ class FSMetaStoreCatalog(
     }
   }
 
+  override def alterUnsafeCatalogTable(ct: CatalogTable): Unit = {
+    val db = ct.database
+    val table = ct.identifier.table
+    FSMetaStoreCatalog.catalog(db).tables.put(table, new TableDesc(ct))
+    println("proper impl")
+  }
+
   private def isThereSecureColumn(catalogTable: CatalogTable):Boolean={
     catalogTable.schema.fields.toSeq.exists(f => f.name.startsWith("cls_"))
   }

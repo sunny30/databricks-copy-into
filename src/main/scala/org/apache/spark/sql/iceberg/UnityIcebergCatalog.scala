@@ -17,6 +17,7 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.iceberg.catalog.{Catalog, Namespace, TableIdentifier}
 import org.apache.spark.sql.hive.catalog.UnityCatalogUtil
+import org.apache.spark.sql.hive.plan.CLSUtils
 
 import java.util
 import java.util.regex.Pattern
@@ -107,19 +108,26 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
                     properties: util.Map[String, String]): StagedTable = {
     val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
     plugin.createTable(ct, true)
-    icebergCatalog.stageReplace(ident, schema, partitions, properties)
+
+    val resultTable = icebergCatalog.stageReplace(ident, schema, partitions, properties)
+    CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable,ct, catalogName)
+    resultTable
   }
 
   def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
     val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
     plugin.createTable(ct, true)
-    icebergCatalog.stageCreate(ident,schema,partitions,properties)
+    val resultTable = icebergCatalog.stageCreate(ident,schema,partitions,properties)
+    CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable, ct, catalogName)
+    resultTable
   }
 
   def stageCrateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable ={
     val ct = (new UnityCatalogUtil(SparkSession.active)).getCatalogForMetaStore(ident, schema, partitions, properties, catalogName,plugin)
-    plugin.createTable(ct, true)
-    icebergCatalog.stageCreateOrReplace(ident,schema,partitions,properties)
+    plugin.createTable(ct, true) //this is idempotent if already exists
+    val resultTable = icebergCatalog.stageCreateOrReplace(ident,schema,partitions,properties)
+    CLSUtils.syncSchemaAtLoadAndOverWrite(resultTable,ct, catalogName)
+    resultTable
   }
 
   def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit ={
@@ -158,15 +166,22 @@ class UnityIcebergCatalog(plugin: ExternalCatalog, catalogName: String,options: 
     val databaseName = tableIdentifier.namespace().level(0) ;
     val tableName = tableIdentifier.name()
     if(!plugin.tableExists(databaseName, tableName)) {
-      val ct = getMetastoreTable(databaseName,tableName)
+      val ct = getMetastoreTable(databaseName,tableName, metadataFileLocation)
       SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].registerTableInMetastore(ct)
-      icebergCatalog.registerTable(tableIdentifier,metadataFileLocation)
+      val registeredTable = icebergCatalog.registerTable(tableIdentifier,metadataFileLocation)
+      val ident = Identifier.of(Array(databaseName), tableName)
+      val icebergTable = loadTable(ident)
+      val schema = icebergTable.schema()
+
+      SparkSession.active.sessionState.catalogManager.catalog(catalogName).asInstanceOf[TableSchemaChangeCatalog].alterTable(ident, schema)
+      registeredTable
     }else{
       throw new AnalysisException("Table already exists")
     }
   }
 
-  private def getMetastoreTable(databaseName:String, tableName:String):CatalogTable={
+  private def getMetastoreTable(databaseName:String, tableName:String, location:String):CatalogTable={
+
 
     val storage: CatalogStorageFormat = CatalogStorageFormat(None, None, None, None, false, Map.empty[String,String])
     val ct = CatalogTable(

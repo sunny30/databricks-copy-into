@@ -160,4 +160,27 @@ object CLSApp {
     spark.createDataFrame(spark.sparkContext.parallelize(data), schema)
   }
 
+
+  def syncSchema(spark:SparkSession): Unit = {
+    spark.sql("create database cat.ddb11")
+    spark.sql("create table cat.ddb11.t1(id int, cls_a int, cls_b int ) using delta location '/tmp/ddt'")
+    spark.sql("insert into cat.ddb11.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+
+    spark.sql("create table cat.ddb11.t2 using delta location '/tmp/ddt'")
+    spark.sql("describe formatted cat.ddb11.t2").show()
+
+  }
+
+
+  def timeTravel(spark: SparkSession): Unit ={
+    spark.sql("create database cat.ddb12")
+    spark.sql("create table cat.ddb12.t1(id int, cls_a int, cls_b int ) using delta")
+    spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+    spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+    spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
+
+    spark.sql("SELECT * FROM cat.ddb12.t1 VERSION AS OF 1").show()
+    spark.sql("SELECT * FROM cat.ddb12.t1").show()
+  }
+
 }
