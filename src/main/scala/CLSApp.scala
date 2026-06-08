@@ -186,9 +186,9 @@ object CLSApp {
 
 
   def view_avro(spark:SparkSession):Unit={
-    spark.sql("CREATE SCHEMA IF NOT EXISTS catx.teste")
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.teste")
 
-    val raw_table = "cat.pr439_avro_view_raw"
+    val raw_table = "cat.teste.pr439_avro_view_raw"
     val view_name = "cat.teste.pr439_avro_view_star"
 
    // spark.sql(f"DROP VIEW IF EXISTS {view_name}")
@@ -280,7 +280,7 @@ object CLSApp {
     """)
 
     println("3. Read saved view. This is expected to reproduce the issue.")
-    val df = spark.sql(f"SELECT * FROM {view_name}")
+    val df = spark.sql(s"SELECT * FROM ${view_name}")
     df.show()
     df.printSchema()
 

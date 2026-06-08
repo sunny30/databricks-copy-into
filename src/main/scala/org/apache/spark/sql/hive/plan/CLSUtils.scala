@@ -12,6 +12,7 @@ import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.hive.plan.listener.CrossThreadSqlHolder
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 import org.apache.spark.sql.types.StructType
 
@@ -336,6 +337,31 @@ object CLSUtils {
       false//Here we need to put HMSUtils code
     }
   }
+
+
+  def shouldSyncSchemaAtLoad: Boolean = {
+    !isCurrentSqlMergeCommand
+  }
+
+  def isCurrentSqlMergeCommand: Boolean =
+    isMergeCommand(normalizeSqlForCommandDetection(Option(CrossThreadSqlHolder.getSqlText).getOrElse("")))
+
+  def isDeltaMergeAnalysisStack: Boolean =
+    Thread.currentThread().getStackTrace.exists { frame =>
+      frame.getClassName == "org.apache.spark.sql.delta.ResolveDeltaMergeInto$"
+    }
+
+  private def normalizeSqlForCommandDetection(sqlText: String): String = {
+    val withoutLeadingComments = sqlText.trim
+      .replaceFirst("(?s)^(?:/\\*.*?\\*/\\s*)+", "")
+      .replaceFirst("(?m)^(?:--[^\\n]*(?:\\n|$)\\s*)+", "")
+      .trim
+      .toUpperCase(java.util.Locale.ROOT)
+    withoutLeadingComments.stripPrefix("EXPLAIN ").trim
+  }
+
+  private def isMergeCommand(normalizedSql: String): Boolean =
+    normalizedSql.startsWith("MERGE ")
 
 
 
