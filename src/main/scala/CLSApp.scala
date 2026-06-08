@@ -183,4 +183,111 @@ object CLSApp {
     spark.sql("SELECT * FROM cat.ddb12.t1").show()
   }
 
+
+
+  def view_avro(spark:SparkSession):Unit={
+    spark.sql("CREATE SCHEMA IF NOT EXISTS catx.teste")
+
+    val raw_table = "cat.pr439_avro_view_raw"
+    val view_name = "cat.teste.pr439_avro_view_star"
+
+   // spark.sql(f"DROP VIEW IF EXISTS {view_name}")
+ //   spark.sql(f"DROP TABLE IF EXISTS {raw_table}")
+
+    spark.sql(
+      s"""
+    CREATE TABLE ${raw_table} (
+      op_type STRING,
+      `table` STRING,
+      op_ts STRING,
+      current_ts STRING,
+      pos STRING,
+      IDT_TRANSACTION_TRANCOST DOUBLE,
+      IDT_TRANSACTION BIGINT,
+      NUM_TRANSACTION_COST_VALUE DOUBLE,
+      IDT_TRANSACTION_COST BIGINT,
+      IDT_USER_APPLICATION BIGINT,
+      COD_COST STRING,
+      IND_EXTERNAL_SYSTEM BIGINT,
+      DAT_PURGE_REFERENCE STRING,
+      dat_kafka TIMESTAMP,
+      day STRING
+    ) USING AVRO
+    """)
+
+    spark.sql(
+      s"""
+    INSERT INTO ${raw_table} VALUES (
+      'I',
+      'SAFEPAY_ADM.TRANS',
+      '2026-06-02T04:47:00Z',
+      '2026-06-02T04:47:00Z',
+      '1',
+      1.0,
+      10L,
+      2.0,
+      20L,
+      30L,
+      'COST',
+      0L,
+      'PURGE',
+      TIMESTAMP '2026-06-02 04:47:00',
+      '2026-06-02_04_45'
+    )
+    """)
+
+    print("1. Direct Avro query should succeed")
+    spark.sql(
+      s"""
+    SELECT op_type, `table`, current_ts, dat_kafka, day
+    FROM ${raw_table}
+    WHERE day >= '2026-06-02_04_44'
+      AND day <= '2026-06-07_14_45'
+    LIMIT 1
+    """).show()
+
+    print("2. Create saved view")
+    spark.sql(
+      s"""
+    CREATE VIEW ${view_name} AS
+    SELECT curated.*
+    FROM (
+      SELECT
+        CAST(s.op_type AS STRING) AS op_type,
+        CAST(s.`table` AS STRING) AS `table`,
+        CAST(s.op_ts AS STRING) AS op_ts,
+        CAST(s.current_ts AS STRING) AS current_ts,
+        CAST(s.pos AS STRING) AS pos,
+        CAST(s.IDT_TRANSACTION_TRANCOST AS DOUBLE) AS IDT_TRANSACTION_TRANCOST,
+        CAST(s.IDT_TRANSACTION AS BIGINT) AS IDT_TRANSACTION,
+        CAST(s.NUM_TRANSACTION_COST_VALUE AS DOUBLE) AS NUM_TRANSACTION_COST_VALUE,
+        CAST(s.IDT_TRANSACTION_COST AS BIGINT) AS IDT_TRANSACTION_COST,
+        CAST(s.IDT_USER_APPLICATION AS BIGINT) AS IDT_USER_APPLICATION,
+        CAST(s.COD_COST AS STRING) AS COD_COST,
+        CAST(s.IND_EXTERNAL_SYSTEM AS BIGINT) AS IND_EXTERNAL_SYSTEM,
+        CAST(s.DAT_PURGE_REFERENCE AS STRING) AS DAT_PURGE_REFERENCE,
+        to_timestamp(s.dat_kafka) AS dat_kafka,
+        CAST(current_timestamp AS TIMESTAMP) AS dat_import_utc,
+        ROW_NUMBER() OVER (
+          PARTITION BY idt_transaction_trancost
+          ORDER BY current_ts DESC
+        ) AS num
+      FROM ${raw_table} s
+      WHERE day >= '2026-06-02_04_44'
+        AND day <= '2026-06-07_14_45'
+    ) curated
+    WHERE num = 1
+    """)
+
+    println("3. Read saved view. This is expected to reproduce the issue.")
+    val df = spark.sql(f"SELECT * FROM {view_name}")
+    df.show()
+    df.printSchema()
+
+  }
+
+  def withCTE(spark:SparkSession):Unit={
+
+  }
+
 }
