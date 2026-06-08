@@ -180,7 +180,9 @@ object CLSApp {
     spark.sql("insert into cat.ddb12.t1 values (1, 1, 1), (2, 2, 2), (3, 3, 3)")
 
     spark.sql("SELECT * FROM cat.ddb12.t1 VERSION AS OF 1").show()
-    spark.sql("SELECT * FROM cat.ddb12.t1").show()
+    val df = spark.sql("SELECT * FROM cat.ddb12.t1")
+    df.show()
+    df.toJSON.show(10,false)
   }
 
 
@@ -283,6 +285,7 @@ object CLSApp {
     val df = spark.sql(s"SELECT * FROM ${view_name}")
     df.show()
     df.printSchema()
+    df.toJSON.show()
 
   }
 
