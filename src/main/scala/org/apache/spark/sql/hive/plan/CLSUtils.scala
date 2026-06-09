@@ -176,6 +176,21 @@ object CLSUtils {
     }
   }
 
+  def relationExists(multipartIdentifier: Seq[String]): Boolean = {
+    val cat = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    val (catalogName:String, dbName:String, tableName:String) = if (multipartIdentifier.size == 3) {
+      (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
+    } else if (multipartIdentifier.size == 2) {
+      (cat, multipartIdentifier(0), multipartIdentifier(1))
+    } else {
+      (cat, "default", multipartIdentifier(0))
+    }
+    val plugin = SparkSession.active.sessionState.catalogManager.catalog(cat)
+    val ident = Identifier.of(Seq(dbName).toArray, tableName)
+    plugin.asInstanceOf[TableCatalog].tableExists(ident)
+
+  }
+
   def getSecureTableFromMultiPart(multipartIdentifier: Seq[String]): Option[CatalogTable] ={
     val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
     val res = if (multipartIdentifier.size == 3) {

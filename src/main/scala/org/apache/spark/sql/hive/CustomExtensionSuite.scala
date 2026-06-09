@@ -58,7 +58,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectFunction(ModelFunc.fd)
     extensions.injectFunction(FiboIter.fd)
     extensions.injectFunction(FiboFuncIn.fd)
-    extensions.injectPostHocResolutionRule(session => new CLSRestrictedColumnErrorRule(session))
+    //extensions.injectPostHocResolutionRule(session => new CLSRestrictedColumnErrorRule(session))
    // super.apply(extensions)
 
 

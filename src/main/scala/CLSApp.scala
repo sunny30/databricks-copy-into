@@ -291,6 +291,77 @@ object CLSApp {
 
   def withCTE(spark:SparkSession):Unit={
 
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.teste1")
+
+    val raw_table = "cat.teste1.pr439_avro_view_raw"
+    val view_name = "cat.teste1.pr439_avro_view_star"
+
+   // val fullyQualifiedView = s"cat1.default.$viewName"
+
+
+    spark.sql(
+      s"""
+         |CREATE TABLE $raw_table (
+         |  op_type STRING,
+         |  `table` STRING,
+         |  current_ts STRING,
+         |  IDT_TRANSACTION_TRANCOST DOUBLE,
+         |  quantity INT,
+         |  state STRING,
+         |  dat_kafka TIMESTAMP,
+         |  day STRING
+         |) USING PARQUET
+         |TBLPROPERTIES (
+         |  'test.secure.columns' =
+         |  'op_type,table,current_ts,IDT_TRANSACTION_TRANCOST,quantity,state,dat_kafka,day'
+         |)
+         |""".stripMargin)
+    spark.sql(
+      s"""
+         |INSERT INTO $raw_table VALUES
+         |  ('I', 'SAFEPAY_ADM.TRANS', '2026-06-02T04:47:00Z',
+         |   1.25, 2, 'CA', TIMESTAMP '2026-06-02 04:47:00', '2026-06-02_04_45'),
+         |  ('U', 'SAFEPAY_ADM.TRANS', '2026-06-02T04:50:00Z',
+         |   3.75, 1, 'CA', TIMESTAMP '2026-06-02 04:50:00', '2026-06-02_04_50'),
+         |  ('I', 'SAFEPAY_ADM.SETTLE', '2026-06-03T05:01:00Z',
+         |   4.0, 3, 'WA', TIMESTAMP '2026-06-03 05:01:00', '2026-06-03_05_00'),
+         |  ('D', 'SAFEPAY_ADM.TRANS', '2026-06-01T00:00:00Z',
+         |   10.0, 1, 'CA', TIMESTAMP '2026-06-01 00:00:00', '2026-06-01_00_00')
+         |""".stripMargin)
+    val viewSQl = s"""
+       |CREATE VIEW $view_name AS
+       |WITH normalized AS (
+       |  SELECT
+       |    `table`,
+       |    CASE
+       |      WHEN IDT_TRANSACTION_TRANCOST >= 4.0 THEN 'high'
+       |      ELSE 'normal'
+       |    END AS cost_bucket,
+       |    quantity,
+       |    op_type
+       |  FROM $raw_table
+       |  WHERE day >= '2026-06-02_00_00'
+       |),
+       |filtered AS (
+       |  SELECT *
+       |  FROM normalized
+       |  WHERE op_type IN ('I', 'U')
+       |)
+       |SELECT
+       |  cost_bucket,
+       |  `table`,
+       |  COUNT(*) AS event_count,
+       |  SUM(quantity) AS total_quantity
+       |FROM filtered
+       |GROUP BY cost_bucket, `table`
+       |""".stripMargin
+    spark.sql(viewSQl)
+
+    spark.sql(s"describe formatted $view_name").show()
+
+    spark.sql(s"select * from ${view_name}").show()
+
+
   }
 
 }

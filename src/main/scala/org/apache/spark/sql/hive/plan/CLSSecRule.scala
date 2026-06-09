@@ -39,8 +39,13 @@ class CLSSecRule(session: SparkSession)
     case prj: Project if CLSUtils.isViewsPlan(prj) && isViewPlanContainsStar(prj) && prj.child.resolved => descomposeStarInViewTextPlan(prj)
 
     case u@UnresolvedRelation(multipartIdentifier: Seq[String], _, _) if CLSUtils.isViewsPlan(u) =>
-      //CLSUtils.tagViewPlan(u)
-      ViewUnresolvedRelation(u)
+      CLSUtils.tagViewPlan(u)
+      if(CLSUtils.relationExists(multipartIdentifier)) {
+        ViewUnresolvedRelation(u)
+      }else{
+        u
+      }
+    // ViewUnresolvedRelation(u)
 
     case plan: LogicalPlan => plan
   }

@@ -111,6 +111,7 @@ case class NonDefaultCatalogCreateViewCommand(
       throw QueryCompilationErrors.createPersistedViewFromDatasetAPINotAllowedError()
     }
     val queryPlan = CLSUtils.removeSecureProjection(analyzedPlan)
+    println(queryPlan.toString())
     val aliasedSchema = CharVarcharUtils.getRawSchema(
       aliasPlan(session, queryPlan).schema, session.sessionState.conf)
     val newProperties = generateViewProperties(
