@@ -185,7 +185,7 @@ object CLSUtils {
     } else {
       (cat, "default", multipartIdentifier(0))
     }
-    val plugin = SparkSession.active.sessionState.catalogManager.catalog(cat)
+    val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
     val ident = Identifier.of(Seq(dbName).toArray, tableName)
     plugin.asInstanceOf[TableCatalog].tableExists(ident)
 
