@@ -188,7 +188,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     val parsedPlan = SQLConf.withExistingConf(View.effectiveSQLConf(viewConfigs, false)) {
       try {
         CurrentOrigin.withOrigin(origin) {
-          (new SparkSqlParser()).parseQuery(viewText)
+          (new CustomSparkSQLParser()).parseQuery(viewText)
         }
       } catch {
         case _: ParseException =>
@@ -198,8 +198,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     val projectList = getViewColumns(table.v1Table)
     //val secureProjection = getSecureProjectList(projectList, table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
-   // val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
-    val child = Project(projectList, parsedPlan)
+   val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
+    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
 
 //    val details = CLSUtils.getCatalogTableDetails(table)
 //    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
