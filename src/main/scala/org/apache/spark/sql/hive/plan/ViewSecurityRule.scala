@@ -20,7 +20,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 class ViewSecurityRule(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
 
-  override def apply(plan: LogicalPlan): LogicalPlan = plan transformUp{
+  override def apply(plan: LogicalPlan): LogicalPlan = plan transformUpWithSubqueries {
 
     case c:CustomView =>
       c.member
@@ -41,10 +41,11 @@ class ViewSecurityRule(session: SparkSession)
 
 case class CustomView(
                   desc: CatalogTable,
-                  member: LogicalPlan) extends LeafNode {
+                  member: LogicalPlan,
+                  secureOutput: Seq[Attribute]) extends LeafNode {
  // require(!isTempViewStoringAnalyzedPlan || child.resolved)
 
-  override def output: Seq[Attribute] = member.output
+  override def output: Seq[Attribute] = secureOutput
 
   override def metadataOutput: Seq[Attribute] = Nil
 

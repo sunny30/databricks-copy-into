@@ -217,8 +217,11 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     CLSUtils.tagViewPlan(plan = secureViewPlan)
     session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
     println("Returning View")
+
+    println("=== secureViewPlan.output: " +
+      secureViewPlan.output.map(_.name).mkString(", "))
    // View(desc = table.v1Table, isTempView = false, child = newChild)
-    CustomView(desc = table.v1Table,secureViewPlan )
+    CustomView(desc = table.v1Table,secureViewPlan, secureViewPlan.output )
     //val resolvedPlan = session.sharedState.sparkContext.
 
 
