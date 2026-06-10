@@ -364,4 +364,104 @@ object CLSApp {
 
   }
 
+
+  def view_usage_test1(spark: SparkSession): Unit = {
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_view_db")
+    val table1 = "dtbl"
+    val table2 = "ptbl"
+    val tableName1 = "cat.cls_view_db.dtbl"
+    val tableName2 = "cat.cls_view_db.ptbl"
+
+    val viewName1 = "cat.cls_view_db.v_dtbl"
+    val viewName2 = "cat.cls_view_db.v_ptbl"
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName1 (
+         | order_id STRING,
+         | cls_customer_id STRING,
+         | amount DOUBLE,
+         | cls_order_date DATE
+         |) USING delta
+         |PARTITIONED BY (cls_order_date)
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName2 (
+         | order_id STRING,
+         | cls_customer_id STRING,
+         | amount DOUBLE,
+         | cls_order_date DATE
+         |) USING parquet
+         |PARTITIONED BY (cls_order_date)
+         |""".stripMargin)
+
+
+    spark.sql(
+      s"""
+         |INSERT INTO $tableName1 VALUES
+         | ('ORD-001', 'CUST-101', 125.5, DATE '2024-01-10'),
+         | ('ORD-002', 'CUST-102', 75.0, DATE '2024-02-20'),
+         | ('ORD-003', 'CUST-101', 250.0, DATE '2023-12-15'),
+         | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |INSERT INTO $tableName2 VALUES
+         | ('ORD-001', 'CUST-101', 125.5, DATE '2024-01-10'),
+         | ('ORD-002', 'CUST-102', 75.0, DATE '2024-02-20'),
+         | ('ORD-003', 'CUST-101', 250.0, DATE '2023-12-15'),
+         | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
+         |""".stripMargin)
+
+    println("----- Insertion completed -----")
+
+    spark.sql(
+      s"""
+         |CREATE VIEW $viewName1
+         |AS SELECT order_id, cls_customer_id, amount, cls_order_date
+         |FROM $tableName1
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |CREATE VIEW $viewName2
+         |AS SELECT order_id, cls_customer_id, amount, cls_order_date
+         |FROM $tableName2
+         |""".stripMargin)
+
+    println("----- Creation of Views completed -----")
+
+//   // val p = (new SparkSqlParser()).parsePlan(
+//      s"""
+//         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+//         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+//         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
+//         |""".stripMargin)
+
+  //  println("----- Parsing completed -----")
+
+//    val df = spark.sql(
+//      s"""
+//         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+//         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+//         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
+//         |""".stripMargin
+//    )
+
+    val df = spark.sql(
+      s"""
+         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} )
+         |""".stripMargin
+    )
+
+    df.explain(true)
+    df.show()
+
+
+  }
+
 }

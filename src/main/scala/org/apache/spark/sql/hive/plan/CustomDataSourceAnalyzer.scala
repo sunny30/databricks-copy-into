@@ -220,13 +220,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     println("=== secureViewPlan.output: " +
       secureViewPlan.output.map(_.name).mkString(", "))
-   // View(desc = table.v1Table, isTempView = false, child = newChild)
     CustomView(desc = table.v1Table,secureViewPlan, secureViewPlan.output )
-    //val resolvedPlan = session.sharedState.sparkContext.
 
-
-
-    //secureViewPlan
   }
 
 

@@ -92,7 +92,7 @@ object App {
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
-      CLSApp.(spark)
+      CLSApp.view_usage_test1(spark)
 //    spark.sql("create database cat.cls_db")
 //    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 //    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")

@@ -1,12 +1,12 @@
 package org.apache.spark.sql.hive.plan
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedAttribute}
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.catalog.CatalogTable.VIEW_STORING_ANALYZED_PLAN
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
-import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Cast}
+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Cast, ExprId}
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, ShowColumns, UnaryNode, View}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
@@ -20,21 +20,54 @@ import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 class ViewSecurityRule(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
 
-  override def apply(plan: LogicalPlan): LogicalPlan = plan transformUpWithSubqueries {
+  override def apply(plan: LogicalPlan): LogicalPlan = {
 
-    case c:CustomView =>
-      c.member
+    // Pass 1: enforce CLS — CustomView still intact
+    plan.transformUpWithSubqueries {
+      case node: LogicalPlan =>
+        node.children.foreach {
+          case c: CustomView =>
+            val declaredNames = c.desc.schema.fields
+              .map(_.name.toLowerCase).toSet
+            val secureNames = c.secureOutput
+              .map(_.name.toLowerCase).toSet
+            val restrictedNames = declaredNames -- secureNames
 
-    case showDeltaTableColumnsCommand: ShowDeltaTableColumnsCommand =>
-        SecureShowDeltaColumnCommand(showDeltaTableColumnsCommand)
-
-    case cmd @ ShowColumns(child @ ResolvedTable(_, _, table: V2Table, _), namespace, _)  =>
-      SecureShowColumnsCommand(cmd, table)
-
-    case pl: LogicalPlan =>
-        pl
-
+            if (restrictedNames.nonEmpty) {
+              node.expressions.foreach { expr =>
+                expr.foreach {
+                  case u: UnresolvedAttribute =>
+                    val colName = u.nameParts.last.toLowerCase
+                    if (restrictedNames.contains(colName)) {
+                      throw new AnalysisException(
+                        s"Access denied: column '${u.nameParts.last}' " +
+                          s"in view '${c.desc.identifier}'"
+                      )
+                    }
+                  case _ =>
+                }
+              }
+            }
+          case _ =>
+        }
+        node
     }
+
+    // Pass 2: substitute CustomView → member
+    plan.transformUpWithSubqueries {
+      case c: CustomView =>
+        c.member
+
+      case cmd: ShowDeltaTableColumnsCommand =>
+        SecureShowDeltaColumnCommand(cmd)
+
+      case cmd@ShowColumns(
+      child@ResolvedTable(_, _, table: V2Table, _), namespace, _) =>
+        SecureShowColumnsCommand(cmd, table)
+
+      case pl: LogicalPlan => pl
+    }
+  }
 
 }
 
@@ -106,5 +139,48 @@ case class SecureShowColumnsCommand(plan: ShowColumns, v2Table: V2Table) extends
     val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(dbName, tableName)
     val secureColumns = secureCatalogTable.schema.map(f => f.name)
     secureColumns.map{ x => Row(x) }
+  }
+}
+
+
+class EnforceCLSAccess(session: SparkSession) extends Rule[LogicalPlan] {
+
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    println(">>> EnforceCLSAccess firing")
+    println(">>> plan:\n" + plan.treeString)
+
+    plan.transformUpWithSubqueries {
+      // Only check nodes that are DIRECT children of CustomView
+      // i.e. the node sits immediately above a CustomView in the tree
+      case node: LogicalPlan =>
+        node.children.foreach {
+          case c: CustomView =>
+            val secureNames = c.secureOutput
+              .map(_.name.toLowerCase).toSet
+            val memberNames = c.member.output
+              .map(_.name.toLowerCase).toSet
+            val restrictedNames = memberNames -- secureNames
+
+            node.expressions.foreach { expr =>
+              expr.foreach {
+                case attr: AttributeReference
+                  if restrictedNames.contains(attr.name.toLowerCase) =>
+                  throw new AnalysisException(
+                    s"Access denied: column '${attr.name}' " +
+                      s"in view '${c.desc.identifier}'"
+                  )
+                case u: UnresolvedAttribute
+                  if restrictedNames.contains(u.nameParts.last.toLowerCase) =>
+                  throw new AnalysisException(
+                    s"Access denied: column '${u.nameParts.last}' " +
+                      s"in view '${c.desc.identifier}'"
+                  )
+                case _ =>
+              }
+            }
+          case _ =>
+        }
+        node
+    }
   }
 }
