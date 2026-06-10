@@ -442,6 +442,10 @@ object CLSApp {
 
   //  println("----- Parsing completed -----")
 
+    val df = spark.table("cat.cls_view_db.v_ptbl")
+      .filter("order_id is not null")
+      .select("order_id", "cls_customer_id")
+
 //    val df = spark.sql(
 //      s"""
 //         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
@@ -450,13 +454,13 @@ object CLSApp {
 //         |""".stripMargin
 //    )
 
-    val df = spark.sql(
-      s"""
-         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
-         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
-         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} )
-         |""".stripMargin
-    )
+//    val df = spark.sql(
+//      s"""
+//         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+//         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+//         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} )
+//         |""".stripMargin
+//    )
 
     df.explain(true)
     df.show()
