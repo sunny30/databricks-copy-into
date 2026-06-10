@@ -273,7 +273,7 @@ object CLSUtils {
   }
 
   def removeSecureProjection(plan:LogicalPlan):LogicalPlan ={
-    plan.transformUp{
+    plan.transformUpWithSubqueries {
       case project: Project if isSecureTableProjection(project)=>
        removeSecureProjection(project.child)
       case plan: LogicalPlan => plan
