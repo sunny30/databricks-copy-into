@@ -12,6 +12,7 @@ import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
+import org.apache.spark.sql.hive.plan.listener.CrossThreadSqlHolder
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 import org.apache.spark.sql.types.StructType
 
@@ -175,6 +176,21 @@ object CLSUtils {
     }
   }
 
+  def relationExists(multipartIdentifier: Seq[String]): Boolean = {
+    val cat = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    val (catalogName:String, dbName:String, tableName:String) = if (multipartIdentifier.size == 3) {
+      (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
+    } else if (multipartIdentifier.size == 2) {
+      (cat, multipartIdentifier(0), multipartIdentifier(1))
+    } else {
+      (cat, "default", multipartIdentifier(0))
+    }
+    val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+    val ident = Identifier.of(Seq(dbName).toArray, tableName)
+    plugin.asInstanceOf[TableCatalog].tableExists(ident)
+
+  }
+
   def getSecureTableFromMultiPart(multipartIdentifier: Seq[String]): Option[CatalogTable] ={
     val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
     val res = if (multipartIdentifier.size == 3) {
@@ -257,7 +273,7 @@ object CLSUtils {
   }
 
   def removeSecureProjection(plan:LogicalPlan):LogicalPlan ={
-    plan.transformUp{
+    plan.transformUpWithSubqueries {
       case project: Project if isSecureTableProjection(project)=>
        removeSecureProjection(project.child)
       case plan: LogicalPlan => plan
@@ -336,6 +352,31 @@ object CLSUtils {
       false//Here we need to put HMSUtils code
     }
   }
+
+
+  def shouldSyncSchemaAtLoad: Boolean = {
+    !isCurrentSqlMergeCommand
+  }
+
+  def isCurrentSqlMergeCommand: Boolean =
+    isMergeCommand(normalizeSqlForCommandDetection(Option(CrossThreadSqlHolder.getSqlText).getOrElse("")))
+
+  def isDeltaMergeAnalysisStack: Boolean =
+    Thread.currentThread().getStackTrace.exists { frame =>
+      frame.getClassName == "org.apache.spark.sql.delta.ResolveDeltaMergeInto$"
+    }
+
+  private def normalizeSqlForCommandDetection(sqlText: String): String = {
+    val withoutLeadingComments = sqlText.trim
+      .replaceFirst("(?s)^(?:/\\*.*?\\*/\\s*)+", "")
+      .replaceFirst("(?m)^(?:--[^\\n]*(?:\\n|$)\\s*)+", "")
+      .trim
+      .toUpperCase(java.util.Locale.ROOT)
+    withoutLeadingComments.stripPrefix("EXPLAIN ").trim
+  }
+
+  private def isMergeCommand(normalizedSql: String): Boolean =
+    normalizedSql.startsWith("MERGE ")
 
 
 

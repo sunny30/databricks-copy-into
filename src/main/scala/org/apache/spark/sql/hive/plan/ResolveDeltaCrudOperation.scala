@@ -3,14 +3,15 @@ package org.apache.spark.sql.hive.plan
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.ResolvedNamespace
-import org.apache.spark.sql.catalyst.expressions.Expression
-import org.apache.spark.sql.catalyst.plans.logical.{DeleteFromTable, LogicalPlan, MergeIntoTable, SubqueryAlias, UpdateTable}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteFromTable, DeltaMergeInto, InsertAction, InsertStarAction, LogicalPlan, MergeIntoTable, SubqueryAlias, UpdateAction, UpdateStarAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
 import org.apache.spark.sql.delta.DeltaRelation.recordFrameProfile
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
+import org.apache.spark.sql.delta.sources.DeltaSQLConf
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -30,10 +31,20 @@ class ResolveDeltaCrudOperation(session: SparkSession)
       val newQuery = CLSUtils.removeSecureProjection(d.table)
       d.copy(table = newQuery)
 
-    case mergeIntoTable: MergeIntoTable =>
-      val newSource = CLSUtils.removeSecureProjection(mergeIntoTable.sourceTable)
-      val newTarget = CLSUtils.removeSecureProjection(mergeIntoTable.targetTable)
-      mergeIntoTable.copy(sourceTable = newSource, targetTable = newTarget)
+    case m: MergeIntoTable =>
+      val merge = m.copy(
+        targetTable = CLSUtils.getSecureRelation(m.targetTable),
+        sourceTable = CLSUtils.getSecureRelation(m.sourceTable))
+      if (merge.targetTable.resolved && merge.sourceTable.resolved) {
+        expandTargetOnlyMergeStarActions(merge)
+      } else {
+        merge
+      }
+
+    case m: DeltaMergeInto =>
+      m.copy(
+        target = CLSUtils.removeSecureProjection(m.target),
+        source = CLSUtils.removeSecureProjection(m.source))
 
     case u:UpdateTable  =>
       val newQuery = CLSUtils.removeSecureProjection(u.table)
@@ -75,4 +86,45 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     lr.setTagValue(TreeNodeTag[String]("delta-time-travel-read"), "true")
     lr
   }
+
+
+  private def expandTargetOnlyMergeStarActions(merge: MergeIntoTable): MergeIntoTable = {
+    val sourceOutput = merge.sourceTable.output
+    val resolver = session.sessionState.conf.resolver
+
+    def sourceAttrFor(targetAttr: Attribute) =
+      sourceOutput.find(sourceAttr => resolver(sourceAttr.name, targetAttr.name))
+
+    val hasTargetOnlyColumns = merge.targetTable.output.exists(targetAttr => sourceAttrFor(targetAttr).isEmpty)
+    val hasSourceOnlyColumns = sourceOutput.exists { sourceAttr =>
+      !merge.targetTable.output.exists(targetAttr => resolver(targetAttr.name, sourceAttr.name))
+    }
+    val canEvolveSchema = session.sessionState.conf.getConf(DeltaSQLConf.DELTA_SCHEMA_AUTO_MIGRATE)
+
+    if (!hasTargetOnlyColumns || (hasSourceOnlyColumns && canEvolveSchema)) {
+      merge
+    } else {
+      val matchedActions = merge.matchedActions.map {
+        case UpdateStarAction(condition) =>
+          val assignments = merge.targetTable.output.map { targetAttr =>
+            Assignment(targetAttr, sourceAttrFor(targetAttr).getOrElse(targetAttr))
+          }
+          UpdateAction(condition, assignments)
+        case other => other
+      }
+
+      val notMatchedActions = merge.notMatchedActions.map {
+        case InsertStarAction(condition) =>
+          val assignments = merge.targetTable.output.flatMap { targetAttr =>
+            sourceAttrFor(targetAttr).map(sourceAttr => Assignment(targetAttr, sourceAttr))
+          }
+          InsertAction(condition, assignments)
+        case other => other
+      }
+      merge.copy(
+        matchedActions = matchedActions,
+        notMatchedActions = notMatchedActions)
+    }
+  }
+
 }

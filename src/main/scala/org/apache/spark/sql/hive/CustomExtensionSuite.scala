@@ -16,7 +16,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.connector.hudi.HoodieMultiCatalo
 import org.apache.spark.sql.hive.plan.spark.sql.execution.IcebergStrategy
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
-import org.apache.spark.sql.hive.plan.{CLSSecRule, CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, ExternalCatalogWrite, ResolveDeltaCrudOperation, RowLevelFilter, TwoToThreePartRule, ViewSecurityRule}
+import org.apache.spark.sql.hive.plan.{CLSRestrictedColumnErrorRule, CLSSecRule, CustomDataSourceAnalyzer, CustomOptimizedPlan, CustomStrategy, DescribeUnResolvedRelation, DescribeViewRelationRule, EnforceCLSAccess, ExternalCatalogWrite, ResolveDeltaCrudOperation, RowLevelFilter, TwoToThreePartRule, ViewSecurityRule}
 
 class CustomExtensionSuite extends DeltaSparkSessionExtension {
 
@@ -39,6 +39,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectResolutionRule(session => new DescribeViewRelationRule(session))
    // extensions.injectResolutionRule(session => new RowLevelFilter(session))
     extensions.injectResolutionRule(session => new CustomDataSourceAnalyzer(session) )
+   // extensions.injectPostHocResolutionRule(session => new EnforceCLSAccess(session))
     extensions.injectPostHocResolutionRule(session => new ViewSecurityRule(session))
    // extensions.injectOptimizerRule(session=> new ExternalCatalogCutAnalyzer(session))
 
@@ -58,6 +59,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectFunction(ModelFunc.fd)
     extensions.injectFunction(FiboIter.fd)
     extensions.injectFunction(FiboFuncIn.fd)
+    //extensions.injectPostHocResolutionRule(session => new CLSRestrictedColumnErrorRule(session))
    // super.apply(extensions)
 
 

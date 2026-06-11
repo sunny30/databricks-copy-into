@@ -26,6 +26,7 @@ import org.apache.spark.sql.delta.commands.cdc.CDCReader
 import org.apache.spark.sql.delta.commands.cdc.CDCReader.DeltaCDFRelation
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.errors.QueryCompilationErrors
+import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.execution.datasources.csv.CSVFileFormat
 import org.apache.spark.sql.execution.datasources.json.JsonFileFormat
 import org.apache.spark.sql.execution.datasources.{CustomInsertIntoHadoopFsRelationCommand, DataSource, FileFormat, HadoopFsRelation, InsertIntoHadoopFsRelationCommand, LogicalRelation}
@@ -197,7 +198,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     val projectList = getViewColumns(table.v1Table)
     //val secureProjection = getSecureProjectList(projectList, table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
-    val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
+   val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
     val child = Project(projectList, parsedPlanWithoutSecureAttribute)
 
 //    val details = CLSUtils.getCatalogTableDetails(table)
@@ -214,13 +215,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
     val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
     CLSUtils.tagViewPlan(plan = secureViewPlan)
+    session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
     println("Returning View")
-    CustomView(desc = table.v1Table,secureViewPlan )
-    //val resolvedPlan = session.sharedState.sparkContext.
 
+    println("=== secureViewPlan.output: " +
+      secureViewPlan.output.map(_.name).mkString(", "))
+    CustomView(desc = table.v1Table,secureViewPlan, secureViewPlan.output )
 
-
-    //secureViewPlan
   }
 
 
@@ -1130,6 +1131,33 @@ class CustomDataSourceAnalyzer(session: SparkSession)
   def getCatalogDetailsFromInsertIntoHadoopFs(in:InsertIntoHadoopFsRelationCommand):Option[String]={
     in.getTagValue(TreeNodeTag[String]("catalog-details"))
   }
+
+
+//  private def resolveViews(plan: LogicalPlan): LogicalPlan = plan match {
+//    // The view's child should be a logical plan parsed from the `desc.viewText`, the variable
+//    // `viewText` should be defined, or else we throw an error on the generation of the View
+//    // operator.
+//    case view@View(desc, isTempView, child) if !child.resolved =>
+//      // Resolve all the UnresolvedRelations and Views in the child.
+//      val newChild = AnalysisContext.withAnalysisContext(desc) {
+//        val nestedViewDepth = AnalysisContext.get.nestedViewDepth
+//        val maxNestedViewDepth = AnalysisContext.get.maxNestedViewDepth
+//        if (nestedViewDepth > maxNestedViewDepth) {
+//          throw QueryCompilationErrors.viewDepthExceedsMaxResolutionDepthError(
+//            desc.identifier, maxNestedViewDepth, view)
+//        }
+//        SQLConf.withExistingConf(View.effectiveSQLConf(desc.viewSQLConfigs, isTempView)) {
+//          Analyzer.executeSameContext(child)
+//        }
+//      }
+//      // Fail the analysis eagerly because outside AnalysisContext, the unresolved operators
+//      // inside a view maybe resolved incorrectly.
+//      checkAnalysis(newChild)
+//      view.copy(child = newChild)
+//    case p@SubqueryAlias(_, view: View) =>
+//      p.copy(child = resolveViews(view))
+//    case _ => plan
+//  }
 
 
 
