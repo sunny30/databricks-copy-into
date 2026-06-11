@@ -442,9 +442,9 @@ object CLSApp {
 
   //  println("----- Parsing completed -----")
 
-    val df = spark.table("cat.cls_view_db.v_ptbl")
-      .filter("order_id is not null")
-      .select("order_id", "cls_customer_id")
+//    val df = spark.table("cat.cls_view_db.v_ptbl")
+//      .filter("order_id is not null")
+//      .select("order_id", "cls_customer_id")
 
 //    val df = spark.sql(
 //      s"""
@@ -453,6 +453,15 @@ object CLSApp {
 //         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
 //         |""".stripMargin
 //    )
+
+    val df = spark.sql(
+      s"""
+         |SELECT a.cls_customer_id
+         |FROM ${viewName1} a JOIN ${viewName2} b ON a.cls_customer_id = b.cls_customer_id
+         |WHERE a.cls_order_date > (
+         |  SELECT MIN(cls_order_date) FROM ${viewName2} WHERE amount > 100
+         |)
+         |""".stripMargin)
 
 //    val df = spark.sql(
 //      s"""
