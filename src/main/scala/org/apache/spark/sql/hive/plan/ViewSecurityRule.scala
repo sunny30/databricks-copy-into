@@ -59,6 +59,8 @@ class ViewSecurityRule(session: SparkSession)
       case c: CustomView =>
         c.member
 
+      case t: SecureRelationalTable => t.member
+
       case cmd: ShowDeltaTableColumnsCommand =>
         SecureShowDeltaColumnCommand(cmd)
 
