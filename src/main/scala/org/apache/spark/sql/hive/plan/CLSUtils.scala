@@ -170,7 +170,7 @@ object CLSUtils {
      }else {
        val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
        //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
-       analyzed
+
        if (tagKey == "col-table-sec") {
          SecureRelationalTable(
            desc = catalogTable,
@@ -295,12 +295,16 @@ object CLSUtils {
     }
   }
 
-  def getSecureRelation(plan:LogicalPlan):LogicalPlan={
+  def getSecureRelation(plan:LogicalPlan):LogicalPlan= {
 
     if (CLSUtils.isViewTagPresent(plan)) {
       plan
     } else {
-      CLSUtils.getSecureDataSource(plan)
+      val pl = plan match {
+        case t: SecureRelationalTable => t.member
+        case _ => CLSUtils.getSecureDataSource(plan)
+      }
+      pl
     }
   }
 

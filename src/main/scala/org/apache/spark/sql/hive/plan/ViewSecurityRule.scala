@@ -59,7 +59,7 @@ class ViewSecurityRule(session: SparkSession)
       case c: CustomView =>
         c.member
 
-      case t: SecureRelationalTable => t.member
+   //   case t: SecureRelationalTable => t.member
 
       case cmd: ShowDeltaTableColumnsCommand =>
         SecureShowDeltaColumnCommand(cmd)
@@ -72,6 +72,14 @@ class ViewSecurityRule(session: SparkSession)
     }
   }
 
+}
+
+class SecureRelationalTableRule(session: SparkSession) extends Rule[LogicalPlan] {
+  override def apply(plan: LogicalPlan): LogicalPlan =
+    plan.transformUpWithSubqueries {
+      case t: SecureRelationalTable => t.member
+      case pl:LogicalPlan => pl
+    }
 }
 
 
