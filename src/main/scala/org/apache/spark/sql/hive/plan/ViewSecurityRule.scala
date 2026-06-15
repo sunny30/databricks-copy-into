@@ -7,6 +7,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.catalog.CatalogTable.VIEW_STORING_ANALYZED_PLAN
 import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, Cast, ExprId}
+import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Project, ShowColumns, UnaryNode, View}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
@@ -103,6 +104,23 @@ case class CustomView(
 
 //  override protected def withNewChildInternal(newChild: LogicalPlan): CustomView =
 //    copy(child = newChild)
+}
+
+
+case class SecureRelationalTable(
+                                  desc: CatalogTable,
+                                  member: LogicalPlan,         // Project([secure cols], DSv2/LogicalRelation)
+                                  // col-table-sec tag on Project — UNCHANGED
+                                  secureOutput: Seq[Attribute] // = member.output = only permitted columns
+                                ) extends LeafNode {
+
+  override def output: Seq[Attribute] = secureOutput
+  override def innerChildren: Seq[QueryPlan[_]] = Seq(member)
+  override def metadataOutput: Seq[Attribute] = Nil
+
+  override def simpleString(maxFields: Int): String =
+    s"Secure Relational Table " +
+      s"(${desc.identifier}, ${output.map(_.name).mkString("[", ",", "]")})"
 }
 
 

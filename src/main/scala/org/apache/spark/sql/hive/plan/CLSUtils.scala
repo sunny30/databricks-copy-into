@@ -51,7 +51,8 @@ object CLSUtils {
         }else{
           ds
         }
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr, catalogTable.get)
+      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined =>
+        getSecurePlanFromLogicalRelation(lr, catalogTable.get)
       case _ => plan
 
     }
