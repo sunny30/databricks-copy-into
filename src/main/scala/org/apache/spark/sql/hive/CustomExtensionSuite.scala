@@ -33,7 +33,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     }
     (new HoodieMultiCatalogExtension().apply(extensions))
     extensions.injectResolutionRule(session => new ResolveCatalogViews(session))
-    extensions.injectOptimizerRule(session => new SecureRelationalTableRule(session))
+ //   extensions.injectOptimizerRule(session => new SecureRelationalTableRule(session))
     extensions.injectOptimizerRule(session => new TwoToThreePartRule(session))
     extensions.injectResolutionRule(session => new ResolveProcedures(session))
     extensions.injectResolutionRule(session => new DescribeUnResolvedRelation(session))

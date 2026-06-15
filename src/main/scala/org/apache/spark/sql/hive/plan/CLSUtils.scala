@@ -171,15 +171,17 @@ object CLSUtils {
        val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
        //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
 
-       if (tagKey == "col-table-sec") {
-         SecureRelationalTable(
-           desc = catalogTable,
-           member = analyzed, // Project([secure cols], DSv2/LogicalRelation)
-           secureOutput = analyzed.output
-         )
-       }else{
-         analyzed
-       }
+       analyzed
+//       if (tagKey == "col-table-sec") {
+//         analyzed
+////         SecureRelationalTable(
+////           desc = catalogTable,
+////           member = analyzed, // Project([secure cols], DSv2/LogicalRelation)
+////           secureOutput = analyzed.output
+//         )
+//       }else{
+//         analyzed
+//       }
      }
 
     } else {
