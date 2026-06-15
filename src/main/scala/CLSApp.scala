@@ -477,4 +477,59 @@ object CLSApp {
 
   }
 
+  def display_fix(spark:SparkSession):Unit={
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_tbl_db")
+    val tableName1 = "cat.cls_tbl_db.dtbl"
+    val tableName2 = "cat.cls_tbl_db.ptbl"
+
+
+
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName1 (
+         | order_id STRING,
+         | cls_customer_id STRING,
+         | amount DOUBLE,
+         | cls_order_date DATE
+         |) USING delta
+         |PARTITIONED BY (cls_order_date)
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName2 (
+         | order_id STRING,
+         | cls_customer_id STRING,
+         | amount DOUBLE,
+         | cls_order_date DATE
+         |) USING parquet
+         |PARTITIONED BY (cls_order_date)
+         |""".stripMargin)
+
+
+    spark.sql(
+      s"""
+         |INSERT INTO $tableName1 VALUES
+         | ('ORD-001', 'CUST-101', 125.5, DATE '2024-01-10'),
+         | ('ORD-002', 'CUST-102', 75.0, DATE '2024-02-20'),
+         | ('ORD-003', 'CUST-101', 250.0, DATE '2023-12-15'),
+         | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |INSERT INTO $tableName2 VALUES
+         | ('ORD-001', 'CUST-101', 125.5, DATE '2024-01-10'),
+         | ('ORD-002', 'CUST-102', 75.0, DATE '2024-02-20'),
+         | ('ORD-003', 'CUST-101', 250.0, DATE '2023-12-15'),
+         | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
+         |""".stripMargin)
+
+
+    val df = spark.read.table(s"$tableName1")
+    df.explain(true)
+
+
+  }
+
 }

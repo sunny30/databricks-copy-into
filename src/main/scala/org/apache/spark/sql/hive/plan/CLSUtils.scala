@@ -51,7 +51,8 @@ object CLSUtils {
         }else{
           ds
         }
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined => getSecurePlanFromLogicalRelation(lr, catalogTable.get)
+      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined =>
+        getSecurePlanFromLogicalRelation(lr, catalogTable.get)
       case _ => plan
 
     }
@@ -169,8 +170,20 @@ object CLSUtils {
      }else {
        val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
        //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
+
        analyzed
+//       if (tagKey == "col-table-sec") {
+//         analyzed
+////         SecureRelationalTable(
+////           desc = catalogTable,
+////           member = analyzed, // Project([secure cols], DSv2/LogicalRelation)
+////           secureOutput = analyzed.output
+//         )
+//       }else{
+//         analyzed
+//       }
      }
+
     } else {
       leafPlan
     }
@@ -276,16 +289,24 @@ object CLSUtils {
     plan.transformUpWithSubqueries {
       case project: Project if isSecureTableProjection(project)=>
        removeSecureProjection(project.child)
+
+      case t: SecureRelationalTable =>
+        removeSecureProjection(t.member)
+
       case plan: LogicalPlan => plan
     }
   }
 
-  def getSecureRelation(plan:LogicalPlan):LogicalPlan={
+  def getSecureRelation(plan:LogicalPlan):LogicalPlan= {
 
     if (CLSUtils.isViewTagPresent(plan)) {
       plan
     } else {
-      CLSUtils.getSecureDataSource(plan)
+      val pl = plan match {
+        case t: SecureRelationalTable => t.member
+        case _ => CLSUtils.getSecureDataSource(plan)
+      }
+      pl
     }
   }
 
