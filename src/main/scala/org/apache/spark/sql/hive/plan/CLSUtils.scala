@@ -171,7 +171,17 @@ object CLSUtils {
        val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
        //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
        analyzed
+       if (tagKey == "col-table-sec") {
+         SecureRelationalTable(
+           desc = catalogTable,
+           member = analyzed, // Project([secure cols], DSv2/LogicalRelation)
+           secureOutput = analyzed.output
+         )
+       }else{
+         analyzed
+       }
      }
+
     } else {
       leafPlan
     }
@@ -280,7 +290,7 @@ object CLSUtils {
 
       case t: SecureRelationalTable =>
         removeSecureProjection(t.member)
-        
+
       case plan: LogicalPlan => plan
     }
   }
