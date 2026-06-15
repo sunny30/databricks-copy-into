@@ -277,6 +277,10 @@ object CLSUtils {
     plan.transformUpWithSubqueries {
       case project: Project if isSecureTableProjection(project)=>
        removeSecureProjection(project.child)
+
+      case t: SecureRelationalTable =>
+        removeSecureProjection(t.member)
+        
       case plan: LogicalPlan => plan
     }
   }
