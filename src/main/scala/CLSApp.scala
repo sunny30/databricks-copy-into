@@ -532,4 +532,43 @@ object CLSApp {
 
   }
 
+
+  def createDt(sparkSession: SparkSession):Unit={
+    sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.dbx11")
+    val dt = io.delta.tables.hc.DeltaTable.create(sparkSession, "tbl","")
+
+
+
+  }
+
+  def streamDeltaTable(sparkSession: SparkSession):Unit={
+    sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_tbl_db2")
+    val tableName1 = "cat.cls_tbl_db2.dtbl"
+    val tableName2 = "cat.cls_tbl_db.ptbl"
+
+    sparkSession.sql(
+      s"""
+         |CREATE TABLE $tableName1 (
+         | order_id STRING,
+         | customer_id STRING,
+         | amount DOUBLE,
+         | order_date DATE
+         |) USING delta
+         |""".stripMargin)
+
+    sparkSession.sql(
+      s"""
+         |INSERT INTO $tableName1 VALUES
+         | ('ORD-001', 'CUST-101', 125.5, DATE '2024-01-10'),
+         | ('ORD-002', 'CUST-102', 75.0, DATE '2024-02-20'),
+         | ('ORD-003', 'CUST-101', 250.0, DATE '2023-12-15'),
+         | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
+         |""".stripMargin)
+
+    sparkSession.readStream.table(s"$tableName1").show()
+  }
+
+
+
+
 }
