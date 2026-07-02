@@ -477,10 +477,15 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         return null
       var resultTable: Table = null
       resultTable = if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("delta")) {
+        val emptySchemaTable = tt.copy(
+          schema = new StructType(),
+          partitionColumnNames = Seq.empty,
+          bucketSpec = None // BucketSpec also references column names
+        )
         DeltaTableV2(
           SparkSession.active,
           new Path(tt.location),
-          catalogTable = Some(tt),
+          catalogTable = Some(emptySchemaTable),
           tableIdentifier = Some(ident.toString))
       } else if (tt.provider.isDefined && tt.provider.get.equalsIgnoreCase("iceberg")) {
         new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)

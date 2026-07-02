@@ -565,7 +565,19 @@ object CLSApp {
          | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
          |""".stripMargin)
 
-    sparkSession.readStream.table(s"$tableName1").show()
+    val query = sparkSession.readStream
+      .table(tableName1)
+      .writeStream
+      .foreachBatch { (batchDF: DataFrame, batchId: Long) =>
+        println(s"\n=== Streaming Batch $batchId ===")
+        batchDF.show(truncate = false)
+      }
+      .outputMode("append")
+      .option("checkpointLocation", "/tmp/checkpoints/dtbl")
+      .start()
+
+    query.processAllAvailable() // drain all existing data
+    query.stop()
   }
 
 
