@@ -581,6 +581,32 @@ object CLSApp {
   }
 
 
+  def view_create_in_cls(sparkSession: SparkSession): Unit = {
+
+    sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_tbl_db3")
+    val tableName1 = "cat.cls_tbl_db3.dtbl"
+    val viewName = "cat.cls_tbl_db3.vtbl"
+
+    sparkSession.sql(
+      s"""
+         |CREATE TABLE $tableName1 (
+         | order_id STRING,
+         | customer_id STRING,
+         | amount DOUBLE,
+         | order_date DATE
+         |) USING delta
+         |""".stripMargin)
+
+    sparkSession.sql(s"create view ${viewName} as select * from $tableName1")
+    sparkSession.sql(s"select * from ${viewName}").show()
+
+  }
+
+
 
 
 }
+
+
+
+

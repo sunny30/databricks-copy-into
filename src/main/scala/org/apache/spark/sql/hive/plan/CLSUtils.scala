@@ -324,7 +324,7 @@ object CLSUtils {
       case lr@LogicalRelation(relation, output, Some(catalogTable), isStreaming)  =>
         val (catalogName, dbName, tableName) = (catalogTable.identifier.catalog.getOrElse("default"), catalogTable.identifier.database.getOrElse("default"), catalogTable.identifier.table)
         val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-        sameFieldsUnordered(catalogTable.schema, secureTable.schema)
+        sameFieldsUnordered(relation.schema, secureTable.schema)
 
       case u@UnresolvedRelation(multipartIdentifier, options, false) =>
         val (catalogName, dbName, tableName) =if(multipartIdentifier.length == 3){
