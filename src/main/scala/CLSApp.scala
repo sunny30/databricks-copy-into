@@ -544,7 +544,7 @@ object CLSApp {
   def streamDeltaTable(sparkSession: SparkSession):Unit={
     sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_tbl_db2")
     val tableName1 = "cat.cls_tbl_db2.dtbl"
-    val tableName2 = "cat.cls_tbl_db.ptbl"
+    val memoryQueryName = "test_output"
 
     sparkSession.sql(
       s"""
@@ -568,12 +568,9 @@ object CLSApp {
     val query = sparkSession.readStream
       .table(tableName1)
       .writeStream
-      .foreachBatch { (batchDF: DataFrame, batchId: Long) =>
-        println(s"\n=== Streaming Batch $batchId ===")
-        batchDF.show(truncate = false)
-      }
+      .format("memory")
+      .queryName(memoryQueryName) // ← no checkpointLocation needed
       .outputMode("append")
-      .option("checkpointLocation", "/tmp/checkpoints/dtbl")
       .start()
 
     query.processAllAvailable() // drain all existing data
