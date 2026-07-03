@@ -532,4 +532,78 @@ object CLSApp {
 
   }
 
+
+  def createDt(sparkSession: SparkSession):Unit={
+    sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.dbx11")
+    val dt = io.delta.tables.hc.DeltaTable.create(sparkSession, "tbl","")
+
+
+
+  }
+
+  def streamDeltaTable(sparkSession: SparkSession):Unit={
+    sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_tbl_db2")
+    val tableName1 = "cat.cls_tbl_db2.dtbl"
+    val memoryQueryName = "test_output"
+
+    sparkSession.sql(
+      s"""
+         |CREATE TABLE $tableName1 (
+         | order_id STRING,
+         | customer_id STRING,
+         | amount DOUBLE,
+         | order_date DATE
+         |) USING delta
+         |""".stripMargin)
+
+    sparkSession.sql(
+      s"""
+         |INSERT INTO $tableName1 VALUES
+         | ('ORD-001', 'CUST-101', 125.5, DATE '2024-01-10'),
+         | ('ORD-002', 'CUST-102', 75.0, DATE '2024-02-20'),
+         | ('ORD-003', 'CUST-101', 250.0, DATE '2023-12-15'),
+         | ('ORD-004', 'CUST-103', 20.0, DATE '2022-11-03')
+         |""".stripMargin)
+
+    val query = sparkSession.readStream
+      .table(tableName1)
+      .writeStream
+      .format("memory")
+      .queryName(memoryQueryName) // ← no checkpointLocation needed
+      .outputMode("append")
+      .start()
+
+    query.processAllAvailable() // drain all existing data
+    query.stop()
+  }
+
+
+  def view_create_in_cls(sparkSession: SparkSession): Unit = {
+
+    sparkSession.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_tbl_db3")
+    val tableName1 = "cat.cls_tbl_db3.dtbl"
+    val viewName = "cat.cls_tbl_db3.vtbl"
+
+    sparkSession.sql(
+      s"""
+         |CREATE TABLE $tableName1 (
+         | order_id STRING,
+         | customer_id STRING,
+         | amount DOUBLE,
+         | order_date DATE
+         |) USING delta
+         |""".stripMargin)
+
+    sparkSession.sql(s"create view ${viewName} as select * from $tableName1")
+    sparkSession.sql(s"select * from ${viewName}").show()
+
+  }
+
+
+
+
 }
+
+
+
+

@@ -13,4 +13,13 @@ object DeltaTable {
       DeltaTableV2(spark, new Path(path)))
   }
 
+  def create(spark: SparkSession, tbl: String, path: String):DeltaTable={
+    io.delta.tables.DeltaTable.create(spark).tableName(tbl).addColumn("id","INT")
+      .addColumn("name", "String")
+      .addColumn("age", "INT")
+      .partitionedBy("age")
+      .property("description", "Sample Delta Table")
+      .execute()
+  }
+
 }
