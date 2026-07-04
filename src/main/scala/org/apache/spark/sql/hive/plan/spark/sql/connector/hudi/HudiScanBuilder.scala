@@ -54,8 +54,18 @@ class HudiScanBuilder(
   // ─── SupportsPushDownFilters ───────────────────────────────────────────────
 
   override def pushFilters(filters: Array[Filter]): Array[Filter] = {
+    // Previously classified purely by column reference: `extractColumns(f).forall(partitionCols
+    // .contains)`. Any filter passing that check got marked fully-handled (removed from what's
+    // returned to Spark for post-scan reapplication) — but HudiFilterConverter.toCatalyst
+    // couldn't convert every Filter shape (e.g. StringStartsWith/Contains/EndsWith), and used to
+    // silently degrade those to "always true" for pruning. Since Spark had already been told
+    // the filter was handled, that meant rows outside the real predicate leaked through with no
+    // correctness check anywhere. Now also requires HudiFilterConverter.isConvertible(f) before
+    // treating a filter as handled — anything that fails that check is routed to dataFilters
+    // instead, so Spark still enforces it as a residual filter (just not used for pruning).
     val (partFilters, dataFilters) = filters.partition { f =>
-      extractColumns(f).forall(c => partitionCols.contains(c.toLowerCase))
+      extractColumns(f).forall(c => partitionCols.contains(c.toLowerCase)) &&
+        HudiFilterConverter.isConvertible(f)
     }
     pushedPartFilters = partFilters
     unpushedFilters   = dataFilters

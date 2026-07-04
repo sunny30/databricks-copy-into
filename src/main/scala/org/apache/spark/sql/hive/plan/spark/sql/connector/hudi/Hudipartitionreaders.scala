@@ -201,20 +201,34 @@ class HudiMORPartitionReader(
 
   // Eagerly materialise records from scanner into a Map (scanner.scan() is called in builder)
   // In Hudi 1.0.1: getRecords() returns Map<String, HoodieRecord<IndexedRecord>>
+  //
+  // NOTE: previously this did `hudiRecord.getData.asInstanceOf[GenericRecord]` unconditionally,
+  // which throws ClassCastException on a delete tombstone entry (a HoodieEmptyRecord's getData()
+  // is not a GenericRecord). Guarded with collect{} so tombstones are excluded here and picked
+  // up correctly below via deletedKeys instead of crashing the whole read.
   private val logRecordMap: Map[String, GenericRecord] = logScanner match {
     case None    => Map.empty
     case Some(s) =>
-      s.getRecords.asScala.map { case (key, hudiRecord) =>
-        // HoodieRecord.getData() returns the payload; for Avro records it is GenericRecord
-        key -> hudiRecord.getData.asInstanceOf[GenericRecord]
+      s.getRecords.asScala.collect {
+        case (key, hudiRecord)
+          if !hudiRecord.isInstanceOf[HoodieEmptyRecord[_]] && hudiRecord.getData.isInstanceOf[GenericRecord] =>
+          key -> hudiRecord.getData.asInstanceOf[GenericRecord]
       }.toMap
   }
 
-  // Keys explicitly deleted via DELETE_BLOCK in the log
+  // Keys explicitly deleted via DELETE_BLOCK in the log.
+  //
+  // Two things were wrong with the original: (1) it called `rec.getData.isInstanceOf
+  // [HoodieEmptyRecord[_]]` — but HoodieEmptyRecord is a HoodieRecord *subtype* representing the
+  // tombstone itself, never something getData() (the payload accessor) returns, so that check
+  // was always false. (2) my own first attempt at fixing this called scanner.getDeletedKeys(),
+  // which doesn't exist on HoodieMergedLogRecordScanner in this Hudi version — my mistake, that
+  // was an unverified guess and the compiler correctly rejected it. Back to getRecords(), but
+  // testing the HoodieRecord wrapper itself for HoodieEmptyRecord, not its payload.
   private val deletedKeys: Set[String] = logScanner match {
     case None    => Set.empty
     case Some(s) => s.getRecords.asScala.collect {
-      case (key, rec) if rec.getData.isInstanceOf[HoodieEmptyRecord[_]] => key
+      case (key, hudiRecord) if hudiRecord.isInstanceOf[HoodieEmptyRecord[_]] => key
     }.toSet
   }
 
