@@ -82,9 +82,20 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
   }
 
-  override def listTables(namespace: Array[String]): Array[Identifier] = ???
+  override def listTables(namespace: Array[String]): Array[Identifier] = {
 
-  override def loadTable(ident: Identifier): Table = ???
+    namespace match {
+      case Array(f,db) =>
+        val ident = Identifier.of(Array(db), "live_tbl")
+        Array(ident)
+      case _ =>
+        throw QueryCompilationErrors.noSuchNamespaceError(namespace)
+    }
+  }
+
+  override def loadTable(ident: Identifier): Table = {
+    null
+  }
 
   override def createTable(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): Table = ???
 
@@ -101,5 +112,5 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
   }
 
-  override def name(): String = ???
+  override def name(): String = catalogName
 }
