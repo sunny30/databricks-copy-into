@@ -1,12 +1,14 @@
 package org.apache.spark.sql.hive.catalog
 
 import org.apache.spark.sql.AnalysisException
-import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogUtils}
+import org.apache.spark.sql.catalyst.TableIdentifier
+import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTableType, CatalogUtils}
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.QueryCompilationErrors
+import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -94,7 +96,8 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
   }
 
   override def loadTable(ident: Identifier): Table = {
-    null
+    val ct = getLiveTableMetadata(ident)
+    V2Table(ct)
   }
 
   override def createTable(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): Table = ???
@@ -103,13 +106,44 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
   override def dropTable(ident: Identifier): Boolean = ???
 
-  override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = ???
+  override def renameTable(oldIdent: Identifier, newIdent: Identifier): Unit = {
+
+  }
 
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
     log.info("Inside Catalog Plugin Initialize")
     this.catalogName = name
     this.options = options
 
+  }
+
+  private def getLiveTableMetadata(ident:Identifier):CatalogTable={
+    val dbName = ident.namespace()
+    val tableName = ident.name()
+    dbName match {
+      case Array(f,db) =>
+        CatalogTable(
+          identifier = TableIdentifier(ident.name, Some(db), Some(catalogName)),
+          CatalogTableType.EXTERNAL,
+          new CatalogStorageFormat(None, None, None,
+            None, false, Map.empty[String, String]
+          ),
+          new StructType(),
+          provider = Some("custom")
+        )
+      case Array(db) =>
+        CatalogTable(
+          identifier = TableIdentifier(ident.name, Some(db), Some(catalogName)),
+          CatalogTableType.EXTERNAL,
+          new CatalogStorageFormat(None, None, None,
+            None, false, Map.empty[String, String]
+          ),
+          new StructType(),
+          provider = Some("custom")
+        )
+
+      case _ => throw new AnalysisException("table does not exist")
+    }
   }
 
   override def name(): String = catalogName
