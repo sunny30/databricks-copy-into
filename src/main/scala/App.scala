@@ -95,6 +95,9 @@ object App {
 
     spark.sql("show databases in live.f.db").show()
     spark.sql("show tables in live.f.db").show()
+    spark.sql("describe formatted live.f.db.live_tbl").show()
+    spark.sql("select * from live.f.db.live_tbl").show()
+
   //    CLSApp.streamDeltaTable(spark)
 //    spark.sql("create database cat.cls_db")
 //    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")

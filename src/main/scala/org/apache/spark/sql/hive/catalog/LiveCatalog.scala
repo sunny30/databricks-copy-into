@@ -9,7 +9,7 @@ import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import java.util
@@ -120,6 +120,11 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
   private def getLiveTableMetadata(ident:Identifier):CatalogTable={
     val dbName = ident.namespace()
     val tableName = ident.name()
+    val schema = StructType(Seq(
+      StructField("id", StringType, nullable = true),
+      StructField("name", StringType, nullable = true),
+      StructField("age", StringType, nullable = true)
+    ))
     dbName match {
       case Array(f,db) =>
         CatalogTable(
@@ -128,7 +133,7 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
           new CatalogStorageFormat(None, None, None,
             None, false, Map.empty[String, String]
           ),
-          new StructType(),
+          schema,
           provider = Some("custom")
         )
       case Array(db) =>
@@ -138,7 +143,7 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
           new CatalogStorageFormat(None, None, None,
             None, false, Map.empty[String, String]
           ),
-          new StructType(),
+          schema,
           provider = Some("custom")
         )
 

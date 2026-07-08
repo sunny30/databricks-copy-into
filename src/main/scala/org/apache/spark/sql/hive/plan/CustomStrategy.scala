@@ -12,6 +12,7 @@ import scala.collection.JavaConverters._
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits._
 import org.apache.spark.sql.connector.catalog.Table
 import org.apache.spark.sql.execution.datasources.v2.DescribeTableExec
+import org.apache.spark.sql.hive.catalog.UnityCatalog
 
 object CustomStrategy extends Strategy with Serializable  {
 
@@ -29,7 +30,7 @@ object CustomStrategy extends Strategy with Serializable  {
           ()=>None,
           SparkSession.active.sharedState.cacheManager.cacheQuery) :: Nil
 
-      case d:DescribeRelation=>
+      case d@DescribeRelation(r: ResolvedTable,_,_,_)=>
         SecureDescribeTableExec(d)::Nil
 
       case dc@DescribeColumn(r: ResolvedTable, column: Attribute, isExtended, output) =>
