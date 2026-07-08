@@ -40,18 +40,30 @@ object CLSUtils {
     plan.foreach(tagSingleViewPlan)
   }
 
+  def isExternalCatalogTable(catalogTable: CatalogTable):Boolean ={
+    catalogTable.provider.getOrElse("hive").equalsIgnoreCase("custom")
+  }
+
+  def isExternalCatalogTable(table: Table): Boolean = {
+    table match {
+      case v2Table: V2Table =>
+        isExternalCatalogTable(v2Table.v1Table)
+      case _ => false
+    }
+  }
+
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
     if(CLSUtils.isViewsPlan(plan)){
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) && !isExternalCatalogTable(table)  =>
         if(table!=null) {
           getSecurePlanFromDataSourceV2(ds, table)
         }else{
           ds
         }
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined =>
+      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined && !isExternalCatalogTable(catalogTable.get) =>
         getSecurePlanFromLogicalRelation(lr, catalogTable.get)
       case _ => plan
 
@@ -373,6 +385,7 @@ object CLSUtils {
       false//Here we need to put HMSUtils code
     }
   }
+
 
 
   def shouldSyncSchemaAtLoad: Boolean = {

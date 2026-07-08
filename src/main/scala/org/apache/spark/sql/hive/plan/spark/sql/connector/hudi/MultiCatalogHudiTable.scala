@@ -192,6 +192,6 @@ class MultiCatalogHudiTable(
   // These are optimizer-visible logical nodes — AQE, CBO, and predicate pushdown all apply.
 
   override def newRowLevelOperationBuilder(info: RowLevelOperationInfo): RowLevelOperationBuilder =
-    new HudiRowLevelOperationBuilder(spark, metaClient, tableType, tableProps, info)
+    new HudiRowLevelOperationBuilder(spark, metaClient, tableType, tableProps, catalogName, info)
 
 }

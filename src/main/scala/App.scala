@@ -58,6 +58,7 @@ object App {
       .set("spark.sql.statistics.size.autoUpdate.enabled", "true")
       .set("spark.sql.parquet.aggregatePushdown", "true")
       .set("spark.sql.sources.commitProtocolClass","org.apache.spark.sql.hive.plan.spark.sql.connector.manifest.ManifestFileCommitProtocolV5")
+      .set("spark.sql.catalog.live","org.apache.spark.sql.hive.catalog.LiveCatalog")
 //      .set("spark.serializer", "org.apache.spark.serializer.KryoSerializer")
 //      .set("spark.kryo.unsafe", "false")
 //      .set("spark.kryo.registrationRequired", "false")
@@ -92,7 +93,12 @@ object App {
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
-      CLSApp.streamDeltaTable(spark)
+    spark.sql("show databases in live.f.db").show()
+    spark.sql("show tables in live.f.db").show()
+    spark.sql("describe formatted live.f.db.live_tbl").show()
+    spark.sql("select * from live.f.db.live_tbl").show()
+
+  //    CLSApp.streamDeltaTable(spark)
 //    spark.sql("create database cat.cls_db")
 //    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 //    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")

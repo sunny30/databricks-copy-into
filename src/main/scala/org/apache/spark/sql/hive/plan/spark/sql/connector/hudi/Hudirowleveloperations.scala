@@ -37,13 +37,14 @@ class HudiRowLevelOperationBuilder(
                                     metaClient: HoodieTableMetaClient,
                                     tableType: HoodieTableType,
                                     tableProps: Map[String, String],
+                                    catalogName: String,
                                     info: RowLevelOperationInfo
                                   ) extends RowLevelOperationBuilder {   // org.apache.spark.sql.connector.catalog
 
   override def build(): RowLevelOperation = info.command() match {
-    case Command.MERGE  => new HudiMergeOperation(spark, metaClient, tableType, tableProps)
-    case Command.UPDATE => new HudiUpdateOperation(spark, metaClient, tableType, tableProps)
-    case Command.DELETE => new HudiDeleteOperation(spark, metaClient, tableType, tableProps)
+    case Command.MERGE  => new HudiMergeOperation(spark, metaClient, tableType, tableProps, catalogName)
+    case Command.UPDATE => new HudiUpdateOperation(spark, metaClient, tableType, tableProps, catalogName)
+    case Command.DELETE => new HudiDeleteOperation(spark, metaClient, tableType, tableProps, catalogName)
     case other          => throw new UnsupportedOperationException(s"Unsupported command: $other")
   }
 }
@@ -71,7 +72,8 @@ abstract class HudiBaseRowLevelOperation(
                                           spark: SparkSession,
                                           metaClient: HoodieTableMetaClient,
                                           tableType: HoodieTableType,
-                                          tableProps: Map[String, String]
+                                          tableProps: Map[String, String],
+                                          catalogName: String
                                         ) extends RowLevelOperation {
 
   protected lazy val tableSchema: StructType = {
@@ -133,17 +135,16 @@ class HudiMergeOperation(
                           spark: SparkSession,
                           metaClient: HoodieTableMetaClient,
                           tableType: HoodieTableType,
-                          tableProps: Map[String, String]
-                        ) extends HudiBaseRowLevelOperation(spark, metaClient, tableType, tableProps) {
+                          tableProps: Map[String, String],
+                          catalogName: String
+                        ) extends HudiBaseRowLevelOperation(spark, metaClient, tableType, tableProps, catalogName) {
 
   override def command(): Command = Command.MERGE
 
-  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = tableType match {
-    case HoodieTableType.COPY_ON_WRITE =>
-      new HudiCOWMergeWriteBuilder(spark, metaClient, tableProps, info)
-    case HoodieTableType.MERGE_ON_READ =>
-      new HudiMORMergeWriteBuilder(spark, metaClient, tableProps, info)
-  }
+  // SparkRDDWriteClient.upsert()/.delete() already dispatch COW vs MOR internally by reading
+  // metaClient's table type — no need to pick a builder class based on tableType here.
+  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder =
+    new HudiRowLevelWriteBuilder(spark, metaClient, tableType, tableProps, catalogName, info)
 }
 
 // ─── UPDATE ───────────────────────────────────────────────────────────────────
@@ -156,15 +157,14 @@ class HudiUpdateOperation(
                            spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            tableType: HoodieTableType,
-                           tableProps: Map[String, String]
-                         ) extends HudiBaseRowLevelOperation(spark, metaClient, tableType, tableProps) {
+                           tableProps: Map[String, String],
+                           catalogName: String
+                         ) extends HudiBaseRowLevelOperation(spark, metaClient, tableType, tableProps, catalogName) {
 
   override def command(): Command = Command.UPDATE
 
-  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = tableType match {
-    case HoodieTableType.COPY_ON_WRITE => new HudiCOWMergeWriteBuilder(spark, metaClient, tableProps, info)
-    case HoodieTableType.MERGE_ON_READ => new HudiMORMergeWriteBuilder(spark, metaClient, tableProps, info)
-  }
+  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder =
+    new HudiRowLevelWriteBuilder(spark, metaClient, tableType, tableProps, catalogName, info)
 }
 
 // ─── DELETE ───────────────────────────────────────────────────────────────────
@@ -178,13 +178,12 @@ class HudiDeleteOperation(
                            spark: SparkSession,
                            metaClient: HoodieTableMetaClient,
                            tableType: HoodieTableType,
-                           tableProps: Map[String, String]
-                         ) extends HudiBaseRowLevelOperation(spark, metaClient, tableType, tableProps) {
+                           tableProps: Map[String, String],
+                           catalogName: String
+                         ) extends HudiBaseRowLevelOperation(spark, metaClient, tableType, tableProps, catalogName) {
 
   override def command(): Command = Command.DELETE
 
-  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder = tableType match {
-    case HoodieTableType.COPY_ON_WRITE => new HudiCOWMergeWriteBuilder(spark, metaClient, tableProps, info)
-    case HoodieTableType.MERGE_ON_READ => new HudiMORMergeWriteBuilder(spark, metaClient, tableProps, info)
-  }
+  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder =
+    new HudiRowLevelWriteBuilder(spark, metaClient, tableType, tableProps, catalogName, info)
 }

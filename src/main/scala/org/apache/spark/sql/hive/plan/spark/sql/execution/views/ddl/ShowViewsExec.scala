@@ -4,7 +4,7 @@ import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
-import org.apache.spark.sql.catalyst.catalog.CatalogTableType
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.{DescribeColumn, DescribeRelation, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.{CharVarcharUtils, ResolveDefaultColumns, StringUtils, quoteIfNeeded}
@@ -100,8 +100,16 @@ case class SecureDescribeTableExec(describeTableExec: DescribeRelation) extends 
     }
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
-    val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(d, t)
-    val secureV2Table = V2Table(secureCatalogTable)
+    val secureCatalogTable =
+      plugin match {
+        case catalog: TableSchemaChangeCatalog =>
+          catalog.loadSecureTable(d, t)
+        case _ => plugin.asInstanceOf[TableCatalog].loadTable(Identifier.of(Array(d), t))
+      }
+    val secureV2Table = secureCatalogTable match {
+      case v2Table: V2Table => v2Table
+      case catalogTable: CatalogTable =>V2Table(catalogTable)
+    }
    // describeTableExec.copy(table = secureV2Table).run()
    val rows = new ArrayBuffer[InternalRow]()
     addSchema(rows,secureV2Table)

@@ -183,12 +183,17 @@ class HudiMORScan(
   private def planSnapshot(): Array[InputPartition] = {
     val catalystFilters = partFilters.map(HudiFilterConverter.toCatalyst).toSeq
     fileIndex.listFiles(catalystFilters, Seq.empty).flatMap { partDir =>
+      // Previously: partitionPath = partDir.values.toString — that stringifies the raw
+      // InternalRow (a debug-ish representation, not a path) rather than resolving the actual
+      // relative partition path the way planRealtime() does below via
+      // resolveRelativePartitionPath. Fixed to use the same helper for consistency.
+      val relPartPath = resolveRelativePartitionPath(partDir.files.map(_.fileStatus).toArray)
       partDir.files.map { status =>
         HudiMORPartition(
           basePath          = Some(status.getPath.toString),
           logPaths          = Array.empty,
           fileGroupId       = fileGroupIdFromName(status.getPath.getName),
-          partitionPath     = partDir.values.toString,
+          partitionPath     = relPartPath,
           latestInstantTime = latestInstant,
           fileSize          = status.getLen
         )
@@ -293,6 +298,32 @@ object HudiFilterConverter {
   import org.apache.spark.sql.catalyst.expressions._
   import org.apache.spark.sql.sources._
 
+  /**
+   * Whether toCatalyst can actually convert this filter. HudiScanBuilder.pushFilters must call
+   * this (not just check column references) before classifying a filter as a handled partition
+   * filter — otherwise a partition-only filter of an unconvertible shape (e.g. StringStartsWith)
+   * gets marked "pushed"/fully-handled, Spark never reapplies it as a residual check, and
+   * toCatalyst's old `case _ => Literal(true)` fallback silently turned it into "no constraint" —
+   * rows from partitions that should've been excluded would leak into the result. That's a
+   * correctness/security gap for a framework whose whole point is row/column-level enforcement,
+   * not just a pruning inefficiency, so we now fail loudly here instead of passing through.
+   */
+  def isConvertible(filter: Filter): Boolean = filter match {
+    case org.apache.spark.sql.sources.EqualTo(_, _)            => true
+    case org.apache.spark.sql.sources.EqualNullSafe(_, _)       => true
+    case org.apache.spark.sql.sources.GreaterThan(_, _)         => true
+    case org.apache.spark.sql.sources.GreaterThanOrEqual(_, _)  => true
+    case org.apache.spark.sql.sources.LessThan(_, _)            => true
+    case org.apache.spark.sql.sources.LessThanOrEqual(_, _)     => true
+    case org.apache.spark.sql.sources.In(_, _)                  => true
+    case org.apache.spark.sql.sources.IsNull(_)                 => true
+    case org.apache.spark.sql.sources.IsNotNull(_)              => true
+    case org.apache.spark.sql.sources.And(left, right)          => isConvertible(left) && isConvertible(right)
+    case org.apache.spark.sql.sources.Or(left, right)            => isConvertible(left) && isConvertible(right)
+    case org.apache.spark.sql.sources.Not(child)                => isConvertible(child)
+    case _                                                       => false
+  }
+
   def toCatalyst(filter: Filter): Expression = filter match {
     case org.apache.spark.sql.sources.EqualTo(attr,value)            => expressions.EqualTo(col(attr), Literal(value))
     case org.apache.spark.sql.sources.EqualNullSafe(attr, value)      => expressions.EqualNullSafe(col(attr), Literal(value))
@@ -306,7 +337,17 @@ object HudiFilterConverter {
     case org.apache.spark.sql.sources.And(left, right)               => expressions.And(toCatalyst(left), toCatalyst(right))
     case org.apache.spark.sql.sources.Or(left, right)                => expressions.Or(toCatalyst(left), toCatalyst(right))
     case org.apache.spark.sql.sources.Not(child)                     => expressions.Not(toCatalyst(child))
-    case _                              => Literal(true) // unsupported → pass-through
+    // Previously: `case _ => Literal(true)`. HudiScanBuilder now only classifies a filter as a
+    // pushed/handled partition filter when isConvertible(filter) is true, so this should be
+    // unreachable — kept as a fail-loud safety net rather than silently granting "no constraint"
+    // in case that classification is ever bypassed.
+    case other =>
+      throw new UnsupportedOperationException(
+        s"HudiFilterConverter cannot convert filter $other to a Catalyst expression for " +
+          "partition pruning. This should have been caught by isConvertible() and treated as " +
+          "a data filter instead — if you're seeing this, HudiScanBuilder's classification and " +
+          "this converter have gone out of sync."
+      )
   }
 
   private def col(name: String): UnresolvedAttribute = UnresolvedAttribute(name)
