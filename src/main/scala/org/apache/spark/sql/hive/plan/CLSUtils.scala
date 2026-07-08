@@ -44,12 +44,20 @@ object CLSUtils {
     catalogTable.provider.getOrElse("hive").equalsIgnoreCase("custom")
   }
 
+  def isExternalCatalogTable(table: Table): Boolean = {
+    table match {
+      case v2Table: V2Table =>
+        isExternalCatalogTable(v2Table.v1Table)
+      case _ => false
+    }
+  }
+
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
     if(CLSUtils.isViewsPlan(plan)){
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) && !isExternalCatalogTable(table)  =>
         if(table!=null) {
           getSecurePlanFromDataSourceV2(ds, table)
         }else{
@@ -377,6 +385,7 @@ object CLSUtils {
       false//Here we need to put HMSUtils code
     }
   }
+
 
 
   def shouldSyncSchemaAtLoad: Boolean = {
