@@ -40,6 +40,10 @@ object CLSUtils {
     plan.foreach(tagSingleViewPlan)
   }
 
+  def isExternalCatalogTable(catalogTable: CatalogTable):Boolean ={
+    catalogTable.provider.getOrElse("hive").equalsIgnoreCase("custom")
+  }
+
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
     if(CLSUtils.isViewsPlan(plan)){
       return plan
@@ -51,7 +55,7 @@ object CLSUtils {
         }else{
           ds
         }
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined =>
+      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined && !isExternalCatalogTable(catalogTable.get) =>
         getSecurePlanFromLogicalRelation(lr, catalogTable.get)
       case _ => plan
 
