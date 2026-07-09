@@ -1,18 +1,30 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import io.delta.sql.parser.DeltaSqlAstBuilder
+import org.apache.iceberg.spark.ExtendedParser
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
+import org.apache.spark.sql.catalyst.parser.extensions.IcebergSparkSqlExtensionsParser
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, CreateView, LogicalPlan}
 import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.hive.parser.CustomSqlParser
 import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.NonDefaultCatalogCreateViewCommand
 import org.xbill.DNS.ZoneTransferIn.Delta
+import java.util.{List => JList}
+
+import java.util
 
 
-class CustomSparkSQLParser extends SparkSqlParser{
+class CustomSparkSQLParser extends SparkSqlParser with ExtendedParser{
+
+  override def parseSortOrder(orderString: String): JList[ExtendedParser.RawOrderField] = {
+    // Delegate to Iceberg's own parser — it knows how to parse
+    // "col ASC NULLS LAST", "zorder(col1, col2)" etc.
+    // We instantiate it with `this` as delegate so the chain is preserved.
+    new IcebergSparkSqlExtensionsParser(this).parseSortOrder(orderString)
+  }
 
   override val astBuilder = new CustomAstBuilder()
   private val deltaSqlAstBuilder = new DeltaSqlAstBuilder()
@@ -42,7 +54,11 @@ class CustomSparkSQLParser extends SparkSqlParser{
 }
 
 
-object CustomSparkSQLParser extends SparkSqlParser{
+object CustomSparkSQLParser extends SparkSqlParser with ExtendedParser{
+
+  override def parseSortOrder(orderString: String): java.util.List[ExtendedParser.RawOrderField] =
+    new IcebergSparkSqlExtensionsParser(new SparkSqlParser())
+      .parseSortOrder(orderString)
 
   override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
 
