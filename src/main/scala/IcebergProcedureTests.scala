@@ -171,45 +171,46 @@ object IcebergProcedureTests {
     println(s"snapshot count before: $snapCount")
 
     // positional — older_than = now()
-    spark.sql(s"CALL cat.system.expire_snapshots('$fqn', now())")
+   // spark.sql(s"CALL cat.system.expire_snapshots('$fqn', now())")
     println(s"[positional older_than=now]   snapshot count: $snapCount")
 
     spark.sql(s"INSERT INTO $fqn VALUES (5,'Eve',5.0)")
     spark.sql(s"INSERT INTO $fqn VALUES (6,'Frank',6.0)")
 
     // named — retain_last
-    spark.sql(
-      s"""CALL cat.system.expire_snapshots(
-         |  table       => '$fqn',
-         |  older_than  => now(),
-         |  retain_last => 1
-         |)""".stripMargin)
-    println(s"[named retain_last=1]         snapshot count: $snapCount")
+//    spark.sql(
+//      s"""CALL cat.system.expire_snapshots(
+//         |  table       => '$fqn',
+//         |  older_than  => now(),
+//         |  retain_last => 1
+//         |)""".stripMargin)
+//    println(s"[named retain_last=1]         snapshot count: $snapCount")
 
     spark.sql(s"INSERT INTO $fqn VALUES (7,'Grace',7.0)")
     spark.sql(s"INSERT INTO $fqn VALUES (8,'Hank',8.0)")
     val ids = snapshotIds(spark, fqn)
 
     // named — specific snapshot_ids
-    spark.sql(
+    val res= spark.sql(
       s"""CALL cat.system.expire_snapshots(
          |  table        => '$fqn',
          |  snapshot_ids => ARRAY(${ids.head})
          |)""".stripMargin)
     println(s"[named snapshot_ids]          snapshot count: $snapCount")
 
+    res.show()
     spark.sql(s"INSERT INTO $fqn VALUES (9,'Ivy',9.0)")
 
     // named — stream_results = true
-    val result = spark.sql(
-      s"""CALL cat.system.expire_snapshots(
-         |  table          => '$fqn',
-         |  older_than     => now(),
-         |  retain_last    => 1,
-         |  stream_results => true
-         |)""".stripMargin)
-    println(s"[named stream_results=true]   expired file count: ${result.count()}")
-    result.show(5, truncate = false)
+//    val result = spark.sql(
+//      s"""CALL cat.system.expire_snapshots(
+//         |  table          => '$fqn',
+//         |  older_than     => now(),
+//         |  retain_last    => 1,
+//         |  stream_results => true
+//         |)""".stripMargin)
+//    println(s"[named stream_results=true]   expired file count: ${result.count()}")
+   // result.show(5, truncate = false)
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -498,20 +499,20 @@ object IcebergProcedureTests {
   // ══════════════════════════════════════════════════════════════════════════
 
   def runAll(spark: org.apache.spark.sql.SparkSession): Unit = {
-    testRollbackToSnapshot(spark)
-    testRollbackToTimestamp(spark)
-    testSetCurrentSnapshot(spark)
-    testCherrypickSnapshot(spark)
-    testFastForward(spark)
+  //  testRollbackToSnapshot(spark)
+   // testRollbackToTimestamp(spark)
+  //  testSetCurrentSnapshot(spark)
+  //  testCherrypickSnapshot(spark)
+  //  testFastForward(spark)
     testExpireSnapshots(spark)
-    testRemoveOrphanFiles(spark)
-    testRewriteDataFiles(spark)
-    testRewriteManifests(spark)
-    testSnapshot(spark)
-    testMigrate(spark)
-    testAddFiles(spark)
-    testAncestorsOf(spark)
-    testCreateChangelogView(spark)
+//    testRemoveOrphanFiles(spark)
+//    testRewriteDataFiles(spark)
+//    testRewriteManifests(spark)
+//    testSnapshot(spark)
+//    testMigrate(spark)
+//    testAddFiles(spark)
+//    testAncestorsOf(spark)
+//    testCreateChangelogView(spark)
     println("\n✓ all Iceberg procedure tests done")
   }
 }

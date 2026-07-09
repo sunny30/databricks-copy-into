@@ -93,6 +93,7 @@ object App {
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
+    IcebergProcedureTests.runAll(spark)
 //    spark.sql("show databases in live.f.db").show()
 //    spark.sql("show tables in live.f.db").show()
 //    spark.sql("describe formatted live.f.db.live_tbl").show()

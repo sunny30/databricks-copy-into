@@ -52,13 +52,25 @@ object CLSUtils {
     }
   }
 
+  def shouldApplyCLSonDSV2Table(table: Table):Boolean = {
+    table match {
+      case v2Table: V2Table =>
+        !isExternalCatalogTable(v2Table)
+      case sparkTable: SparkTable =>
+        val parsedIcebergIdent = org.apache.iceberg.catalog.TableIdentifier.parse(sparkTable.name())
+        val metadataTable = org.apache.iceberg.MetadataTableUtils.hasMetadataTableName(parsedIcebergIdent)
+        !metadataTable
+      case _ => true
+    }
+  }
+
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
     if(CLSUtils.isViewsPlan(plan)){
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) && !isExternalCatalogTable(table)  =>
-        if(table!=null) {
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
+        if(table!=null && shouldApplyCLSonDSV2Table(table)) {
           getSecurePlanFromDataSourceV2(ds, table)
         }else{
           ds
@@ -237,6 +249,9 @@ object CLSUtils {
 
   def getSecureColumns(multipartIdentifier: Seq[String]):Option[Seq[String]]={
 
+    if(multipartIdentifier.size>3){
+      return None
+    }
     val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
     val res = if (multipartIdentifier.size == 3) {
       (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
