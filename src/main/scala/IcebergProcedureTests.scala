@@ -338,6 +338,8 @@ object IcebergProcedureTests {
     spark.sql("CALL cat.system.snapshot('cat.ice_db10.src', 'cat.ice_db10.ice_snap1')")
     println(s"[positional] count: ${count(spark, "cat.ice_db10.ice_snap1")}")
 
+    spark.sql("select * from cat.ice_db10.ice_snap1").show()
+
     spark.sql("DROP TABLE IF EXISTS cat.ice_db10.ice_snap2")
 
     // named — with explicit location
@@ -348,6 +350,7 @@ object IcebergProcedureTests {
          |  location     => '/tmp/ice_snap2'
          |)""".stripMargin)
     println(s"[named location] count: ${count(spark, "cat.ice_db10.ice_snap2")}")
+    spark.sql("select * from cat.ice_db10.ice_snap2").show()
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -506,10 +509,10 @@ object IcebergProcedureTests {
   //  testFastForward(spark)
  //   testExpireSnapshots(spark)
 //    testRemoveOrphanFiles(spark)
-    testRewriteDataFiles(spark)
+//    testRewriteDataFiles(spark)
 //    testRewriteManifests(spark)
-//    testSnapshot(spark)
-//    testMigrate(spark)
+ //   testSnapshot(spark)
+    testMigrate(spark)
 //    testAddFiles(spark)
 //    testAncestorsOf(spark)
 //    testCreateChangelogView(spark)
