@@ -512,9 +512,9 @@ object IcebergProcedureTests {
 //    testRewriteDataFiles(spark)
 //    testRewriteManifests(spark)
  //   testSnapshot(spark)
-    testMigrate(spark)
-//    testAddFiles(spark)
-//    testAncestorsOf(spark)
+ //   testMigrate(spark)
+  //  testAddFiles(spark)
+    testAncestorsOf(spark)
 //    testCreateChangelogView(spark)
     println("\n✓ all Iceberg procedure tests done")
   }
