@@ -4,6 +4,7 @@ import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, MetadataAttribute}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
@@ -162,6 +163,35 @@ object CLSUtils {
     getSecureLeafPlan(secureCatalogTable, view)
   }
 
+
+  private def isHiddenColumn(attr: Attribute): Boolean = {
+    // Delta file metadata columns
+    // tagged with __metadata_col or __file_source_metadata_col in metadata
+    val isDeltaMetadata =
+    attr.metadata.contains("__metadata_col") ||
+      attr.metadata.contains("__file_source_metadata_col")
+
+    // Iceberg hidden columns
+    // tagged with __internal_metadata_col
+    val isIcebergMetadata =
+    attr.metadata.contains("__internal_metadata_col")
+
+    // Spark's general metadata column marker
+    // works for both Delta and Iceberg in Spark 3.5.0
+    val isMetadataCol =
+    try {
+      // MetadataAttribute.METADATA_COL_ATTR_KEY = "metadata_col"
+      attr.metadata.getBoolean(org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY)
+    } catch {
+      case _: NoSuchElementException => false
+    }
+
+    isDeltaMetadata || isIcebergMetadata || isMetadataCol
+  }
+
+  private def userVisibleOutput(plan: LogicalPlan): Seq[Attribute] =
+    plan.output.filterNot(isHiddenColumn)
+
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
     val tagKey = if(catalogTable.tableType == CatalogTableType.VIEW){
@@ -183,9 +213,12 @@ object CLSUtils {
       val prj = Project(secureAttributes, leafPlan)
       prj.setTagValue(TreeNodeTag[String](tagKey), "true")
 
+
+      val userOutput = userVisibleOutput(leafPlan)
+
       val sameOutput =
-        secureAttributes.size == leafPlan.output.size &&
-          secureAttributes.zip(leafPlan.output).forall { case (secureAttr, outputAttr) =>
+        secureAttributes.size == userOutput.size &&
+          secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
             resolver(secureAttr.name, outputAttr.name)
           }
 

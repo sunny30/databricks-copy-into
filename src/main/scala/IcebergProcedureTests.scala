@@ -497,6 +497,19 @@ object IcebergProcedureTests {
     spark.sql("SELECT * FROM changelog_v3").show(truncate = false)
   }
 
+  def runDeltaChangeReader(spark: org.apache.spark.sql.SparkSession):Unit={
+    spark.sql("create database cat.deldb")
+    spark.sql("create table cat.deldb.t(id int)  using delta TBLPROPERTIES(delta.enableChangeDataFeed=true)")
+    spark.sql("insert into cat.deldb.t values(1)")
+    spark.sql("insert into cat.deldb.t values(2)")
+    spark.sql("insert into cat.deldb.t values(3)")
+
+    val df = spark.read.option("readChangeFeed", "true").option("startingVersion",0).
+      option("endingVerion",2).table("cat.deldb.t")
+
+    df.show()
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // run all
   // ══════════════════════════════════════════════════════════════════════════
@@ -514,8 +527,12 @@ object IcebergProcedureTests {
  //   testSnapshot(spark)
  //   testMigrate(spark)
   //  testAddFiles(spark)
-    testAncestorsOf(spark)
+   // testAncestorsOf(spark)
 //    testCreateChangelogView(spark)
+    runDeltaChangeReader(spark)
+
     println("\n✓ all Iceberg procedure tests done")
   }
+
+
 }
