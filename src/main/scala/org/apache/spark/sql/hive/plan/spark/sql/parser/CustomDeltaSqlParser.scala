@@ -31,7 +31,7 @@ class CustomDeltaSqlParser(val delegate: CustomSparkSQLParser) extends ParserInt
         try {
           delegate.parserSparkSQLPlan(sqlText)
         }catch {
-          case e:Exception => new HudiIcebergParser(delegate).parsePlan(sqlText)
+          case e:Exception => new SparkSqlParser().parsePlan(sqlText)
         }
     }
   }

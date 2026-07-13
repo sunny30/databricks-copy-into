@@ -520,7 +520,7 @@ object IcebergProcedureTests {
   //  testSetCurrentSnapshot(spark)
   //  testCherrypickSnapshot(spark)
   //  testFastForward(spark)
- //   testExpireSnapshots(spark)
+    testExpireSnapshots(spark)
 //    testRemoveOrphanFiles(spark)
 //    testRewriteDataFiles(spark)
 //    testRewriteManifests(spark)
@@ -529,7 +529,7 @@ object IcebergProcedureTests {
   //  testAddFiles(spark)
    // testAncestorsOf(spark)
 //    testCreateChangelogView(spark)
-    runDeltaChangeReader(spark)
+    //runDeltaChangeReader(spark)
 
     println("\n✓ all Iceberg procedure tests done")
   }

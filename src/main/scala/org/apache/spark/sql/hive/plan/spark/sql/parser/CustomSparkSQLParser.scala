@@ -4,6 +4,7 @@ import io.delta.sql.parser.DeltaSqlAstBuilder
 import org.apache.iceberg.spark.ExtendedParser
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
+import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.extensions.IcebergSparkSqlExtensionsParser
 import org.apache.spark.sql.catalyst.plans.logical.{CreateTableAsSelect, CreateView, LogicalPlan}
@@ -11,9 +12,10 @@ import org.apache.spark.sql.execution.SparkSqlParser
 import org.apache.spark.sql.hive.parser.CustomSqlParser
 import org.apache.spark.sql.hive.plan.listener.{CatalogQueryExecutionListener, ListenerUtil}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.NonDefaultCatalogCreateViewCommand
+import org.apache.spark.sql.types.{DataType, StructType}
 import org.xbill.DNS.ZoneTransferIn.Delta
-import java.util.{List => JList}
 
+import java.util.{List => JList}
 import java.util
 
 
@@ -28,9 +30,18 @@ class CustomSparkSQLParser extends SparkSqlParser with ExtendedParser{
 
   override val astBuilder = new CustomAstBuilder()
   private val deltaSqlAstBuilder = new DeltaSqlAstBuilder()
+  private val icebergSqlParser = new CustomIcebergSqlParser(this)
 
   override def parsePlan(sqlText: String): LogicalPlan = {
-    (new CustomDeltaSqlParser(this)).parsePlan(sqlText)
+    if(icebergSqlParser.isIcebergCommand(sqlText)){
+      icebergSqlParser.parsePlan(sqlText)
+    }else if(icebergSqlParser.isIcebergProcedure(sqlText)){
+      return new org.apache.spark.sql.catalyst.parser.extensions
+      .IcebergSparkSqlExtensionsParser(new SparkSqlParser())
+        .parsePlan(sqlText)
+    }else {
+      (new CustomDeltaSqlParser(this)).parsePlan(sqlText)
+    }
   }
 
 
@@ -60,12 +71,24 @@ object CustomSparkSQLParser extends SparkSqlParser with ExtendedParser{
     new IcebergSparkSqlExtensionsParser(new SparkSqlParser())
       .parseSortOrder(orderString)
 
-  override def parsePlan(sqlText: String): LogicalPlan = parse(sqlText) { parser =>
+  override def parsePlan(sqlText: String): LogicalPlan = {
 
     SparkSession.active.conf.set("spark.sql.catalog.cat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     SparkSession.active.conf.set("spark.sql.catalog.ecat", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     SparkSession.active.conf.set("spark.sql.catalog.hive", "org.apache.spark.sql.hive.catalog.UnityCatalog")
     val delegate = new CustomSparkSQLParser()
+    val icebergSqlParser = new CustomIcebergSqlParser(delegate)
+
+    if(icebergSqlParser.isIcebergProcedure(sqlText)){
+      return new org.apache.spark.sql.catalyst.parser.extensions
+      .IcebergSparkSqlExtensionsParser(new SparkSqlParser())
+        .parsePlan(sqlText)
+    }
+
+    if (icebergSqlParser.isIcebergCommand(sqlText)) {
+      return icebergSqlParser.parsePlan(sqlText)
+    }
+
     new CustomSqlParser(delegate).parse(sqlText) match {
       case plan: LogicalPlan =>
         plan match {
@@ -112,6 +135,23 @@ object CustomSparkSQLParser extends SparkSqlParser with ExtendedParser{
       val mp:Seq[String] = Seq(catalogName,"default", u.multipartIdentifier.head)
       u.copy(multipartIdentifier = mp)
     }
+  }
+
+  override def parseExpression(sqlText: String): Expression = {
+    val delegate = new CustomSparkSQLParser()
+    delegate.parseExpression(sqlText)
+  }
+
+
+  // ADD
+  override def parseDataType(sqlText: String): DataType = {
+    val delegate = new CustomSparkSQLParser()
+    delegate.parseDataType(sqlText)
+  }
+
+  override def parseTableSchema(sqlText: String): StructType = {
+    val delegate = new CustomSparkSQLParser()
+    delegate.parseTableSchema(sqlText)
   }
 
 
