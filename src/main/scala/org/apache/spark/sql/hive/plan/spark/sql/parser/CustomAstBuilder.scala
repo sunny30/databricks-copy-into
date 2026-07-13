@@ -392,13 +392,12 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
     println("parser table plan is "+ tablePlan.toString())
     tablePlan match {
       case r@RelationTimeTravel(relation, timestamp, version)=> r
-      case u@UnresolvedRelation(multipartIdentifier,_,_) =>
-        if(multipartIdentifier.size>3){
-          u
-        }else{
-          tablePlan = CLSUtils.getProjectedTable(tablePlan, ctx)
-          tablePlan
-        }
+      case u@UnresolvedRelation(multipartIdentifier,_,_) if multipartIdentifier.size>3 =>
+        u
+      case _ =>
+        tablePlan = CLSUtils.getProjectedTable(tablePlan, ctx)
+        tablePlan
+
     }
 
     //tablePlan

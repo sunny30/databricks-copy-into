@@ -181,7 +181,7 @@ object CLSUtils {
     val isMetadataCol =
     try {
       // MetadataAttribute.METADATA_COL_ATTR_KEY = "metadata_col"
-      attr.metadata.getBoolean(org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY)
+      attr.metadata.contains(org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY)
     } catch {
       case _: NoSuchElementException => false
     }
