@@ -4,6 +4,7 @@ import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, MetadataAttribute}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
@@ -52,13 +53,25 @@ object CLSUtils {
     }
   }
 
+  def shouldApplyCLSonDSV2Table(table: Table):Boolean = {
+    table match {
+      case v2Table: V2Table =>
+        !isExternalCatalogTable(v2Table)
+      case sparkTable: SparkTable =>
+        val parsedIcebergIdent = org.apache.iceberg.catalog.TableIdentifier.parse(sparkTable.name())
+        val metadataTable = org.apache.iceberg.MetadataTableUtils.hasMetadataTableName(parsedIcebergIdent)
+        !metadataTable
+      case _ => true
+    }
+  }
+
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
     if(CLSUtils.isViewsPlan(plan)){
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) && !isExternalCatalogTable(table)  =>
-        if(table!=null) {
+      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
+        if(table!=null && shouldApplyCLSonDSV2Table(table)) {
           getSecurePlanFromDataSourceV2(ds, table)
         }else{
           ds
@@ -150,6 +163,35 @@ object CLSUtils {
     getSecureLeafPlan(secureCatalogTable, view)
   }
 
+
+  private def isHiddenColumn(attr: Attribute): Boolean = {
+    // Delta file metadata columns
+    // tagged with __metadata_col or __file_source_metadata_col in metadata
+    val isDeltaMetadata =
+    attr.metadata.contains("__metadata_col") ||
+      attr.metadata.contains("__file_source_metadata_col")
+
+    // Iceberg hidden columns
+    // tagged with __internal_metadata_col
+    val isIcebergMetadata =
+    attr.metadata.contains("__internal_metadata_col")
+
+    // Spark's general metadata column marker
+    // works for both Delta and Iceberg in Spark 3.5.0
+    val isMetadataCol =
+    try {
+      // MetadataAttribute.METADATA_COL_ATTR_KEY = "metadata_col"
+      attr.metadata.contains(org.apache.spark.sql.catalyst.util.METADATA_COL_ATTR_KEY)
+    } catch {
+      case _: NoSuchElementException => false
+    }
+
+    isDeltaMetadata || isIcebergMetadata || isMetadataCol
+  }
+
+  private def userVisibleOutput(plan: LogicalPlan): Seq[Attribute] =
+    plan.output.filterNot(isHiddenColumn)
+
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
     val tagKey = if(catalogTable.tableType == CatalogTableType.VIEW){
@@ -171,9 +213,12 @@ object CLSUtils {
       val prj = Project(secureAttributes, leafPlan)
       prj.setTagValue(TreeNodeTag[String](tagKey), "true")
 
+
+      val userOutput = userVisibleOutput(leafPlan)
+
       val sameOutput =
-        secureAttributes.size == leafPlan.output.size &&
-          secureAttributes.zip(leafPlan.output).forall { case (secureAttr, outputAttr) =>
+        secureAttributes.size == userOutput.size &&
+          secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
             resolver(secureAttr.name, outputAttr.name)
           }
 
@@ -237,6 +282,9 @@ object CLSUtils {
 
   def getSecureColumns(multipartIdentifier: Seq[String]):Option[Seq[String]]={
 
+    if(multipartIdentifier.size>3){
+      return None
+    }
     val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
     val res = if (multipartIdentifier.size == 3) {
       (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))

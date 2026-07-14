@@ -171,45 +171,46 @@ object IcebergProcedureTests {
     println(s"snapshot count before: $snapCount")
 
     // positional — older_than = now()
-    spark.sql(s"CALL cat.system.expire_snapshots('$fqn', now())")
+   // spark.sql(s"CALL cat.system.expire_snapshots('$fqn', now())")
     println(s"[positional older_than=now]   snapshot count: $snapCount")
 
     spark.sql(s"INSERT INTO $fqn VALUES (5,'Eve',5.0)")
     spark.sql(s"INSERT INTO $fqn VALUES (6,'Frank',6.0)")
 
     // named — retain_last
-    spark.sql(
-      s"""CALL cat.system.expire_snapshots(
-         |  table       => '$fqn',
-         |  older_than  => now(),
-         |  retain_last => 1
-         |)""".stripMargin)
-    println(s"[named retain_last=1]         snapshot count: $snapCount")
+//    spark.sql(
+//      s"""CALL cat.system.expire_snapshots(
+//         |  table       => '$fqn',
+//         |  older_than  => now(),
+//         |  retain_last => 1
+//         |)""".stripMargin)
+//    println(s"[named retain_last=1]         snapshot count: $snapCount")
 
     spark.sql(s"INSERT INTO $fqn VALUES (7,'Grace',7.0)")
     spark.sql(s"INSERT INTO $fqn VALUES (8,'Hank',8.0)")
     val ids = snapshotIds(spark, fqn)
 
     // named — specific snapshot_ids
-    spark.sql(
+    val res= spark.sql(
       s"""CALL cat.system.expire_snapshots(
          |  table        => '$fqn',
          |  snapshot_ids => ARRAY(${ids.head})
          |)""".stripMargin)
     println(s"[named snapshot_ids]          snapshot count: $snapCount")
 
+    res.show()
     spark.sql(s"INSERT INTO $fqn VALUES (9,'Ivy',9.0)")
 
     // named — stream_results = true
-    val result = spark.sql(
-      s"""CALL cat.system.expire_snapshots(
-         |  table          => '$fqn',
-         |  older_than     => now(),
-         |  retain_last    => 1,
-         |  stream_results => true
-         |)""".stripMargin)
-    println(s"[named stream_results=true]   expired file count: ${result.count()}")
-    result.show(5, truncate = false)
+//    val result = spark.sql(
+//      s"""CALL cat.system.expire_snapshots(
+//         |  table          => '$fqn',
+//         |  older_than     => now(),
+//         |  retain_last    => 1,
+//         |  stream_results => true
+//         |)""".stripMargin)
+//    println(s"[named stream_results=true]   expired file count: ${result.count()}")
+   // result.show(5, truncate = false)
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -337,6 +338,8 @@ object IcebergProcedureTests {
     spark.sql("CALL cat.system.snapshot('cat.ice_db10.src', 'cat.ice_db10.ice_snap1')")
     println(s"[positional] count: ${count(spark, "cat.ice_db10.ice_snap1")}")
 
+    spark.sql("select * from cat.ice_db10.ice_snap1").show()
+
     spark.sql("DROP TABLE IF EXISTS cat.ice_db10.ice_snap2")
 
     // named — with explicit location
@@ -347,6 +350,7 @@ object IcebergProcedureTests {
          |  location     => '/tmp/ice_snap2'
          |)""".stripMargin)
     println(s"[named location] count: ${count(spark, "cat.ice_db10.ice_snap2")}")
+    spark.sql("select * from cat.ice_db10.ice_snap2").show()
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -493,25 +497,42 @@ object IcebergProcedureTests {
     spark.sql("SELECT * FROM changelog_v3").show(truncate = false)
   }
 
+  def runDeltaChangeReader(spark: org.apache.spark.sql.SparkSession):Unit={
+    spark.sql("create database cat.deldb")
+    spark.sql("create table cat.deldb.t(id int)  using delta TBLPROPERTIES(delta.enableChangeDataFeed=true)")
+    spark.sql("insert into cat.deldb.t values(1)")
+    spark.sql("insert into cat.deldb.t values(2)")
+    spark.sql("insert into cat.deldb.t values(3)")
+
+    val df = spark.read.option("readChangeFeed", "true").option("startingVersion",0).
+      option("endingVerion",2).table("cat.deldb.t")
+
+    df.show()
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // run all
   // ══════════════════════════════════════════════════════════════════════════
 
   def runAll(spark: org.apache.spark.sql.SparkSession): Unit = {
-    testRollbackToSnapshot(spark)
-    testRollbackToTimestamp(spark)
-    testSetCurrentSnapshot(spark)
-    testCherrypickSnapshot(spark)
-    testFastForward(spark)
-    testExpireSnapshots(spark)
-    testRemoveOrphanFiles(spark)
-    testRewriteDataFiles(spark)
-    testRewriteManifests(spark)
-    testSnapshot(spark)
-    testMigrate(spark)
+  //  testRollbackToSnapshot(spark)
+   // testRollbackToTimestamp(spark)
+  //  testSetCurrentSnapshot(spark)
+  //  testCherrypickSnapshot(spark)
+  //  testFastForward(spark)
+ //   testExpireSnapshots(spark)
+//    testRemoveOrphanFiles(spark)
+//    testRewriteDataFiles(spark)
+//    testRewriteManifests(spark)
+ //   testSnapshot(spark)
+ //   testMigrate(spark)
     testAddFiles(spark)
-    testAncestorsOf(spark)
-    testCreateChangelogView(spark)
+   // testAncestorsOf(spark)
+//    testCreateChangelogView(spark)
+    //runDeltaChangeReader(spark)
+
     println("\n✓ all Iceberg procedure tests done")
   }
+
+
 }

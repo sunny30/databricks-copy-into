@@ -1,7 +1,7 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, RelationTimeTravel, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedTable, UnresolvedTableOrView, UnresolvedView}
+import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, RelationTimeTravel, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedRelation, UnresolvedTable, UnresolvedTableOrView, UnresolvedView}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{AlterViewQueryContext, AnalyzeContext, CreateViewContext, IdentifierReferenceContext, RenameTableContext, SetTablePropertiesContext, UnsetTablePropertiesContext}
@@ -390,12 +390,16 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
   override def visitTableName(ctx: SqlBaseParser.TableNameContext): LogicalPlan = {
     var tablePlan = super.visitTableName(ctx)
     println("parser table plan is "+ tablePlan.toString())
-    if(tablePlan.isInstanceOf[RelationTimeTravel]){
-      tablePlan
-    }else {
-      tablePlan = CLSUtils.getProjectedTable(tablePlan, ctx)
-      tablePlan
+    tablePlan match {
+      case r@RelationTimeTravel(relation, timestamp, version)=> r
+      case u@UnresolvedRelation(multipartIdentifier,_,_) if multipartIdentifier.size>3 =>
+        u
+      case _ =>
+        tablePlan = CLSUtils.getProjectedTable(tablePlan, ctx)
+        tablePlan
+
     }
+
     //tablePlan
   }
 

@@ -152,9 +152,15 @@ public class UnitySparkTableUtil {
             Seq<CatalogTablePartition> partitions =
                     (new UnityCatalogUtil(spark)).getCatalogTablePartitions(tableIdent).toIndexedSeq();
             CatalogTable catalogTable = (new UnityCatalogUtil(spark)).getV1CatalogTableFromV2Table(tableIdent) ;
-            return JavaConverters.seqAsJavaListConverter(partitions).asJava().stream()
-                    .map(catalogPartition -> toSparkPartition(catalogPartition, catalogTable))
-                    .collect(Collectors.toList());
+            if(partitionFilter!=null){
+                return JavaConverters.seqAsJavaListConverter(partitions).asJava().stream()
+                        .map(catalogPartition -> toSparkPartition(catalogPartition, catalogTable)).filter(p -> p.getValues().entrySet().containsAll(partitionFilter.entrySet()))
+                        .collect(Collectors.toList());
+            }else {
+                return JavaConverters.seqAsJavaListConverter(partitions).asJava().stream()
+                        .map(catalogPartition -> toSparkPartition(catalogPartition, catalogTable))
+                        .collect(Collectors.toList());
+            }
         }  catch (Exception e) {
             throw SparkExceptionUtil.toUncheckedException(
                     e, "Unknown table: %s. Table not found in catalog.", tableIdent);
