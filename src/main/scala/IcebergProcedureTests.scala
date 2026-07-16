@@ -508,6 +508,8 @@ object IcebergProcedureTests {
       option("endingVerion",2).table("cat.deldb.t")
 
     df.show()
+
+    spark.sql("select * from table_changes('cat.deldb.t', 0, 2)").show()
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -526,10 +528,10 @@ object IcebergProcedureTests {
 //    testRewriteManifests(spark)
  //   testSnapshot(spark)
  //   testMigrate(spark)
-    testAddFiles(spark)
+  //  testAddFiles(spark)
    // testAncestorsOf(spark)
 //    testCreateChangelogView(spark)
-    //runDeltaChangeReader(spark)
+    runDeltaChangeReader(spark)
 
     println("\n✓ all Iceberg procedure tests done")
   }
