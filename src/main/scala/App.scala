@@ -98,6 +98,7 @@ object App {
 //    spark.sql("show tables in live.f.db").show()
 //    spark.sql("describe formatted live.f.db.live_tbl").show()
 //    spark.sql("select * from live.f.db.live_tbl").show()
+    spark.read.table("live.`FS('b12'.'a + b')`.`this is table`")
 
   //    CLSApp.streamDeltaTable(spark)
 //    spark.sql("create database cat.cls_db")

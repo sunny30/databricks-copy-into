@@ -106,7 +106,19 @@ public class UnityMigrateTableSparkAction extends UnityBaseTableCreationSparkAct
     }
 
     public UnityMigrateTableSparkAction backupTableName(String tableName) {
-        this.backupIdent = Identifier.of(this.sourceTableIdent().namespace(), tableName);
+        // Handle both plain name ("my_backup") and db-qualified name ("mydb.my_backup").
+        // If the user passes a qualified name, extract the db and table parts separately
+        // so the backup lands in the right namespace instead of creating a table whose
+        // name literally contains a dot.
+        if (tableName != null && tableName.contains(".")) {
+            String[] parts = tableName.split("\\.", 2);
+            String db    = parts[0];
+            String table = parts[1];
+            this.backupIdent = Identifier.of(new String[]{db}, table);
+        } else {
+            // Plain name — use the same namespace as the source table
+            this.backupIdent = Identifier.of(this.sourceTableIdent().namespace(), tableName);
+        }
         return this;
     }
 

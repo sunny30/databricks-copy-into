@@ -360,16 +360,16 @@ object IcebergProcedureTests {
   def testMigrate(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("migrate")
     spark.sql("CREATE DATABASE IF NOT EXISTS cat.ice_db11")
-
-    spark.sql("DROP TABLE IF EXISTS cat.ice_db11.parq1")
-    spark.sql("CREATE TABLE cat.ice_db11.parq1 (id INT, name STRING) USING parquet")
-    spark.sql("INSERT INTO cat.ice_db11.parq1 VALUES (1,'A'),(2,'B')")
-
-    // positional
-    spark.sql("CALL cat.system.migrate('cat.ice_db11.parq1')")
-    println(s"[positional] provider: " +
-      spark.sql("DESCRIBE EXTENDED cat.ice_db11.parq1")
-        .filter("col_name = 'Provider'").collect()(0).getString(1))
+//
+//    spark.sql("DROP TABLE IF EXISTS cat.ice_db11.parq1")
+//    spark.sql("CREATE TABLE cat.ice_db11.parq1 (id INT, name STRING) USING parquet")
+//    spark.sql("INSERT INTO cat.ice_db11.parq1 VALUES (1,'A'),(2,'B')")
+//
+//    // positional
+//    spark.sql("CALL cat.system.migrate('cat.ice_db11.parq1')")
+//    println(s"[positional] provider: " +
+//      spark.sql("DESCRIBE EXTENDED cat.ice_db11.parq1")
+//        .filter("col_name = 'Provider'").collect()(0).getString(1))
 
     spark.sql("DROP TABLE IF EXISTS cat.ice_db11.parq2")
     spark.sql("CREATE TABLE cat.ice_db11.parq2 (id INT, name STRING) USING parquet")
@@ -379,8 +379,10 @@ object IcebergProcedureTests {
     spark.sql(
       s"""CALL cat.system.migrate(
          |  table      => 'cat.ice_db11.parq2',
-         |  properties => map('write.format.default','parquet','format-version','2')
+         |  backup_table_name => 'ice_db11.parq2_bk'
          |)""".stripMargin)
+    spark.sql("describe formatted cat.ice_db11.parq2").show()
+    spark.sql("describe formatted cat.ice_db11.parq2_bk").show()
     println(s"[named properties] provider: " +
       spark.sql("DESCRIBE EXTENDED cat.ice_db11.parq2")
         .filter("col_name = 'Provider'").collect()(0).getString(1))
@@ -508,7 +510,11 @@ object IcebergProcedureTests {
       option("endingVerion",2).table("cat.deldb.t")
 
     df.show()
+
+    spark.sql("select * from table_changes('cat.deldb.t', 0, 2)").show()
   }
+
+
 
   // ══════════════════════════════════════════════════════════════════════════
   // run all
@@ -525,8 +531,8 @@ object IcebergProcedureTests {
 //    testRewriteDataFiles(spark)
 //    testRewriteManifests(spark)
  //   testSnapshot(spark)
- //   testMigrate(spark)
-    testAddFiles(spark)
+    testMigrate(spark)
+  //  testAddFiles(spark)
    // testAncestorsOf(spark)
 //    testCreateChangelogView(spark)
     //runDeltaChangeReader(spark)
