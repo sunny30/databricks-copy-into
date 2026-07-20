@@ -84,11 +84,11 @@ object VanilaSparkApp {
 //    df3.write.format("delta").mode("overwrite").saveAsTable("test12.ctbl")
 
 
-    df3.write.format("delta").mode("overwrite").saveAsTable("test12.dtbl")
+    df3.write.format("delta").mode("overwrite").option("path","/tmp/del1").saveAsTable("test12.dtbl3")
 
-    spark.read.table("test12.dtbl").show()
+    spark.read.table("test12.dtbl3").show()
 
-    df3.write.format("csv").mode("overwrite").saveAsTable("test12.dtbl")
+    df3.write.format("delta").mode("overwrite").saveAsTable("test12.dtbl3")
 
     //    val raw_table = "test.pr439_avro_view_raw1"
 //    val view_name = "test.pr439_avro_view_star1"

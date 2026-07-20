@@ -54,7 +54,6 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case "csv" => new CSVFileFormat
       case "orc" => new OrcFileFormat
       case "parquet" => new ParquetFileFormat
-      case "orc" => new OrcFileFormat
       case "avro" => new AvroFileFormat
       case _ => new CSVFileFormat
     }
@@ -75,12 +74,12 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 
 
   def shouldDropExistingTable(table:Table,targetProvider:String):Boolean ={
-    (Table,targetProvider.toLowerCase) match {
+    (table,targetProvider.toLowerCase) match {
       case (t:V2Table,_) => true
       case (t:DeltaTableV2,"delta") => false
       case (t:DeltaTableV2,_) => true
-      case (SparkTable , "iceberg")=> false
-      case (SparkTable, _) => true
+      case (t:SparkTable , "iceberg")=> false
+      case (t:SparkTable, _) => true
 
       case _ => throw new IllegalArgumentException("not a valid data format table")
     }
@@ -108,7 +107,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 
 
 
-  def getActualProvider(catalog:CatalogPlugin, identifier: Identifier):Table ={
+  def getExistingTable(catalog:CatalogPlugin, identifier: Identifier):Table ={
     catalog.asTableCatalog.loadTable(identifier)
   }
 
@@ -159,9 +158,23 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           qe.optimizedPlan
         }
         val outputs = query.schema.map(s => s.name)
-        val providerValue = getActualProvider(catalog,ident,tableSpec)
+        val existingProvider = getActualProvider(catalog,ident,tableSpec)
+        val targetProvider = targetTableProvider(tableSpec, existingProvider)
+        val tableExists = catalog.asTableCatalog.tableExists(ident)
+        var table: Table = if (tableExists) getExistingTable(catalog, ident) else null
+        val dropAndCreateTable = tableExists && shouldDropExistingTable(table, targetProvider)
+        if (dropAndCreateTable) {
+          catalog.asTableCatalog.dropTable(ident)
+          table = catalog.asTableCatalog.createTable(
+            ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+        } else if (!tableExists && !targetProvider.equalsIgnoreCase("delta")
+          && !targetProvider.equalsIgnoreCase("iceberg")) {
+          // orCreate = true and table doesn't exist — create fresh
+          table = catalog.asTableCatalog.createTable(
+            ident, query.schema, parts.toArray, mapAsJavaMap(properties))
+        }
         /**Delta External we have to see later**/
-        if (providerValue.equalsIgnoreCase("delta")) {
+        if (targetProvider.equalsIgnoreCase("delta")) {
 //          if (catalog.asTableCatalog.tableExists(ident)) {
 //            println("Calling RTAS drop table plan")
 //            catalog.asTableCatalog.dropTable(ident)
@@ -169,21 +182,13 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           println("Inside delta or custom datasource plan block")
           rtas.copy(query = writePlan)
 
-        }else if(providerValue.equalsIgnoreCase("custom")){
+        }else if(targetProvider.equalsIgnoreCase("custom")){
           properties = getOldTableProps(catalog,ident,tableSpec)
-          val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
+          val newTableSpec = tableSpec.copy(properties = properties,provider = Some(existingProvider))
           rtas.copy(tableSpec = newTableSpec,query = writePlan)
-        }else if(providerValue.equalsIgnoreCase("iceberg")){
+        }else if(targetProvider.equalsIgnoreCase("iceberg")){
           rtas.copy(query = writePlan)
         }else {
-
-          if (catalog.asTableCatalog.tableExists(ident)) {
-            catalog.asTableCatalog.dropTable(ident)
-          }
-          val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-          //Thread.sleep(30000)
-
-
           val ps = getPartitionAttributeFromV2Table(writePlan, table)
         //  val table = catalog.asTableCatalog.loadTable(ident)
 
@@ -236,7 +241,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 //        analyzedWritePlan.setAnalyzed()
 
        // query.schema.toDDL
-        val outputs = query.schema.map(s => s.name)
+        //val outputs = query.schema.map(s => s.name)
         val providerValue = getActualProvider(catalog,ident,tableSpec)
 
         if (providerValue.equalsIgnoreCase("delta")) {
