@@ -74,6 +74,45 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
   }
 
 
+  def shouldDropExistingTable(table:Table,targetProvider:String):Boolean ={
+    (Table,targetProvider.toLowerCase) match {
+      case (t:V2Table,_) => true
+      case (t:DeltaTableV2,"delta") => false
+      case (t:DeltaTableV2,_) => true
+      case (SparkTable , "iceberg")=> false
+      case (SparkTable, _) => true
+
+      case _ => throw new IllegalArgumentException("not a valid data format table")
+    }
+  }
+
+
+  def targetTableProvider(tableSpec: TableSpec, existingProvider: String): String = {
+    val properties = CatalogV2Util.convertTableProperties(tableSpec)
+    val defaultDatasource = conf.defaultDataSourceName
+    properties.get("provider") match {
+      case Some(v) => v
+      case None =>
+        if (existingProvider.equalsIgnoreCase("delta") || existingProvider.equalsIgnoreCase("iceberg")) {
+          existingProvider
+        } else {
+          defaultDatasource
+        }
+
+    }
+
+  }
+
+
+
+
+
+
+  def getActualProvider(catalog:CatalogPlugin, identifier: Identifier):Table ={
+    catalog.asTableCatalog.loadTable(identifier)
+  }
+
+
   def getActualProvider(catalog:CatalogPlugin, identifier: Identifier, tableSpec: TableSpec):String = {
     if(catalog.asTableCatalog.tableExists(identifier)){
      // catalog.name()

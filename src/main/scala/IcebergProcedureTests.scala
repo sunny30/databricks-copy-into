@@ -327,6 +327,7 @@ object IcebergProcedureTests {
 
   def testSnapshot(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("snapshot (migration)")
+   // spark.sessionState.catalog.getTableMetadata()
     spark.sql("CREATE DATABASE IF NOT EXISTS cat.ice_db10")
     spark.sql("DROP TABLE IF EXISTS cat.ice_db10.src")
     spark.sql("CREATE TABLE cat.ice_db10.src (id INT, name STRING) USING parquet")
@@ -372,7 +373,9 @@ object IcebergProcedureTests {
 //        .filter("col_name = 'Provider'").collect()(0).getString(1))
 
     spark.sql("DROP TABLE IF EXISTS cat.ice_db11.parq2")
+
     spark.sql("CREATE TABLE cat.ice_db11.parq2 (id INT, name STRING) USING parquet")
+    spark.sql("alter table cat.`ice_db11`.`parq2` rename to cat.`ice_db11`.`parq3`" )
     spark.sql("INSERT INTO cat.ice_db11.parq2 VALUES (1,'A'),(2,'B')")
 
     // named — with table properties
