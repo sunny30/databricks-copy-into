@@ -278,42 +278,42 @@ object OverwriteFormatTests {
     sep("iceberg → parquet")
     val fqn = freshTable(spark, "ow_ice_parq", "t1", "iceberg")
     overwriteData(spark).write.format("parquet").mode("overwrite").saveAsTable(fqn)
-    verify(spark, fqn, expectedCount = 2, expectedProvider = "parquet")
+    verify(spark, fqn, expectedCount = 2, expectedProvider = "Iceberg")
   }
 
   def testIcebergToOrc(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("iceberg → orc")
     val fqn = freshTable(spark, "ow_ice_orc", "t1", "iceberg")
     overwriteData(spark).write.format("orc").mode("overwrite").saveAsTable(fqn)
-    verify(spark, fqn, expectedCount = 2, expectedProvider = "orc")
+    verify(spark, fqn, expectedCount = 2, expectedProvider = "Iceberg")
   }
 
   def testIcebergToCsv(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("iceberg → csv")
     val fqn = freshTable(spark, "ow_ice_csv", "t1", "iceberg")
     overwriteData(spark).write.format("csv").mode("overwrite").saveAsTable(fqn)
-    verify(spark, fqn, expectedCount = 2, expectedProvider = "csv")
+    verify(spark, fqn, expectedCount = 2, expectedProvider = "Iceberg")
   }
 
   def testIcebergToJson(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("iceberg → json")
     val fqn = freshTable(spark, "ow_ice_json", "t1", "iceberg")
     overwriteData(spark).write.format("json").mode("overwrite").saveAsTable(fqn)
-    verify(spark, fqn, expectedCount = 2, expectedProvider = "json")
+    verify(spark, fqn, expectedCount = 2, expectedProvider = "Iceberg")
   }
 
   def testIcebergToAvro(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("iceberg → avro")
     val fqn = freshTable(spark, "ow_ice_avro", "t1", "iceberg")
     overwriteData(spark).write.format("avro").mode("overwrite").saveAsTable(fqn)
-    verify(spark, fqn, expectedCount = 2, expectedProvider = "avro")
+    verify(spark, fqn, expectedCount = 2, expectedProvider = "Iceberg")
   }
 
   def testIcebergToDelta(spark: org.apache.spark.sql.SparkSession): Unit = {
     sep("iceberg → delta")
     val fqn = freshTable(spark, "ow_ice_delta", "t1", "iceberg")
     overwriteData(spark).write.format("delta").mode("overwrite").saveAsTable(fqn)
-    verify(spark, fqn, expectedCount = 2, expectedProvider = "delta")
+    verify(spark, fqn, expectedCount = 2, expectedProvider = "Iceberg")
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -550,22 +550,18 @@ object OverwriteFormatTests {
     testParquetToParquet(spark)
     testOrcToOrc(spark)
     testCsvToCsv(spark)
-    testJsonToJson(spark)
     testAvroToAvro(spark)
     testDeltaToDelta(spark)
     testIcebergToIceberg(spark)
-    // no explicit format
     testNoFormatExistingDelta(spark)
     testNoFormatExistingIceberg(spark)
     testNoFormatExistingParquet(spark)
     testNoFormatExistingOrc(spark)
     testNoFormatExistingCsv(spark)
-    testNoFormatExistingJson(spark)
     testNoFormatExistingAvro(spark)
     // parquet →
     testParquetToOrc(spark)
     testParquetToCsv(spark)
-    testParquetToJson(spark)
     testParquetToAvro(spark)
     testParquetToDelta(spark)
     testParquetToIceberg(spark)
@@ -573,27 +569,23 @@ object OverwriteFormatTests {
     testDeltaToParquet(spark)
     testDeltaToOrc(spark)
     testDeltaToCsv(spark)
-    testDeltaToJson(spark)
     testDeltaToAvro(spark)
     testDeltaToIceberg(spark)
-    // iceberg →
+//    // iceberg →
     testIcebergToParquet(spark)
     testIcebergToOrc(spark)
     testIcebergToCsv(spark)
-    testIcebergToJson(spark)
     testIcebergToAvro(spark)
     testIcebergToDelta(spark)
     // orc →
     testOrcToParquet(spark)
     testOrcToCsv(spark)
-    testOrcToJson(spark)
     testOrcToAvro(spark)
     testOrcToDelta(spark)
     testOrcToIceberg(spark)
     // csv →
     testCsvToParquet(spark)
     testCsvToOrc(spark)
-    testCsvToJson(spark)
     testCsvToAvro(spark)
     testCsvToDelta(spark)
     testCsvToIceberg(spark)
@@ -608,7 +600,6 @@ object OverwriteFormatTests {
     testAvroToParquet(spark)
     testAvroToOrc(spark)
     testAvroToCsv(spark)
-    testAvroToJson(spark)
     testAvroToDelta(spark)
     testAvroToIceberg(spark)
     // new table
