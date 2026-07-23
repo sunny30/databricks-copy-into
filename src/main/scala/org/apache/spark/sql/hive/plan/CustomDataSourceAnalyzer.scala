@@ -18,7 +18,7 @@ import org.apache.spark.sql.catalyst.types.DataTypeUtils
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.{convertTableProperties, withDefaultOwnership}
 import org.apache.spark.sql.connector.catalog.{CatalogPlugin, CatalogV2Util, Identifier, StagedTable, Table, TableCatalog, TableSchemaChangeCatalog}
-import org.apache.spark.sql.connector.expressions.Transform
+import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform, Transform}
 import org.apache.spark.sql.delta.{DeltaAnalysis, DeltaErrors, DeltaRelation, PreprocessTableMerge, PreprocessTableUpdate, ResolveDeltaPathTable, TableChanges}
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.DeleteCommand
@@ -833,9 +833,8 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             val abpl = abd.copy(analyzedQuery = Some(abd.query))
             appendIntoV2Table(abpl, table)
 
+
           case overwriteByExpression@OverwriteByExpression(table: DataSourceV2Relation, deleteExpr, query, writeOptions, isByName, _, analyzedQuery) =>
-            //  val overwriteByExpressionPl = overwriteByExpression.copy(analyzedQuery = Some(query))
-            println("Inside Overwrite by Expression")
             table.table match {
               case v2Table: V2Table =>
                 val catalogName = v2Table.v1Table.identifier.catalog.getOrElse("hive")
@@ -844,7 +843,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
                   catalogPlugin,
                   Identifier.of(Array(v2Table.v1Table.identifier.database.getOrElse("default")).toArray, v2Table.v1Table.identifier.table)
                 )
-                ReplaceTableAsSelect(resId, Seq.empty[Transform], query, TableSpec(
+                val partColumns = Some(v2Table.v1Table.partitionColumnNames).map {
+                  colNames =>
+                    colNames.map(
+                      name => IdentityTransform(FieldReference(Seq(name))))
+                }.getOrElse(Seq.empty[Transform])
+                ReplaceTableAsSelect(resId, partColumns, query, TableSpec(
                   provider = v2Table.v1Table.provider,
                   properties = (Map("provider" -> v2Table.v1Table.provider.getOrElse("hive"))),
                   location = Some(v2Table.v1Table.location.toString),
