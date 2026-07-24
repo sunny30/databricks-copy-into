@@ -179,10 +179,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         }
         /**Delta External we have to see later**/
         if (targetProvider.equalsIgnoreCase("delta")) {
-//          if (catalog.asTableCatalog.tableExists(ident)) {
-//            println("Calling RTAS drop table plan")
-//            catalog.asTableCatalog.dropTable(ident)
-//          }
+
           println("Inside delta or custom datasource plan block")
           rtas.copy(query = writePlan, tableSpec = newTableSpec)
 
@@ -194,10 +191,6 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           rtas.copy(query = writePlan, tableSpec = newTableSpec)
         }else {
           val ps = getPartitionAttributeFromV2Table(writePlan, table)
-        //  val table = catalog.asTableCatalog.loadTable(ident)
-
-        //  spark.catalog.refreshTable(ident)
-
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
