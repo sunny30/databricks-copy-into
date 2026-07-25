@@ -54,7 +54,6 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       case "csv" => new CSVFileFormat
       case "orc" => new OrcFileFormat
       case "parquet" => new ParquetFileFormat
-      case "orc" => new OrcFileFormat
       case "avro" => new AvroFileFormat
       case _ => new CSVFileFormat
     }
@@ -71,6 +70,46 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
   private def invalidateCache(catalog: TableCatalog, table: Table, ident: Identifier): Unit = {
     val v2Relation = DataSourceV2Relation.create(table, Some(catalog), Some(ident))
     spark.sharedState.cacheManager.uncacheQuery(spark, v2Relation, cascade = true)
+  }
+
+
+  def shouldDropExistingTable(table:Table,targetProvider:String):Boolean ={
+    (table,targetProvider.toLowerCase) match {
+      case (t:V2Table,_) => true
+      case (t:DeltaTableV2,"delta") => false
+      case (t:DeltaTableV2,_) => true
+      case (t:SparkTable , _)=> false
+
+      case (_,_) => true
+    }
+  }
+
+
+  def targetTableProvider(tableSpec: TableSpec, existingProvider: String): String = {
+    val defaultDatasource = conf.defaultDataSourceName
+    if(existingProvider.equalsIgnoreCase("iceberg")) {
+      return existingProvider
+    }
+    tableSpec.provider match {
+      case Some(v) => v
+      case None =>
+        if (existingProvider.equalsIgnoreCase("delta") || existingProvider.equalsIgnoreCase("iceberg")) {
+          existingProvider
+        } else {
+          defaultDatasource
+        }
+
+    }
+
+  }
+
+
+
+
+
+
+  def getExistingTable(catalog:CatalogPlugin, identifier: Identifier):Table ={
+    catalog.asTableCatalog.loadTable(identifier)
   }
 
 
@@ -120,36 +159,38 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
           qe.optimizedPlan
         }
         val outputs = query.schema.map(s => s.name)
-        val providerValue = getActualProvider(catalog,ident,tableSpec)
+        val existingProvider = getActualProvider(catalog,ident,tableSpec)
+        val targetProvider = targetTableProvider(tableSpec, existingProvider)
+        val tableExists = catalog.asTableCatalog.tableExists(ident)
+        var table: Table = if (tableExists) getExistingTable(catalog, ident) else null
+        val dropAndCreateTable = tableExists && shouldDropExistingTable(table, targetProvider)
+        val newTableSpec = tableSpec.copy(provider = Some(targetProvider))
+        var newTableProperties = CatalogV2Util.convertTableProperties(newTableSpec)
+
+        if (dropAndCreateTable) {
+          catalog.asTableCatalog.dropTable(ident)
+          table = catalog.asTableCatalog.createTable(
+            ident, query.schema, parts.toArray, mapAsJavaMap(newTableProperties))
+        } else if (!tableExists && !targetProvider.equalsIgnoreCase("delta")
+          && !targetProvider.equalsIgnoreCase("iceberg")) {
+          // orCreate = true and table doesn't exist — create fresh
+          table = catalog.asTableCatalog.createTable(
+            ident, query.schema, parts.toArray, mapAsJavaMap(newTableProperties))
+        }
         /**Delta External we have to see later**/
-        if (providerValue.equalsIgnoreCase("delta")) {
-//          if (catalog.asTableCatalog.tableExists(ident)) {
-//            println("Calling RTAS drop table plan")
-//            catalog.asTableCatalog.dropTable(ident)
-//          }
+        if (targetProvider.equalsIgnoreCase("delta")) {
+
           println("Inside delta or custom datasource plan block")
-          rtas.copy(query = writePlan)
+          rtas.copy(query = writePlan, tableSpec = newTableSpec)
 
-        }else if(providerValue.equalsIgnoreCase("custom")){
+        }else if(targetProvider.equalsIgnoreCase("custom")){
           properties = getOldTableProps(catalog,ident,tableSpec)
-          val newTableSpec = tableSpec.copy(properties = properties,provider = Some(providerValue))
+          val newTableSpec = tableSpec.copy(properties = properties,provider = Some(existingProvider))
           rtas.copy(tableSpec = newTableSpec,query = writePlan)
-        }else if(providerValue.equalsIgnoreCase("iceberg")){
-          rtas.copy(query = writePlan)
+        }else if(targetProvider.equalsIgnoreCase("iceberg")){
+          rtas.copy(query = writePlan, tableSpec = newTableSpec)
         }else {
-
-          if (catalog.asTableCatalog.tableExists(ident)) {
-            catalog.asTableCatalog.dropTable(ident)
-          }
-          val table = catalog.asTableCatalog.createTable(ident, query.schema, parts.toArray, mapAsJavaMap(properties))
-          //Thread.sleep(30000)
-
-
           val ps = getPartitionAttributeFromV2Table(writePlan, table)
-        //  val table = catalog.asTableCatalog.loadTable(ident)
-
-        //  spark.catalog.refreshTable(ident)
-
           InsertIntoHadoopFsRelationCommand(
             outputPath = new Path(table.asInstanceOf[V2Table].v1Table.storage.locationUri.get.toString),
             staticPartitions = Map.empty,
@@ -197,7 +238,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
 //        analyzedWritePlan.setAnalyzed()
 
        // query.schema.toDDL
-        val outputs = query.schema.map(s => s.name)
+        //val outputs = query.schema.map(s => s.name)
         val providerValue = getActualProvider(catalog,ident,tableSpec)
 
         if (providerValue.equalsIgnoreCase("delta")) {
