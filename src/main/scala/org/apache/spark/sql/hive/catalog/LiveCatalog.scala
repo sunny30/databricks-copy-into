@@ -100,12 +100,35 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
   }
 
+  override def tableExists(ident: Identifier): Boolean = {
+    listTables(ident.namespace()).
+      map(i=>i.name()).
+      exists(t=>t.equalsIgnoreCase(ident.name()))
+  }
+
   override def listTables(namespace: Array[String]): Array[Identifier] = {
 
     namespace match {
       case Array(f,db) =>
-        val ident = Identifier.of(Array(db), "live_tbl")
-        Array(ident)
+        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/name_type.csv")
+        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+        resultMap.get("name") match {
+          case Some(v) =>
+            v.map(tbl => Identifier.of(Array(db), tbl))
+
+          case None => Array.empty[Identifier]
+        }
+
+      case Array(db) =>
+        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/name_type.csv")
+        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+        resultMap.get("name") match {
+          case Some(v) =>
+            v.map(tbl => Identifier.of(Array(db), tbl))
+
+          case None => Array.empty[Identifier]
+        }
+
       case _ =>
         throw QueryCompilationErrors.noSuchNamespaceError(namespace)
     }
