@@ -50,18 +50,32 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
     }
   }
 
+
+  override def namespaceExists(namespace: Array[String]): Boolean={
+    namespace match {
+      case Array(f,db) =>
+        listNamespaces().map(p=>p).exists(_.head.equalsIgnoreCase(db))
+      case Array(db) =>
+        listNamespaces().map(p=>p).exists(_.head.equalsIgnoreCase(db))
+    }
+  }
+
   override def loadNamespaceMetadata(namespace: Array[String]): util.Map[String, String] = {
 
     namespace match {
-      case Array(f,db) =>
-        val odb = CatalogDatabase(
-          name = db,
-          description = "reserve-database for systems",
-          locationUri = CatalogUtils.stringToURI("NA"),
-          properties = Map.empty[String, String]
-        )
-        val augmentedProperties = odb.properties ++ Map("db_location" -> "live_db")
-        augmentedProperties.asJava
+      case Array(f,db) if namespaceExists(namespace)=>
+        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema_properties.csv")
+        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+        val res = resultMap.map(r=> (r._1,r._2.head))
+        res.asJava
+
+      case Array(db) if namespaceExists(namespace) =>
+        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema_properties.csv")
+        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+        val res = resultMap.map(r => (r._1, r._2.head))
+        res.asJava
+
+
     }
   }
 
