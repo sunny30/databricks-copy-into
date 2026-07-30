@@ -223,7 +223,7 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
         //val df = SparkSession.active.read.option("header", "true").option("quote", "\"").option("escape", "\"").csv("path/to/file.csv")
         val rawJson = df.select("dataset_event").as[String].collect().head
         val root = DatasetEventParser.parseFromCsvParsedField(rawJson)
-        val scheaFieldNde = root.get("dataset").get("facets").get("schema").get("fields")
+        val scheaFieldNde = root.path("dataset").path("facets").path("schema").path("fields")
         val schema = JsonFieldsToStructType.toStructType(scheaFieldNde)
 
         val dbName = ident.namespace().head
