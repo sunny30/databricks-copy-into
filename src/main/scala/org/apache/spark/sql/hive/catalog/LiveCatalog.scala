@@ -1,6 +1,6 @@
 package org.apache.spark.sql.hive.catalog
 
-import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, CatalogStorageFormat, CatalogTable, CatalogTableType, CatalogUtils}
 import org.apache.spark.sql.connector.catalog.functions.UnboundFunction
@@ -33,7 +33,9 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
   }
 
   override def listNamespaces(): Array[Array[String]] = {
-    Array(Array("live_db"))
+    val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema.csv")
+    val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+    resultMap.flatMap(r => r._2.map(Array(_))).toArray
   }
 
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
@@ -152,4 +154,18 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
   }
 
   override def name(): String = catalogName
+
+
+  def dataFrameToColumnMap(df: DataFrame): Map[String, Array[String]] = {
+    val columnNames: Array[String] = df.columns
+    val rows: Array[Row] = df.collect()
+
+    columnNames.map { colName =>
+      val values: Array[String] = rows.map { row =>
+        val v = row.getAs[Any](colName)
+        if (v == null) null else v.toString
+      }
+      colName -> values
+    }.toMap
+  }
 }

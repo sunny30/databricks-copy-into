@@ -867,12 +867,13 @@ class CustomDataSourceAnalyzer(session: SparkSession)
             prj.copy(view.output)
 
 
-          case _ =>
+          case other:LogicalPlan =>
+            other
           //  p
-            val pl = ResolveReferences(p)
-            pl.resolved
-            //  pl.setAnalyzed()
-            pl
+//            val pl = ResolveReferences(p)
+//            pl.resolved
+//            //  pl.setAnalyzed()
+//            pl
         }
     }
   }
