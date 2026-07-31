@@ -300,7 +300,7 @@ object GetMetadataUtil{
     resultMap.get("dataset_event") match {
       case Some(v) =>
         //val df = SparkSession.active.read.option("header", "true").option("quote", "\"").option("escape", "\"").csv("path/to/file.csv")
-        val rawJson = df.select("dataset_event").as[String].collect().head
+        var rawJson =v.head
         val root = DatasetEventParser.parseFromCsvParsedField(rawJson)
         val scheaFieldNde = root.path("dataset").path("facets").path("schema").path("fields")
         val schema = JsonFieldsToStructType.toStructType(scheaFieldNde)
