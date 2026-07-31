@@ -94,9 +94,9 @@ object App {
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
    //OverwriteFormatTests.runAll(spark)
-   // spark.sql("show databases in live").show(100,0)
-   // spark.sql("describe database live.`HCM - Workforce Time and Labor Management`").show(2,0)
-    //spark.sql("show tables in live.`HCM - Workforce Time and Labor Management1`").show()
+    spark.sql("show databases in live").show(100,0)
+    spark.sql("describe database live.`HCM - Workforce Time and Labor Management`").show(2,0)
+    spark.sql("show tables in live.`HCM - Workforce Time and Labor Management1`").show()
     spark.sql("describe formatted live.`HCM - Workforce Time and Labor Management1`.`Lead Converted Date`").show()
 //    spark.sql("show tables in live.f.db").show()
 //    spark.sql("describe formatted live.f.db.live_tbl").show()

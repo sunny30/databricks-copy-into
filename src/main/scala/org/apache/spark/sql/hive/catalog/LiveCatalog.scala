@@ -42,9 +42,7 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
   }
 
   override def listNamespaces(): Array[Array[String]] = {
-    val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema.csv")
-    val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
-    resultMap.flatMap(r => r._2.map(Array(_))).toArray
+    GetMetadataUtil.listDatabases(catalogName)
   }
 
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
@@ -73,16 +71,11 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
     namespace match {
       case Array(f, db) if namespaceExists(namespace) =>
-        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema_properties.csv")
-        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
-        val res = resultMap.map(r => (r._1, r._2.head))
-        res.asJava
+        GetMetadataUtil.loadNameSpaceMetadata(db,catalogName)
 
       case Array(db) if namespaceExists(namespace) =>
-        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema_properties.csv")
-        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
-        val res = resultMap.map(r => (r._1, r._2.head))
-        res.asJava
+        GetMetadataUtil.loadNameSpaceMetadata(db,catalogName)
+
 
 
     }
@@ -119,24 +112,10 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
     namespace match {
       case Array(f, db) =>
-        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/name_type.csv")
-        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
-        resultMap.get("name") match {
-          case Some(v) =>
-            v.map(tbl => Identifier.of(Array(db), tbl))
-
-          case None => Array.empty[Identifier]
-        }
+        GetMetadataUtil.listTables(catalogName, db)
 
       case Array(db) =>
-        val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/name_type.csv")
-        val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
-        resultMap.get("name") match {
-          case Some(v) =>
-            v.map(tbl => Identifier.of(Array(db), tbl))
-
-          case None => Array.empty[Identifier]
-        }
+        GetMetadataUtil.listTables(catalogName, db)
 
       case _ =>
         throw QueryCompilationErrors.noSuchNamespaceError(namespace)
@@ -144,9 +123,7 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
   }
 
   override def loadTable(ident: Identifier): Table = {
-    val df = SparkSession.active.read.format("csv").option("header", "true").option("quote", "\"").option("escape", "\"").load("/Users/sharadsingh/Documents/more_schemas/table_schema_dataset_event.csv")
-    val ct = getCatalogTable(df, ident)
-    V2Table(ct)
+    GetMetadataUtil.loadTable(ident,catalogName)
   }
 
   override def createTable(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): Table = ???
@@ -166,42 +143,130 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
 
   }
 
-  private def getLiveTableMetadata(ident: Identifier): CatalogTable = {
-    val dbName = ident.namespace()
-    val tableName = ident.name()
-    val schema = StructType(Seq(
-      StructField("id", StringType, nullable = true),
-      StructField("name", StringType, nullable = true),
-      StructField("age", StringType, nullable = true)
-    ))
-    dbName match {
-      case Array(f, db) =>
-        CatalogTable(
-          identifier = TableIdentifier(ident.name, Some(db), Some(catalogName)),
-          CatalogTableType.EXTERNAL,
-          new CatalogStorageFormat(None, None, None,
-            None, false, Map.empty[String, String]
-          ),
-          schema,
-          provider = Some("custom")
-        )
-      case Array(db) =>
-        CatalogTable(
-          identifier = TableIdentifier(ident.name, Some(db), Some(catalogName)),
-          CatalogTableType.EXTERNAL,
-          new CatalogStorageFormat(None, None, None,
-            None, false, Map.empty[String, String]
-          ),
-          schema,
-          provider = Some("custom")
-        )
-
-      case _ => throw new AnalysisException("table does not exist")
-    }
-  }
 
   override def name(): String = catalogName
 
+}
+
+
+object DatasetEventFixer {
+
+  // Stage 1: undo CSV-style quote doubling ("" -> ")
+  // Only needed if you're handed the raw literal text, NOT if a CSV
+  // parser (Spark, OpenCSV, commons-csv) already read the field for you.
+  def unescapeCsvQuotes(raw: String): String = {
+    // strip one layer of the outer wrapping quote if present, then unescape ""
+    val trimmed =
+      if (raw.startsWith("\"") && raw.endsWith("\"")) raw.substring(1, raw.length - 1)
+      else raw
+    trimmed.replace("\"\"", "\"")
+  }
+
+  // Stage 2: fix the XSA("uuid"."table") embedded-quote issue
+  private val xsaFieldPattern: Regex =
+    """"(name|displayName)":"(XSA\(.*?\))"""".r
+
+  def sanitize(raw: String): String = {
+    xsaFieldPattern.replaceAllIn(raw, m => {
+      val fieldName = m.group(1)
+      val xsaValue = m.group(2).replace("\"", "\\\"")
+      Regex.quoteReplacement(s""""$fieldName":"$xsaValue"""")
+    })
+  }
+
+  // Full pipeline: raw CSV-literal text -> parseable JSON string
+  def fixCsvEscapedJson(rawFromCsvLiteral: String): String = {
+    val csvUnescaped = unescapeCsvQuotes(rawFromCsvLiteral)
+    sanitize(csvUnescaped)
+  }
+}
+
+object DatasetEventParser {
+  private val mapper = new ObjectMapper()
+  mapper.registerModule(DefaultScalaModule)
+
+  // Use this if the value already came through a real CSV parser
+  // (Spark df.select("dataset_event"), OpenCSV, etc.) — only the
+  // XSA quote issue remains.
+  def parseFromCsvParsedField(value: String): JsonNode =
+    mapper.readTree(DatasetEventFixer.sanitize(value))
+
+  // Use this if you have the raw literal CSV text with visible "" escaping,
+  // e.g. copy-pasted straight from the file without going through a CSV reader.
+  def parseFromRawCsvLiteral(rawLiteral: String): JsonNode =
+    mapper.readTree(DatasetEventFixer.fixCsvEscapedJson(rawLiteral))
+}
+
+object JsonFieldsToStructType {
+
+  private val decimalPattern: Regex = """decimal\((\d+),(\d+)\)""".r
+
+  // Maps the type string coming from the schema facet into a Spark DataType
+  def mapType(typeStr: String): DataType = typeStr.trim.toLowerCase match {
+    case "string" => StringType
+    case "timestamp" => TimestampType
+    case "date" => DateType
+    case "boolean" | "bool" => BooleanType
+    case "int" | "integer" => IntegerType
+    case "long" | "bigint" => LongType
+    case "float" => FloatType
+    case "double" => DoubleType
+    case "binary" => BinaryType
+    case decimalPattern(prec, scale) => DecimalType(prec.toInt, scale.toInt)
+    case other =>
+      // Fallback: unknown/unsupported type -> treat as String rather than throw
+      StringType
+  }
+
+  /**
+   * @param fieldsNode the JsonNode at ...facets.schema.fields (must be an ARRAY node)
+   * @param nullable   whether generated fields should be nullable (default true)
+   */
+  def toStructType(fieldsNode: JsonNode, nullable: Boolean = true): StructType = {
+    require(fieldsNode.isArray, "Expected 'fields' to be a JSON array")
+
+    val structFields: Array[StructField] = fieldsNode.elements().asScala.map { fieldNode =>
+      val name = fieldNode.path("name").asText()
+      val typeStr = fieldNode.path("type").asText()
+      StructField(name, mapType(typeStr), nullable)
+    }.toArray
+
+    StructType(structFields)
+  }
+}
+
+object GetMetadataUtil{
+
+  def listDatabases(catalogName: String):Array[Array[String]]={
+    val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema.csv")
+    val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+    resultMap.flatMap(r => r._2.map(Array(_))).toArray
+  }
+
+  def loadNameSpaceMetadata(dbName: String, catalogName: String):util.Map[String, String]={
+    val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/schema_properties.csv")
+    val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+    val res = resultMap.map(r => (r._1, r._2.head))
+    res.asJava
+  }
+
+  def listTables(catalogName:String, db:String):Array[Identifier]={
+    val df = SparkSession.active.read.format("csv").option("header", "true").load("/Users/sharadsingh/Documents/more_schemas/name_type.csv")
+    val resultMap: Map[String, Array[String]] = dataFrameToColumnMap(df)
+
+    resultMap.get("name") match {
+      case Some(v) =>
+        v.map(tbl => Identifier.of(Array(db), tbl))
+
+      case None => Array.empty[Identifier]
+    }
+  }
+
+  def loadTable(ident: Identifier,catalogName: String):Table={
+    val df = SparkSession.active.read.format("csv").option("header", "true").option("quote", "\"").option("escape", "\"").load("/Users/sharadsingh/Documents/more_schemas/table_schema_dataset_event.csv")
+    val ct = getCatalogTable(df, ident,catalogName)
+    V2Table(ct)
+  }
 
   def dataFrameToColumnMap(df: DataFrame): Map[String, Array[String]] = {
     val columnNames: Array[String] = df.columns
@@ -216,7 +281,8 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
     }.toMap
   }
 
-  def getCatalogTable(df: DataFrame, ident: Identifier): CatalogTable = {
+
+  def getCatalogTable(df: DataFrame, ident: Identifier, catalogName:String): CatalogTable = {
     val resultMap = dataFrameToColumnMap(df)
     resultMap.get("dataset_event") match {
       case Some(v) =>
@@ -243,96 +309,6 @@ class LiveCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExte
       case None => throw new AnalysisException("Metadata missing from connector")
     }
   }
+
 }
-
-
-
-
-  object DatasetEventFixer {
-
-    // Stage 1: undo CSV-style quote doubling ("" -> ")
-    // Only needed if you're handed the raw literal text, NOT if a CSV
-    // parser (Spark, OpenCSV, commons-csv) already read the field for you.
-    def unescapeCsvQuotes(raw: String): String = {
-      // strip one layer of the outer wrapping quote if present, then unescape ""
-      val trimmed =
-        if (raw.startsWith("\"") && raw.endsWith("\"")) raw.substring(1, raw.length - 1)
-        else raw
-      trimmed.replace("\"\"", "\"")
-    }
-
-    // Stage 2: fix the XSA("uuid"."table") embedded-quote issue
-    private val xsaFieldPattern: Regex =
-      """"(name|displayName)":"(XSA\(.*?\))"""".r
-
-    def sanitize(raw: String): String = {
-      xsaFieldPattern.replaceAllIn(raw, m => {
-        val fieldName = m.group(1)
-        val xsaValue = m.group(2).replace("\"", "\\\"")
-        Regex.quoteReplacement(s""""$fieldName":"$xsaValue"""")
-      })
-    }
-
-    // Full pipeline: raw CSV-literal text -> parseable JSON string
-    def fixCsvEscapedJson(rawFromCsvLiteral: String): String = {
-      val csvUnescaped = unescapeCsvQuotes(rawFromCsvLiteral)
-      sanitize(csvUnescaped)
-    }
-  }
-
-  object DatasetEventParser {
-    private val mapper = new ObjectMapper()
-    mapper.registerModule(DefaultScalaModule)
-
-    // Use this if the value already came through a real CSV parser
-    // (Spark df.select("dataset_event"), OpenCSV, etc.) — only the
-    // XSA quote issue remains.
-    def parseFromCsvParsedField(value: String): JsonNode =
-      mapper.readTree(DatasetEventFixer.sanitize(value))
-
-    // Use this if you have the raw literal CSV text with visible "" escaping,
-    // e.g. copy-pasted straight from the file without going through a CSV reader.
-    def parseFromRawCsvLiteral(rawLiteral: String): JsonNode =
-      mapper.readTree(DatasetEventFixer.fixCsvEscapedJson(rawLiteral))
-  }
-
-  object JsonFieldsToStructType {
-
-    private val decimalPattern: Regex = """decimal\((\d+),(\d+)\)""".r
-
-    // Maps the type string coming from the schema facet into a Spark DataType
-    def mapType(typeStr: String): DataType = typeStr.trim.toLowerCase match {
-      case "string" => StringType
-      case "timestamp" => TimestampType
-      case "date" => DateType
-      case "boolean" | "bool" => BooleanType
-      case "int" | "integer" => IntegerType
-      case "long" | "bigint" => LongType
-      case "float" => FloatType
-      case "double" => DoubleType
-      case "binary" => BinaryType
-      case decimalPattern(prec, scale) => DecimalType(prec.toInt, scale.toInt)
-      case other =>
-        // Fallback: unknown/unsupported type -> treat as String rather than throw
-        StringType
-    }
-
-    /**
-     * @param fieldsNode the JsonNode at ...facets.schema.fields (must be an ARRAY node)
-     * @param nullable   whether generated fields should be nullable (default true)
-     */
-    def toStructType(fieldsNode: JsonNode, nullable: Boolean = true): StructType = {
-      require(fieldsNode.isArray, "Expected 'fields' to be a JSON array")
-
-      val structFields: Array[StructField] = fieldsNode.elements().asScala.map { fieldNode =>
-        val name = fieldNode.path("name").asText()
-        val typeStr = fieldNode.path("type").asText()
-        StructField(name, mapType(typeStr), nullable)
-      }.toArray
-
-      StructType(structFields)
-    }
-  }
-
-
 
