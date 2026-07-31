@@ -212,6 +212,19 @@ object JsonFieldsToStructType {
     case "float" => FloatType
     case "double" => DoubleType
     case "binary" => BinaryType
+    case "time"  => StringType
+    case "real"  => FloatType
+    case "clob"  => StringType
+    case "nclob" => StringType
+    case "blob" => BinaryType
+    case "varbinary" => BinaryType
+    case "longvarbinary" => BinaryType
+    case "tinyint" => ShortType
+    case "smallint" => ShortType
+    case "binary_double" => DoubleType
+    case "nvarchar" => StringType
+    case "nchar" => StringType
+    case "varchar" => StringType
     case decimalPattern(prec, scale) => DecimalType(prec.toInt, scale.toInt)
     case other =>
       // Fallback: unknown/unsupported type -> treat as String rather than throw
