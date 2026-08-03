@@ -307,11 +307,12 @@ object GetMetadataUtil{
 
         val dbName = ident.namespace().head
         val tableName = ident.name()
+        val storageMap = Map("schema"->dbName, "table" -> tableName)
         CatalogTable(
           identifier = TableIdentifier(tableName, Some(dbName), Some(catalogName)),
           CatalogTableType.EXTERNAL,
           new CatalogStorageFormat(None, None, None,
-            None, false, Map.empty[String, String]
+            None, false, storageMap
           ),
           schema,
           provider = Some("custom"),
