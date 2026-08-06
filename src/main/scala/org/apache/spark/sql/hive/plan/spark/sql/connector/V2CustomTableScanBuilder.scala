@@ -24,6 +24,19 @@ import org.apache.spark.sql.v2.avro.AvroScanBuilder
 
 import scala.collection.JavaConverters.mapAsScalaMapConverter
 
+
+/**Looking at the three files you've shared, here's my honest assessment for Spark 4.x + Scala 2.13 compatibility:
+V2CustomTableScan.scala — will work as-is. No changes needed.
+V2CustomTable.scala — will work as-is. No changes needed.
+V2CustomTableScanBuilder.scala — two things that will break on Spark 4.x:
+1. import org.apache.spark.sql.catalyst.StructFilters
+In Spark 4.x, StructFilters moved from org.apache.spark.sql.catalyst to org.apache.spark.sql.execution.datasources. The import you have is wrong for Spark 3.5 too — which is likely the "Cannot resolve symbol StructFilters" error you hit. In Spark 4.x the class may be renamed or removed entirely since CSV/JSON filter pushdown was reworked.
+2. import org.apache.spark.sql.catalyst.util.RebaseDateTime
+RebaseDateTime and the entire datetime rebase infrastructure were removed in Spark 4.0 as part of the legacy datetime rebase cleanup (SPARK-43576). LegacyBehaviorPolicy was also removed. So RebaseDateTime.RebaseSpec(LegacyBehaviorPolicy.CORRECTED) won't compile on Spark 4.x at all.
+3. ParquetFilters constructor — the 8-arg constructor with datetimeRebaseSpec was simplified in Spark 4.x. The rebase spec arg was dropped when the legacy rebase support was removed.
+4. Scala 2.13 — scala.collection.JavaConverters is deprecated in 2.13, replaced by scala.jdk.CollectionConverters. Won't break compilation but will generate deprecation warnings everywhere the asScala/asJava conversions are used.
+The rest — equals, hashCode, estimateStatistics, FileStatusCache, capabilities, the FileScanBuilder subclassing approach — is all fine on Spark 4.x.**/
+
 // ─────────────────────────────────────────────────────────────────────────────
 // ARCHITECTURE
 // ─────────────────────────────────────────────────────────────────────────────
