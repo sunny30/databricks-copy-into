@@ -157,9 +157,20 @@ case class V2CustomTable(name: String,
     )
 
     // FIX 11 — pass catalogTable so the scan can expose stats to CBO
+    // Factory selects the right per-format subclass (V2ParquetScanBuilder,
+    // V2OrcScanBuilder etc.) so pushDataFilters is called on `this` inside
+    // each subclass — no cross-instance protected access issues.
     V2CustomTableScanBuilder(
-      multiPartName, provider, sparkSession, fileIndex, readSchema, dataSchema,
-      effectiveOptions, Some(catalogTable))
+      multiPartName = multiPartName,
+      format        = provider,
+      sparkSession  = sparkSession,
+      hadoopConf    = hadoopConf,
+      fileIndex     = fileIndex,
+      schema        = readSchema,
+      dataSchema    = dataSchema,
+      options       = effectiveOptions,
+      catalogTable  = Some(catalogTable)
+    )
   }
 
   protected def getPaths(map: CaseInsensitiveStringMap): Seq[String] = {

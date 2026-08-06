@@ -93,11 +93,15 @@ object App {
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
+
    //OverwriteFormatTests.runAll(spark)
 //    spark.sql("show databases in live").show(100,0)
 //    spark.sql("describe database live.`HCM - Workforce Time and Labor Management`").show(2,0)
 //    spark.sql("show tables in live.`HCM - Workforce Time and Labor Management1`").show()
-    spark.sql("describe formatted live.`HCM - Workforce Time and Labor Management1`.`Lead Converted Date`").show()
+//    spark.sql("describe formatted live.`HCM - Workforce Time and Labor Management1`.`Lead Converted Date`").show()
+    spark.sql("use catalog cat")
+    spark.sql("create database cat.dbicex")
+    spark.sql("create table dbicex.tbl(id int, name string) using iceberg")
 //    spark.sql("show tables in live.f.db").show()
 //    spark.sql("describe formatted live.f.db.live_tbl").show()
 //    spark.sql("select * from live.f.db.live_tbl").show()
