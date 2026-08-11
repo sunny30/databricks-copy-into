@@ -63,6 +63,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   var proxyCatalog: ProxyCatalog = null;
 
+  private var liveCatalog: LiveCatalog[_ <: TableCatalog with SupportsNamespaces] = null
+
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
     // TODO
     log.info("Inside Catalog Plugin Initialize")
@@ -75,6 +77,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     this.options = options
     proxyCatalog = new ProxyCatalog(catalogName = catalogName, proxyDBName = None)
     // Initialize the catalog in any other provider that we can integrate with
+    liveCatalog = new LiveCatalog()
+    liveCatalog.initialize(name, options)
   }
 
   override def setDelegateCatalog(delegate: CatalogPlugin): Unit = {
