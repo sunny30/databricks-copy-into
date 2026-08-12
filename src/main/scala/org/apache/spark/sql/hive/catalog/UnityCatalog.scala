@@ -108,6 +108,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
 
   override def listTables(namespace: Array[String]): Array[Identifier] = {
+    if(isLiveCatalog){
+      return liveCatalog.listTables(namespace)
+    }
     namespace match {
       case Array(db) =>
         if (proxyCatalog.databaseExists(db)) {
@@ -232,6 +235,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def listNamespaces(): Array[Array[String]] = {
+    if (isLiveCatalog)
+      return liveCatalog.listNamespaces()
     (externalCatalog.
       listDatabases() ++ proxyCatalog.listDatabase()).
       map(x => Array(x)).
@@ -239,6 +244,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
+    if (isLiveCatalog)
+      return liveCatalog.listNamespaces(namespace)
     namespace match {
       case Array() =>
         listNamespaces()
@@ -250,7 +257,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadNamespaceMetadata(namespace: Array[String]): util.Map[String, String] = {
-
+    if(isLiveCatalog)
+      return liveCatalog.loadNamespaceMetadata(namespace)
 
     namespace match {
       case Array(db) =>
@@ -297,6 +305,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def namespaceExists(namespace: Array[String]): Boolean = {
+    if (isLiveCatalog)
+      return liveCatalog.namespaceExists(namespace)
     namespace match {
       case Array(db) => externalCatalog.databaseExists(db)
       case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
@@ -451,6 +461,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def tableExists(ident: Identifier): Boolean = {
+    if(isLiveCatalog)
+      return  liveCatalog.tableExists(ident)
     try {
       loadTable(ident) != null || loadTable(ident, null) != null
     } catch {
@@ -465,6 +477,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier): Table = {
+    if(isLiveCatalog){
+      return liveCatalog.loadTable(ident)
+    }
     if (ident.namespace().size > 1) {
       //this if block for history,snapshots..so far its only possible for
       new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
@@ -616,6 +631,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def name(): String = catalogName
+
+
+  private def isLiveCatalog:Boolean={
+    catalogName.equalsIgnoreCase("live")
+  }
 
   private def toCatalogDatabase(
                                  db: String,
