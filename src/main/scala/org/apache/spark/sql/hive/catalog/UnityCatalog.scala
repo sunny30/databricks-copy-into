@@ -30,6 +30,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hudi.UnityHudiCatalog
 import org.apache.spark.sql.iceberg.UnityIcebergCatalog
+import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
 import java.net.URI
@@ -595,41 +596,53 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
+
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
+
     if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new UnityDeltaCatalog(externalCatalog,catalogName).stageReplace(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageReplace(newIdent, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageReplace(ident, schema, partitions, properties)
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageReplace(newIdent, schema, partitions, properties)
     } else {
-      dropTable(ident)
-      val table = createTable(ident, schema, partitions, properties)
-      BestEffortStagedTable(ident, table, this)
+      dropTable(newIdent)
+      val table = createTable(newIdent, schema, partitions, properties)
+      BestEffortStagedTable(newIdent, table, this)
     }
   }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
     println("Inside stageCreateOrReplace")
     if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreateOrReplace(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreateOrReplace(newIdent, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(newIdent, schema, partitions, properties)
     } else {
-      dropTable(ident)
-      val table = createTable(ident, schema, partitions, properties)
-      BestEffortStagedTable(ident, table, this)
+      dropTable(newIdent)
+      val table = createTable(newIdent, schema, partitions, properties)
+      BestEffortStagedTable(newIdent, table, this)
     }
   }
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
 
    // val table = createTable(ident, schema, partitions, properties)
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
+
     if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
     //  val table = createTable(ident, schema, partitions, properties)
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(newIdent, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("delta")) {
-      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreate(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreate(newIdent, schema, partitions, properties)
     } else {
-      val table = createTable(ident, schema, partitions, properties)
-      BestEffortStagedTable(ident, table, this)
+      val table = createTable(newIdent, schema, partitions, properties)
+      BestEffortStagedTable(newIdent, table, this)
     }
   }
 
