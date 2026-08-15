@@ -30,6 +30,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
 import org.apache.spark.sql.hudi.UnityHudiCatalog
 import org.apache.spark.sql.iceberg.UnityIcebergCatalog
+import org.apache.spark.sql.internal.SQLConf
 
 import scala.collection.JavaConverters._
 import java.net.URI
@@ -63,6 +64,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
   var proxyCatalog: ProxyCatalog = null;
 
+  private var liveCatalog: LiveCatalog[_ <: TableCatalog with SupportsNamespaces] = null
+
   override def initialize(name: String, options: CaseInsensitiveStringMap): Unit = {
     // TODO
     log.info("Inside Catalog Plugin Initialize")
@@ -75,6 +78,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     this.options = options
     proxyCatalog = new ProxyCatalog(catalogName = catalogName, proxyDBName = None)
     // Initialize the catalog in any other provider that we can integrate with
+    liveCatalog = new LiveCatalog()
+    liveCatalog.initialize(name, options)
   }
 
   override def setDelegateCatalog(delegate: CatalogPlugin): Unit = {
@@ -104,6 +109,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
 
 
   override def listTables(namespace: Array[String]): Array[Identifier] = {
+    if(isLiveCatalog){
+      return liveCatalog.listTables(namespace)
+    }
     namespace match {
       case Array(db) =>
         if (proxyCatalog.databaseExists(db)) {
@@ -228,6 +236,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def listNamespaces(): Array[Array[String]] = {
+    if (isLiveCatalog)
+      return liveCatalog.listNamespaces()
     (externalCatalog.
       listDatabases() ++ proxyCatalog.listDatabase()).
       map(x => Array(x)).
@@ -235,6 +245,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def listNamespaces(namespace: Array[String]): Array[Array[String]] = {
+    if (isLiveCatalog)
+      return liveCatalog.listNamespaces(namespace)
     namespace match {
       case Array() =>
         listNamespaces()
@@ -246,7 +258,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadNamespaceMetadata(namespace: Array[String]): util.Map[String, String] = {
-
+    if(isLiveCatalog)
+      return liveCatalog.loadNamespaceMetadata(namespace)
 
     namespace match {
       case Array(db) =>
@@ -293,6 +306,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def namespaceExists(namespace: Array[String]): Boolean = {
+    if (isLiveCatalog)
+      return liveCatalog.namespaceExists(namespace)
     namespace match {
       case Array(db) => externalCatalog.databaseExists(db)
       case _ => throw QueryCompilationErrors.noSuchNamespaceError(namespace)
@@ -447,6 +462,8 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def tableExists(ident: Identifier): Boolean = {
+    if(isLiveCatalog)
+      return  liveCatalog.tableExists(ident)
     try {
       loadTable(ident) != null || loadTable(ident, null) != null
     } catch {
@@ -461,6 +478,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier): Table = {
+    if(isLiveCatalog){
+      return liveCatalog.loadTable(ident)
+    }
     if (ident.namespace().size > 1) {
       //this if block for history,snapshots..so far its only possible for
       new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident)
@@ -507,6 +527,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadSecureTable(db: String, table: String): CatalogTable = {
+    if(isLiveCatalog){
+      liveCatalog.loadTable(Identifier.of(Array(db), table))
+    }
     externalCatalog.getSecureTable(db, table)
   }
 
@@ -573,45 +596,62 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
                              schema: StructType,
                              partitions: Array[Transform],
                              properties: util.Map[String, String]): StagedTable = {
+
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
+
     if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new UnityDeltaCatalog(externalCatalog,catalogName).stageReplace(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageReplace(newIdent, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageReplace(ident, schema, partitions, properties)
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageReplace(newIdent, schema, partitions, properties)
     } else {
-      dropTable(ident)
-      val table = createTable(ident, schema, partitions, properties)
-      BestEffortStagedTable(ident, table, this)
+      dropTable(newIdent)
+      val table = createTable(newIdent, schema, partitions, properties)
+      BestEffortStagedTable(newIdent, table, this)
     }
   }
 
   override def stageCreateOrReplace(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
     println("Inside stageCreateOrReplace")
     if (DeltaSourceUtils.isDeltaDataSourceName(getProvider(properties))) {
-      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreateOrReplace(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreateOrReplace(newIdent, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(newIdent, schema, partitions, properties)
     } else {
-      dropTable(ident)
-      val table = createTable(ident, schema, partitions, properties)
-      BestEffortStagedTable(ident, table, this)
+      dropTable(newIdent)
+      val table = createTable(newIdent, schema, partitions, properties)
+      BestEffortStagedTable(newIdent, table, this)
     }
   }
 
   override def stageCreate(ident: Identifier, schema: StructType, partitions: Array[Transform], properties: util.Map[String, String]): StagedTable = {
 
    // val table = createTable(ident, schema, partitions, properties)
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
+
     if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("iceberg")) {
     //  val table = createTable(ident, schema, partitions, properties)
-      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(ident, schema, partitions, properties)
+      (new UnityIcebergCatalog(externalCatalog, catalogName, options)).stageCrateOrReplace(newIdent, schema, partitions, properties)
     } else if (properties.containsKey("provider") && properties.get("provider").equalsIgnoreCase("delta")) {
-      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreate(ident, schema, partitions, properties)
+      new UnityDeltaCatalog(externalCatalog,catalogName).stageCreate(newIdent, schema, partitions, properties)
     } else {
-      val table = createTable(ident, schema, partitions, properties)
-      BestEffortStagedTable(ident, table, this)
+      val table = createTable(newIdent, schema, partitions, properties)
+      BestEffortStagedTable(newIdent, table, this)
     }
   }
 
   override def name(): String = catalogName
+
+
+  private def isLiveCatalog:Boolean={
+    catalogName.equalsIgnoreCase("live")
+  }
 
   private def toCatalogDatabase(
                                  db: String,

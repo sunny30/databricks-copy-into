@@ -1,5 +1,6 @@
 package org.apache.spark.sql.hive.plan.spark.sql.parser
 
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{GlobalTempView, LocalTempView, PersistedView, RelationTimeTravel, UnresolvedIdentifier, UnresolvedNamespace, UnresolvedRelation, UnresolvedTable, UnresolvedTableOrView, UnresolvedView}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.withOrigin
@@ -15,6 +16,7 @@ import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{RenameCatalogView, ShowCatalogViews}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.{NonDefaultCatalogAlterViewQueryCommand, NonDefaultCatalogCreateViewCommand, NonDefaultCatalogDropViewCommand}
 import org.apache.spark.sql.hive.plan.spark.sql.stat.{CustomAnalyzeColumn, CustomAnalyzeTable}
+import org.apache.spark.sql.internal.SQLConf
 
 import java.util.Locale
 import scala.collection.JavaConverters.asScalaBufferConverter
@@ -77,31 +79,28 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
       val nameParts = withIdentClause(ctx.identifierReference(),
         UnresolvedIdentifier(_)).
         asInstanceOf[UnresolvedIdentifier].nameParts
+      val defaultCatalog = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+      val defaultSchema = SparkSession.active.sessionState.catalogManager.currentCatalog.defaultNamespace().head
 
-      if(nameParts.size==3){
-        NonDefaultCatalogCreateViewCommand(
-          TableIdentifier(table = nameParts(2), database = Some(nameParts(1)), catalog = Some(nameParts(0))),
-          userSpecifiedColumns,
-          visitCommentSpecList(ctx.commentSpec()),
-          properties,
-          Option(source(ctx.query)),
-          qPlan,
-          ctx.EXISTS != null,
-          ctx.REPLACE != null,
-          viewType = viewType
-        )
 
-      }else {
-        CreateView(
-          withIdentClause(ctx.identifierReference(), UnresolvedIdentifier(_)),
-          userSpecifiedColumns,
-          visitCommentSpecList(ctx.commentSpec()),
-          properties,
-          Some(originalText),
-          qPlan,
-          ctx.EXISTS != null,
-          ctx.REPLACE != null)
+      val (catalogName, dbName, viewName) = if (nameParts.size == 3) {
+        (nameParts(0), nameParts(1), nameParts(2))
+      } else if (nameParts.size == 2) {
+        (defaultCatalog, nameParts(0), nameParts(1))
+      } else {
+        (defaultCatalog, defaultSchema, nameParts(0))
       }
+      NonDefaultCatalogCreateViewCommand(
+        TableIdentifier(table = viewName, database = Some(dbName), catalog = Some(catalogName)),
+        userSpecifiedColumns,
+        visitCommentSpecList(ctx.commentSpec()),
+        properties,
+        Option(source(ctx.query)),
+        qPlan,
+        ctx.EXISTS != null,
+        ctx.REPLACE != null,
+        viewType = viewType
+      )
     } else {
       // Disallows 'CREATE TEMPORARY VIEW IF NOT EXISTS' to be consistent with
       // 'CREATE TEMPORARY TABLE'
