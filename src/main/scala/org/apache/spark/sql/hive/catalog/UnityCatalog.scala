@@ -534,8 +534,10 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier, timestamp: Long): Table = {
-    val tableName = ident.asTableIdentifier.table
-    val dbName = ident.asTableIdentifier.database.getOrElse("default")
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
+
     val tt = externalCatalog.getTable(table = tableName, db = dbName)
     if (timestamp == null) {
       if (tt != null) {
@@ -551,9 +553,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       }
       tt.provider match {
         case Some(value) => if(value.equalsIgnoreCase("delta")){
-          new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(ident, timestamp)
+          new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(newIdent, timestamp)
         }else if(value.equalsIgnoreCase("iceberg")){
-          new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident, timestamp)
+          new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(newIdent, timestamp)
         }else{
           throw new IllegalArgumentException(s"${value} dataforat not supported")
         }
@@ -562,8 +564,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadTable(ident: Identifier, version: String): Table = {
-    val tableName = ident.asTableIdentifier.table
-    val dbName = ident.asTableIdentifier.database.getOrElse("default")
+    val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
+    val tableName = ident.name().toLowerCase
+    val newIdent = Identifier.of(Array(dbName), tableName)
     val tt = externalCatalog.getTable(table = tableName, db = dbName)
     if (version == null) {
 
@@ -575,9 +578,9 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     } else {
       tt.provider match {
         case Some(value) => if (value.equalsIgnoreCase("delta")) {
-          new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(ident, version)
+          new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(newIdent, version)
         } else if (value.equalsIgnoreCase("iceberg")) {
-          new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(ident, version)
+          new UnityIcebergCatalog(externalCatalog, catalogName, options).loadTable(newIdent, version)
         } else {
           throw new IllegalArgumentException(s"${value} dataforat not supported")
         }
