@@ -94,7 +94,11 @@ object CLSUtils {
     }
 
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    getSecureLeafPlan(secureTable, ds)
+    if(secureTable!= null ) {
+      getSecureLeafPlan(secureTable, ds)
+    }else{
+      ds
+    }
   }
 
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
@@ -105,7 +109,11 @@ object CLSUtils {
       return ds
     }
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    getSecureLeafPlan(secureTable, ds)
+    if (secureTable != null) {
+      getSecureLeafPlan(secureTable, ds)
+    } else {
+      ds
+    }
   }
 
 
@@ -160,7 +168,12 @@ object CLSUtils {
     val tid = view.desc.identifier
     val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
     val secureCatalogTable = getSecureTableFrom(catalogName,dbName,tableName)
-    getSecureLeafPlan(secureCatalogTable, view)
+    if (secureCatalogTable != null) {
+      getSecureLeafPlan(secureCatalogTable, view)
+    } else {
+      view
+    }
+   // getSecureLeafPlan(secureCatalogTable, view)
   }
 
 
@@ -263,12 +276,18 @@ object CLSUtils {
 
   def getSecureTableFromMultiPart(multipartIdentifier: Seq[String]): Option[CatalogTable] ={
     val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    val schemaName = SparkSession.active.sessionState.catalogManager.currentNamespace
+    val defaultSchema = schemaName match {
+      case Array(db) => db
+      case Array(_, db) => db
+      case _ => "default"
+    }
     val res = if (multipartIdentifier.size == 3) {
       (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
     } else if (multipartIdentifier.size == 2) {
       (catalogName, multipartIdentifier(0), multipartIdentifier(1))
     } else {
-      (catalogName, "default", multipartIdentifier(0))
+      (catalogName, defaultSchema, multipartIdentifier(0))
     }
     try {
       val ct = getSecureTableFrom(res._1, res._2, res._3)
