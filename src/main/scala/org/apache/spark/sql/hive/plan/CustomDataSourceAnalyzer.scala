@@ -11,7 +11,7 @@ import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubquer
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeleteFromTable, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, MergeIntoTable, OverwriteByExpression, Project, ReplaceData, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CTERelationRef, CreateTableAsSelect, DeleteFromTable, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, MergeIntoTable, OverwriteByExpression, Project, ReplaceData, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils

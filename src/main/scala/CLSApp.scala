@@ -17,7 +17,10 @@ object CLSApp {
     val cteQuery =
       s"""WITH cte_data AS (SELECT * FROM cat.cls_db2.ppt)
          |SELECT * FROM cte_data""".stripMargin
-    spark.sql(cteQuery).show()
+
+    val cteQuery1 = """WITH tmp AS (SELECT id, name FROM cat.cls_db2.ppt)
+                      |    SELECT * FROM cat.cls_db2.ppt a JOIN tmp ON a.id = tmp.id""".stripMargin
+    spark.sql(cteQuery1).show()
 //    spark.sql("SELECT * FROM cte_data").show()
    // spark.sql("truncate table cat.cls_db2.ppt")
    // spark.sql("select * from cat.cls_db2.ppt").show()

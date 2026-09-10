@@ -52,15 +52,10 @@ class ResolveDeltaCrudOperation(session: SparkSession)
       u.copy(table = newQuery)
 
     case b: BinaryNode =>
-      session.sessionState.analyzer.executeAndCheck(b.left, new QueryPlanningTracker())
-      session.sessionState.analyzer.executeAndCheck(b.right, new QueryPlanningTracker())
-      b.collectLeaves().foreach(l => CLSUtils.getSecureRelation(l))
-      b
+      applySecurityToLeaves(b)
 
     case u: Union =>
-      u.children.foreach(child => session.sessionState.analyzer.executeAndCheck(child, new QueryPlanningTracker()))
-      u.collectLeaves().foreach(l => CLSUtils.getSecureRelation(l))
-      u
+      applySecurityToLeaves(u)
 
 
     case dsv2@DataSourceV2Relation(d: DeltaTableV2, _, _, _, options) if (d.timeTravelOpt.isDefined) =>
@@ -97,6 +92,29 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     val lr = LogicalRelation(relation, output, d.ttSafeCatalogTable, isStreaming = false)
     lr.setTagValue(TreeNodeTag[String]("delta-time-travel-read"), "true")
     lr
+  }
+
+  private def applySecurityToLeaves(plan: LogicalPlan): LogicalPlan = {
+    plan.transformUpWithSubqueries {
+      // Covers Delta (DeltaTableV2), Iceberg (SparkTable), V2Table
+      // All are DataSourceV2Relation at this point in the pipeline
+      // getSecureDataSource internally handles shouldApplyCLSonDSV2Table
+      case ds: DataSourceV2Relation
+        if ds.resolved &&
+          !CLSUtils.isViewsPlan(ds) &&
+          !CDCReader.isCDCRead(ds.options) =>
+        CLSUtils.getSecureDataSource(ds)
+
+      // Defensive — LogicalRelation if somehow present at this stage
+      case lr: LogicalRelation
+        if lr.resolved &&
+          lr.catalogTable.isDefined &&
+          !CLSUtils.isExternalCatalogTable(lr.catalogTable.get) &&
+          !CLSUtils.isTimeTravelTagPresentAtLogicalRelation(lr) =>
+        CLSUtils.getSecureDataSource(lr)
+
+      case other => other
+    }
   }
 
 
