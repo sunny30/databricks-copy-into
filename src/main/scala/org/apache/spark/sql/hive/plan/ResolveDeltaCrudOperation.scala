@@ -2,9 +2,10 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.QueryPlanningTracker
 import org.apache.spark.sql.catalyst.analysis.ResolvedNamespace
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteFromTable, DeltaMergeInto, InsertAction, InsertStarAction, LogicalPlan, MergeIntoTable, SubqueryAlias, UpdateAction, UpdateStarAction, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, BinaryNode, DeleteFromTable, DeltaMergeInto, InsertAction, InsertStarAction, LogicalPlan, MergeIntoTable, SubqueryAlias, Union, UpdateAction, UpdateStarAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
@@ -49,6 +50,17 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     case u:UpdateTable  =>
       val newQuery = CLSUtils.removeSecureProjection(u.table)
       u.copy(table = newQuery)
+
+    case b: BinaryNode =>
+      session.sessionState.analyzer.executeAndCheck(b.left, new QueryPlanningTracker())
+      session.sessionState.analyzer.executeAndCheck(b.right, new QueryPlanningTracker())
+      b.collectLeaves().foreach(l => CLSUtils.getSecureRelation(l))
+      b
+
+    case u: Union =>
+      u.children.foreach(child => session.sessionState.analyzer.executeAndCheck(child, new QueryPlanningTracker()))
+      u.collectLeaves().foreach(l => CLSUtils.getSecureRelation(l))
+      u
 
 
     case dsv2@DataSourceV2Relation(d: DeltaTableV2, _, _, _, options) if (d.timeTravelOpt.isDefined) =>

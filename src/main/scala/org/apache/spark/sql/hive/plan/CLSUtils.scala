@@ -333,6 +333,8 @@ object CLSUtils {
       val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
       val ct = getSecureTableFromMultiPart(multiParts)
+      if(ct == null)
+        return plan
       val tag_key = ct match {
         case Some(table) => if (table.tableType == CatalogTableType.VIEW){
           "col-view-sec"

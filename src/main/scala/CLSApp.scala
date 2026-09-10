@@ -14,11 +14,11 @@ object CLSApp {
    // spark.sql("describe table cat.cls_db2.ppt cls_id").show()
     //spark.sql("show columns in cat.cls_db2.ppt").show()
     spark.sql("insert into cat.cls_db2.ppt values(1,'sh'), (3, 'su')")
-//    val cteQuery =
-//      s"""WITH cte_data AS (SELECT * FROM cat.cls_db2.ppt)
-//         |SELECT * FROM cte_data""".stripMargin
-//    spark.sql(cteQuery).show()
-   // spark.sql("SELECT * FROM cte_data").show()
+    val cteQuery =
+      s"""WITH cte_data AS (SELECT * FROM cat.cls_db2.ppt)
+         |SELECT * FROM cte_data""".stripMargin
+    spark.sql(cteQuery).show()
+//    spark.sql("SELECT * FROM cte_data").show()
    // spark.sql("truncate table cat.cls_db2.ppt")
    // spark.sql("select * from cat.cls_db2.ppt").show()
 
@@ -50,8 +50,8 @@ object CLSApp {
 //        |""".stripMargin)
    // spark.sql("update cat.cls_db2.ppt set id = 4 where name1 = 'sh'")
   //  spark.sql("select * from cat.cls_db2.ppt").show()
-    spark.sql("create view cat.cls_db2.v1(cls_id , name) as select *  from cat.cls_db2.ppt")
-    spark.sql("describe formatted cat.cls_db2.v1").show()
+ //   spark.sql("create view cat.cls_db2.v1(cls_id , name) as select *  from cat.cls_db2.ppt")
+ //   spark.sql("describe formatted cat.cls_db2.v1").show()
   //  spark.sql("show columns in cat.cls_db2.v1").show()
 //    spark.sql("select * from cat.cls_db2.v1").show()
 //    spark.sql("show columns in cat.cls_db2.ppt").show()
