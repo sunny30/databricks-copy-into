@@ -7,6 +7,12 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 object CLSApp {
 
 
+  def dfJoinApp(spark: SparkSession):Unit={
+    spark.sql("""create database if not exists cat.cls_db3""")
+    spark.sql("create table cat.cls_db3.dt(id int, name string) using delta")
+    spark.sql("create table cat.cls_db3.it(id int, name string) using iceberg")
+    spark.read.table("cat.cls_db3.dt").join(spark.table(" cat.cls_db3.it"), "id").show()
+  }
   def viewCLSApp(spark: SparkSession):Unit = {
 
     spark.sql("""create database if not exists cat.cls_db2""")
