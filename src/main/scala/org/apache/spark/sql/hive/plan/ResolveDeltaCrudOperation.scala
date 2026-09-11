@@ -104,6 +104,7 @@ class ResolveDeltaCrudOperation(session: SparkSession)
           !CLSUtils.isViewsPlan(ds) &&
           !CDCReader.isCDCRead(ds.options) =>
         CLSUtils.getSecureDataSource(ds)
+        ds
 
       // Defensive — LogicalRelation if somehow present at this stage
       case lr: LogicalRelation
@@ -112,6 +113,7 @@ class ResolveDeltaCrudOperation(session: SparkSession)
           !CLSUtils.isExternalCatalogTable(lr.catalogTable.get) &&
           !CLSUtils.isTimeTravelTagPresentAtLogicalRelation(lr) =>
         CLSUtils.getSecureDataSource(lr)
+        lr
 
       case other => other
     }

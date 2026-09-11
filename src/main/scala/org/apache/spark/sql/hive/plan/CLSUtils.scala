@@ -66,18 +66,14 @@ object CLSUtils {
   }
 
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
-    if(CLSUtils.isViewsPlan(plan)){
+    if (CLSUtils.isViewsPlan(plan)) {
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
-        if(table!=null && shouldApplyCLSonDSV2Table(table)) {
-          getSecurePlanFromDataSourceV2(ds, table)
-        }else{
-          ds
-        }
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined && !isExternalCatalogTable(catalogTable.get) =>
-        getSecurePlanFromLogicalRelation(lr, catalogTable.get)
+      case ds: DataSourceV2Relation if ds.table != null && shouldApplyCLSonDSV2Table(ds.table) =>
+        getSecurePlanFromDataSourceV2(ds, ds.table)
+      case lr: LogicalRelation if lr.catalogTable.isDefined =>
+        getSecurePlanFromLogicalRelation(lr, lr.catalogTable.get)
       case _ => plan
 
     }
@@ -86,34 +82,34 @@ object CLSUtils {
   //covers Iceberg and V2Table
   def getSecurePlanFromDataSourceV2(ds: DataSourceV2Relation, table: Table): LogicalPlan = {
     val (catalogName, dbName, tableName) = getCatalogTableDetails(table)
-    if(catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty){
+    if (catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty) {
       return ds
     }
-    if(isExternalCatalog(catalogName)){
+    if (isExternalCatalog(catalogName)) {
       return ds
     }
 
-    val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    if(secureTable!= null ) {
-      getSecureLeafPlan(secureTable, ds)
-    }else{
-      ds
-    }
-  }
-
-  def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
-    println("Inside getSecurePlanFromLogicalRelation")
-    val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
-
-    if(isExternalCatalog(catalogName)){
-      return ds
-    }
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
     if (secureTable != null) {
       getSecureLeafPlan(secureTable, ds)
     } else {
       ds
     }
+  }
+
+  def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
+    val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
+    if (isExternalCatalog(catalogName)) {
+      return ds
+    } else {
+      val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+      if (secureTable != null) {
+        getSecureLeafPlan(secureTable, ds)
+      } else {
+        ds
+      }
+    }
+
   }
 
 
@@ -159,8 +155,16 @@ object CLSUtils {
 
 
   def getSecureTableFrom(catalogName: String, db: String, table: String): CatalogTable = {
+    println(s"""getSecureTableFrom $catalogName, $db, $table""")
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
     val ct = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(db, table)
+    val ctString = if(ct == null ){
+      "null"
+    }else{
+      ct.toString()
+    }
+    println(s"""getSecureTableFrom $catalogName, $db, $table result is $ctString""")
+
     ct
   }
 
