@@ -198,8 +198,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     val projectList = getViewColumns(table.v1Table)
     //val secureProjection = getSecureProjectList(projectList, table.v1Table)
     // val resolvedPlan = apply(Project(projectList, parsedPlan))
-   val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
-    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
+    val secureProjectList = getSecureProjection(parsedPlan)
+   //val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
+
+    val child = Project(projectList, parsedPlan)
 
 //    val details = CLSUtils.getCatalogTableDetails(table)
 //    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
@@ -213,15 +215,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     CLSUtils.tagViewPlan(plan = newPlan)
     val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
-    val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
+    val secureViewPlan = View(desc = table.v1Table, isTempView = false, child = newChild)
     CLSUtils.tagViewPlan(plan = secureViewPlan)
-    session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
+    session.sessionState.analyzer.executeAndCheck(newChild, new QueryPlanningTracker())
     println("Returning View")
 
     println("=== secureViewPlan.output: " +
       secureViewPlan.output.map(_.name).mkString(", "))
     CustomView(desc = table.v1Table,secureViewPlan, secureViewPlan.output )
 
+  }
+
+
+  def getSecureProjection(securePlan: LogicalPlan):Seq[Attribute]={
+    securePlan.output
   }
 
 
