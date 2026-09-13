@@ -169,15 +169,16 @@ object CLSUtils {
   }
 
   def getSecureViewPlan(view:View):LogicalPlan={
-    val tid = view.desc.identifier
-    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
-    val secureCatalogTable = getSecureTableFrom(catalogName,dbName,tableName)
-    if (secureCatalogTable != null) {
-      getSecureLeafPlan(secureCatalogTable, view)
-    } else {
-      view
-    }
+//    val tid = view.desc.identifier
+//    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
+//    val secureCatalogTable = getSecureTableFrom(catalogName,dbName,tableName)
+//    if (secureCatalogTable != null) {
+//      getSecureLeafPlan(secureCatalogTable, view)
+//    } else {
+//      view
+//    }
    // getSecureLeafPlan(secureCatalogTable, view)
+    view
   }
 
 
