@@ -132,7 +132,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val nameToCurrentOrdinal = scala.collection.mutable.HashMap.empty[String, Int]
       val viewDDL = buildViewDDL(metadata, false)
 
-      viewColumnNames.zip(metadata.schema).map { case (name, field) =>
+      val viewColumns = viewColumnNames.zip(metadata.schema).map { case (name, field) =>
         val normalizedName = normalizeColName(name)
         val count = nameToCounts(normalizedName)
         val ordinal = nameToCurrentOrdinal.getOrElse(normalizedName, 0)
@@ -141,14 +141,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           metadata.identifier.toString, name, ordinal, count, viewDDL)
         Alias(UpCast(col, field.dataType), field.name)(explicitMetadata = Some(field.metadata))
       }
+      viewColumns
     } else {
       // For view created by hive, the parsed view plan may have different output columns with
       // the schema stored in metadata. For example: `CREATE VIEW v AS SELECT 1 FROM t`
       // the schema in metadata will be `_c0` while the parsed view plan has column named `1`
-      metadata.schema.zipWithIndex.map { case (field, index) =>
+      val viewColumns =  metadata.schema.zipWithIndex.map { case (field, index) =>
         val col = GetColumnByOrdinal(index, field.dataType)
         Alias(UpCast(col, field.dataType), field.name)(explicitMetadata = Some(field.metadata))
       }
+      viewColumns
     }
     //    projectList.map(at => if(at.isInstanceOf[Alias]){
     //      at
@@ -196,36 +198,25 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
     }
     val projectList = getViewColumns(table.v1Table)
-    //val secureProjection = getSecureProjectList(projectList, table.v1Table)
-    // val resolvedPlan = apply(Project(projectList, parsedPlan))
-    val secureProjectList = getSecureProjection(parsedPlan)
-   //val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
-
-    val child = Project(projectList, parsedPlan)
-
-//    val details = CLSUtils.getCatalogTableDetails(table)
-//    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
-//    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
-
+    val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
+    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
     CLSUtils.tagViewPlan(plan = child)
     val newPlan = (new CLSSecRule(session)).apply(child)
-   // CLSUtils.tagViewPlan(plan = child)
     if (!isHiveCreatedView(table.v1Table))
       newPlan.setTagValue(TreeNodeTag[String]("custom-view-projection"), "true")
 
     CLSUtils.tagViewPlan(plan = newPlan)
     val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
-    val secureViewPlan = View(desc = table.v1Table, isTempView = false, child = newChild)
+    val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
     CLSUtils.tagViewPlan(plan = secureViewPlan)
-    session.sessionState.analyzer.executeAndCheck(newChild, new QueryPlanningTracker())
+    session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
     println("Returning View")
 
     println("=== secureViewPlan.output: " +
       secureViewPlan.output.map(_.name).mkString(", "))
-    CustomView(desc = table.v1Table,secureViewPlan, secureViewPlan.output )
+    CustomView(desc = table.v1Table, secureViewPlan, secureViewPlan.output)
 
   }
-
 
   def getSecureProjection(securePlan: LogicalPlan):Seq[Attribute]={
     securePlan.output
