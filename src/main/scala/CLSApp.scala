@@ -442,6 +442,8 @@ object CLSApp {
 
     spark.sql(s"select * from $viewName1").show()
     spark.sql(s"select * from $viewName2").show()
+    spark.read.table(s"$viewName1").show()
+    spark.read.table(s"$viewName2").show()
 //
 //
 //    println("----- Creation of Views completed -----")
