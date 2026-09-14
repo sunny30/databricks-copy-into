@@ -332,7 +332,7 @@ object CLSUtils {
       val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
       val ct = getSecureTableFromMultiPart(multiParts)
-      if(ct == null)
+      if(ct == null || (ct.isDefined && ct.get.tableType == CatalogTableType.VIEW))
         return plan
       val tag_key = ct match {
         case Some(table) => if (table.tableType == CatalogTableType.VIEW){

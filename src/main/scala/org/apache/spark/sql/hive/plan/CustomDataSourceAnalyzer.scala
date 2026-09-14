@@ -185,9 +185,12 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       throw new IllegalStateException("Invalid view without text.")
     }
 
-    val parsedPlan = SQLConf.withExistingConf(View.effectiveSQLConf(table.v1Table.viewSQLConfigs, false)) {
+    val parsedPlan = SQLConf.withExistingConf(
+      View.effectiveSQLConf(table.v1Table.viewSQLConfigs, false)) {
       try {
-        CurrentOrigin.withOrigin(Origin(objectType = Some("VIEW"), objectName = Some(table.v1Table.qualifiedName))) {
+        CurrentOrigin.withOrigin(Origin(
+          objectType = Some("VIEW"),
+          objectName = Some(table.v1Table.qualifiedName))) {
           (new CustomSparkSQLParser()).parseQuery(viewText)
         }
       } catch {
@@ -196,15 +199,22 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       }
     }
 
-    CLSUtils.tagViewPlan(parsedPlan)
-
+    // Apply CLSSecRule before execute
+    // Handles CTE UnresolvedRelation wrapping and CTE name conflict guard
     val planWithCLS = (new CLSSecRule(session)).apply(parsedPlan)
-    CLSUtils.tagViewPlan(planWithCLS)
 
-    val analyzedQuery = session.sessionState.analyzer.executeAndCheck(
-      planWithCLS, new QueryPlanningTracker()
-    )
-    val secureQueryOutputNames = analyzedQuery.output.map(_.name.toLowerCase).toSet
+    // execute WITHOUT view tag, WITHOUT checkAnalysis
+    // parsedPlan already has getProjectedTable CLS projection from visitTableName
+    // restricted cols become unresolved in outer SELECT output
+    val partiallyAnalyzed = session.sessionState.analyzer.execute(planWithCLS)
+
+    // resolved   = CLS-permitted (cls_customer_id, cls_order_date)
+    // unresolved = CLS-restricted (order_id, amount) — from * view metadata expansion
+    val secureQueryOutputNames = partiallyAnalyzed.output
+      .filter(_.resolved)
+      .map(_.name.toLowerCase)
+      .toSet
+
     println(s"=== Secure table columns visible to view: ${secureQueryOutputNames.mkString(", ")}")
 
     val allViewColumns = getViewColumns(table.v1Table)
@@ -213,17 +223,21 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val sourceColName = namedExpr
         .find {
           case _: GetViewColumnByNameAndOrdinal => true
-          case _: GetColumnByOrdinal => true
-          case _ => false
+          case _: GetColumnByOrdinal            => true
+          case _: AttributeReference            => true
+          case _                                => false
         }
         .map {
           case col: GetViewColumnByNameAndOrdinal =>
             col.colName.toLowerCase
           case col: GetColumnByOrdinal =>
-            analyzedQuery.output
+            partiallyAnalyzed.output
+              .filter(_.resolved)
               .lift(col.ordinal)
               .map(_.name.toLowerCase)
               .getOrElse("")
+          case attr: AttributeReference =>
+            attr.name.toLowerCase
           case other =>
             other.toString.toLowerCase
         }
@@ -232,13 +246,26 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       secureQueryOutputNames.contains(sourceColName)
     }
 
+    println(s"=== View columns after CLS filter: ${secureViewColumns.map(_.name).mkString(", ")}")
+
     if (secureViewColumns.isEmpty) {
       throw new AnalysisException(
         s"Access denied: no permitted columns in view ${table.v1Table.qualifiedName}"
       )
     }
 
-    val child = Project(secureViewColumns, parsedPlan)
+    // Use first fully resolved subplan as child
+    // NOT parsedPlan — parsedPlan outer SELECT has 'order_id, 'amount unresolved
+    // from * expansion of view catalog metadata (all 4 cols from HMS)
+    // findFirstResolved navigates to:
+    //   Project([cls_customer_id#210, cls_order_date#212], Relation) ← fully resolved ✓
+    // No unresolved attrs in subtree → checkAnalysis passes ✓
+    val resolvedBase = findFirstResolved(partiallyAnalyzed)
+    println(s"=== Resolved base output: ${resolvedBase.output.map(_.name).mkString(", ")}")
+
+    CLSUtils.tagViewPlan(resolvedBase)
+
+    val child = Project(secureViewColumns, resolvedBase)
     CLSUtils.tagViewPlan(child)
 
     val newPlan = (new CLSSecRule(session)).apply(child)
@@ -255,13 +282,21 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     println(s"=== Final view output: ${newChild.output.map(_.name).mkString(", ")}")
 
     CustomView(
-      desc = table.v1Table,
-      member = newChild,
+      desc         = table.v1Table,
+      member       = newChild,
       secureOutput = newChild.output
     )
   }
-  def getSecureProjection(securePlan: LogicalPlan):Seq[Attribute]={
-    securePlan.output
+
+  private def findFirstResolved(plan: LogicalPlan): LogicalPlan = {
+    if (plan.resolved) {
+      plan
+    } else {
+      plan.children
+        .map(findFirstResolved)
+        .find(_.resolved)
+        .getOrElse(plan)
+    }
   }
 
 
