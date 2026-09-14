@@ -212,56 +212,50 @@ object CLSUtils {
 
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
-    val tagKey = if(catalogTable.tableType == CatalogTableType.VIEW){
-      "col-view-sec"
-    }else{
-      "col-table-sec"
+    // Views inherit table CLS — no view-level CLS
+    if (catalogTable.tableType == CatalogTableType.VIEW) {
+      return leafPlan
     }
 
+    // Time travel — never apply CLS
     if (isTimeTravelTagPresentAtLogicalRelation(leafPlan)) {
       return leafPlan
     }
 
-    val resolver  = SparkSession.active.sessionState.conf.resolver
-    if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
-      val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
-      println("***Secure fields name***"+secureFields.mkString(","))
-      val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
-      leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
-      val prj = Project(secureAttributes, leafPlan)
-      prj.setTagValue(TreeNodeTag[String](tagKey), "true")
-
-
-      val userOutput = userVisibleOutput(leafPlan)
-
-      val sameOutput =
-        secureAttributes.size == userOutput.size &&
-          secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
-            resolver(secureAttr.name, outputAttr.name)
-          }
-
-     if(sameOutput || isTimeTravelTagPresentAtLogicalRelation(leafPlan)){
-       return leafPlan
-     }else {
-       val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
-       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
-
-       analyzed
-//       if (tagKey == "col-table-sec") {
-//         analyzed
-////         SecureRelationalTable(
-////           desc = catalogTable,
-////           member = analyzed, // Project([secure cols], DSv2/LogicalRelation)
-////           secureOutput = analyzed.output
-//         )
-//       }else{
-//         analyzed
-//       }
-     }
-
-    } else {
-      leafPlan
+    // Already processed
+    if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isDefined) {
+      return leafPlan
     }
+
+    val resolver = SparkSession.active.sessionState.conf.resolver
+    val secureFields = catalogTable.schema.fields.map(_.name).toSet
+    println("***Secure fields name*** " + secureFields.mkString(","))
+
+    val hiddenCols = leafPlan.output.filter(isHiddenColumn)
+    val hiddenExprIds = hiddenCols.map(_.exprId).toSet
+    val userOutput = leafPlan.output.filterNot(a => hiddenExprIds.contains(a.exprId))
+
+    val secureAttributes = userOutput.filter(at => secureFields.contains(at.name))
+
+    val sameOutput =
+      secureAttributes.size == userOutput.size &&
+        secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
+          resolver(secureAttr.name, outputAttr.name)
+        }
+
+    if (sameOutput) {
+      // Full permission — return unchanged, no tag needed
+      return leafPlan
+    }
+
+    // CLS restriction applies — set tags only now
+    leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
+
+    // Include hidden cols so Delta/Iceberg internals work
+    val prj = Project(secureAttributes ++ hiddenCols, leafPlan)
+    prj.setTagValue(TreeNodeTag[String]("col-table-sec"), "true")
+
+    SparkSession.active.sessionState.analyzer.execute(prj)
   }
 
   def relationExists(multipartIdentifier: Seq[String]): Boolean = {
