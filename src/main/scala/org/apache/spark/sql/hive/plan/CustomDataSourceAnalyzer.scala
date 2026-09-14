@@ -4,7 +4,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.arrow.ArrowFileFormat
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
 import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubqueryAliases, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, RelationTimeTravel, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
@@ -177,19 +177,17 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
+//
+
   def getViewPlan(table: V2Table, relation: Option[DataSourceV2Relation] = None): LogicalPlan = {
+
     val viewText = table.v1Table.viewText.getOrElse {
       throw new IllegalStateException("Invalid view without text.")
     }
-    val viewConfigs = table.v1Table.viewSQLConfigs
-    val origin = Origin(
-      objectType = Some("VIEW"),
-      objectName = Some(table.v1Table.qualifiedName)
-    )
 
-    val parsedPlan = SQLConf.withExistingConf(View.effectiveSQLConf(viewConfigs, false)) {
+    val parsedPlan = SQLConf.withExistingConf(View.effectiveSQLConf(table.v1Table.viewSQLConfigs, false)) {
       try {
-        CurrentOrigin.withOrigin(origin) {
+        CurrentOrigin.withOrigin(Origin(objectType = Some("VIEW"), objectName = Some(table.v1Table.qualifiedName))) {
           (new CustomSparkSQLParser()).parseQuery(viewText)
         }
       } catch {
@@ -197,27 +195,71 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           throw QueryCompilationErrors.invalidViewText(viewText, table.v1Table.qualifiedName)
       }
     }
-    val projectList = getViewColumns(table.v1Table)
-    val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
-    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
-    CLSUtils.tagViewPlan(plan = child)
+
+    CLSUtils.tagViewPlan(parsedPlan)
+
+    val planWithCLS = (new CLSSecRule(session)).apply(parsedPlan)
+    CLSUtils.tagViewPlan(planWithCLS)
+
+    val analyzedQuery = session.sessionState.analyzer.executeAndCheck(
+      planWithCLS, new QueryPlanningTracker()
+    )
+    val secureQueryOutputNames = analyzedQuery.output.map(_.name.toLowerCase).toSet
+    println(s"=== Secure table columns visible to view: ${secureQueryOutputNames.mkString(", ")}")
+
+    val allViewColumns = getViewColumns(table.v1Table)
+
+    val secureViewColumns = allViewColumns.filter { namedExpr =>
+      val sourceColName = namedExpr
+        .find {
+          case _: GetViewColumnByNameAndOrdinal => true
+          case _: GetColumnByOrdinal => true
+          case _ => false
+        }
+        .map {
+          case col: GetViewColumnByNameAndOrdinal =>
+            col.colName.toLowerCase
+          case col: GetColumnByOrdinal =>
+            analyzedQuery.output
+              .lift(col.ordinal)
+              .map(_.name.toLowerCase)
+              .getOrElse("")
+          case other =>
+            other.toString.toLowerCase
+        }
+        .getOrElse(namedExpr.name.toLowerCase)
+
+      secureQueryOutputNames.contains(sourceColName)
+    }
+
+    if (secureViewColumns.isEmpty) {
+      throw new AnalysisException(
+        s"Access denied: no permitted columns in view ${table.v1Table.qualifiedName}"
+      )
+    }
+
+    val child = Project(secureViewColumns, parsedPlan)
+    CLSUtils.tagViewPlan(child)
+
     val newPlan = (new CLSSecRule(session)).apply(child)
-    if (!isHiveCreatedView(table.v1Table))
+    if (!isHiveCreatedView(table.v1Table)) {
       newPlan.setTagValue(TreeNodeTag[String]("custom-view-projection"), "true")
+    }
+    CLSUtils.tagViewPlan(newPlan)
 
-    CLSUtils.tagViewPlan(plan = newPlan)
-    val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
-    val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
-    CLSUtils.tagViewPlan(plan = secureViewPlan)
-    session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
-    println("Returning View")
+    val newChild = session.sessionState.analyzer.executeAndCheck(
+      newPlan, new QueryPlanningTracker()
+    )
+    CLSUtils.tagViewPlan(newChild)
 
-    println("=== secureViewPlan.output: " +
-      secureViewPlan.output.map(_.name).mkString(", "))
-    CustomView(desc = table.v1Table, secureViewPlan, secureViewPlan.output)
+    println(s"=== Final view output: ${newChild.output.map(_.name).mkString(", ")}")
 
+    CustomView(
+      desc = table.v1Table,
+      member = newChild,
+      secureOutput = newChild.output
+    )
   }
-
   def getSecureProjection(securePlan: LogicalPlan):Seq[Attribute]={
     securePlan.output
   }
