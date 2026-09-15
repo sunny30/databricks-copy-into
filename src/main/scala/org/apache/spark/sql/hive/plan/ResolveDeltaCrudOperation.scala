@@ -2,9 +2,10 @@ package org.apache.spark.sql.hive.plan
 
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.catalyst.QueryPlanningTracker
 import org.apache.spark.sql.catalyst.analysis.ResolvedNamespace
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression}
-import org.apache.spark.sql.catalyst.plans.logical.{Assignment, DeleteFromTable, DeltaMergeInto, InsertAction, InsertStarAction, LogicalPlan, MergeIntoTable, SubqueryAlias, UpdateAction, UpdateStarAction, UpdateTable}
+import org.apache.spark.sql.catalyst.plans.logical.{Assignment, BinaryNode, DeleteFromTable, DeltaMergeInto, InsertAction, InsertStarAction, LogicalPlan, MergeIntoTable, SubqueryAlias, Union, UpdateAction, UpdateStarAction, UpdateTable}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
@@ -50,6 +51,12 @@ class ResolveDeltaCrudOperation(session: SparkSession)
       val newQuery = CLSUtils.removeSecureProjection(u.table)
       u.copy(table = newQuery)
 
+    case b: BinaryNode =>
+      applySecurityToLeaves(b)
+
+    case u: Union =>
+      applySecurityToLeaves(u)
+
 
     case dsv2@DataSourceV2Relation(d: DeltaTableV2, _, _, _, options) if (d.timeTravelOpt.isDefined) =>
       fromV2Relation(d,dsv2, options)
@@ -85,6 +92,31 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     val lr = LogicalRelation(relation, output, d.ttSafeCatalogTable, isStreaming = false)
     lr.setTagValue(TreeNodeTag[String]("delta-time-travel-read"), "true")
     lr
+  }
+
+  private def applySecurityToLeaves(plan: LogicalPlan): LogicalPlan = {
+    plan.transformUpWithSubqueries {
+      // Covers Delta (DeltaTableV2), Iceberg (SparkTable), V2Table
+      // All are DataSourceV2Relation at this point in the pipeline
+      // getSecureDataSource internally handles shouldApplyCLSonDSV2Table
+      case ds: DataSourceV2Relation
+        if ds.resolved &&
+          !CLSUtils.isViewsPlan(ds) &&
+          !CDCReader.isCDCRead(ds.options) =>
+        CLSUtils.getSecureDataSource(ds)
+        ds
+
+      // Defensive — LogicalRelation if somehow present at this stage
+      case lr: LogicalRelation
+        if lr.resolved &&
+          lr.catalogTable.isDefined &&
+          !CLSUtils.isExternalCatalogTable(lr.catalogTable.get) &&
+          !CLSUtils.isTimeTravelTagPresentAtLogicalRelation(lr) =>
+        CLSUtils.getSecureDataSource(lr)
+        lr
+
+      case other => other
+    }
   }
 
 

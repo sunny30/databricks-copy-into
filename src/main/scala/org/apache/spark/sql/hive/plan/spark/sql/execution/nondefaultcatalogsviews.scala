@@ -71,9 +71,9 @@ case class NonDefaultCatalogCreateViewCommand(
     }
     val analyzedPlan = SparkSession.active.sessionState.analyzer.execute(plan)
     val  createViewAssertion = CLSUtils.validateCreateViewPlan(analyzedPlan)
-    if(createViewAssertion){
-      throw new IllegalArgumentException("User need permissions on all columns of all the tables in VIEW SQL TEXT")
-    }
+//    if(createViewAssertion){
+//      throw new IllegalArgumentException("User need permissions on all columns of all the tables in VIEW SQL TEXT")
+//    }
     val viewPlan = CLSUtils.removeSecureProjection(analyzedPlan)
     if(!exists){
       externalCatalog.createTable(prepareTable(sparkSession, viewPlan),false)

@@ -4,14 +4,14 @@ import org.apache.hadoop.fs.Path
 import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.arrow.ArrowFileFormat
-import org.apache.spark.sql.{SaveMode, SparkSession}
+import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.apache.spark.sql.avro.AvroFileFormat
 import org.apache.spark.sql.catalyst.{AliasIdentifier, QueryPlanningTracker, TableIdentifier, parser}
 import org.apache.spark.sql.catalyst.analysis.{AnalysisContext, EliminateSubqueryAliases, GetColumnByOrdinal, GetViewColumnByNameAndOrdinal, NamedRelation, RelationTimeTravel, ResolveInlineTables, ResolvedIdentifier, ResolvedTable, UnresolvedAttribute, UnresolvedFunction, UnresolvedInlineTable, UnresolvedLeafNode, UnresolvedRelation, UnresolvedTable}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeReference, NamedExpression, SubqueryExpression, UpCast}
 import org.apache.spark.sql.catalyst.parser.ParseException
-import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CreateTableAsSelect, DeleteFromTable, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, MergeIntoTable, OverwriteByExpression, Project, ReplaceData, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
+import org.apache.spark.sql.catalyst.plans.logical.{AppendData, CTERelationRef, CreateTableAsSelect, DeleteFromTable, DeltaDelete, DeltaMergeInto, DeltaUpdateTable, DescribeRelation, DeserializeToObject, Filter, InsertIntoStatement, LocalRelation, LogicalPlan, MergeIntoTable, OverwriteByExpression, Project, ReplaceData, ReplaceTableAsSelect, SerdeInfo, SubqueryAlias, TableSpec, TableSpecBase, TruncatePartition, TruncateTable, View}
 import org.apache.spark.sql.catalyst.rules.{Rule, RuleExecutor}
 import org.apache.spark.sql.catalyst.trees.{CurrentOrigin, Origin, TreeNodeTag}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils
@@ -132,7 +132,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       val nameToCurrentOrdinal = scala.collection.mutable.HashMap.empty[String, Int]
       val viewDDL = buildViewDDL(metadata, false)
 
-      viewColumnNames.zip(metadata.schema).map { case (name, field) =>
+      val viewColumns = viewColumnNames.zip(metadata.schema).map { case (name, field) =>
         val normalizedName = normalizeColName(name)
         val count = nameToCounts(normalizedName)
         val ordinal = nameToCurrentOrdinal.getOrElse(normalizedName, 0)
@@ -141,14 +141,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           metadata.identifier.toString, name, ordinal, count, viewDDL)
         Alias(UpCast(col, field.dataType), field.name)(explicitMetadata = Some(field.metadata))
       }
+      viewColumns
     } else {
       // For view created by hive, the parsed view plan may have different output columns with
       // the schema stored in metadata. For example: `CREATE VIEW v AS SELECT 1 FROM t`
       // the schema in metadata will be `_c0` while the parsed view plan has column named `1`
-      metadata.schema.zipWithIndex.map { case (field, index) =>
+      val viewColumns =  metadata.schema.zipWithIndex.map { case (field, index) =>
         val col = GetColumnByOrdinal(index, field.dataType)
         Alias(UpCast(col, field.dataType), field.name)(explicitMetadata = Some(field.metadata))
       }
+      viewColumns
     }
     //    projectList.map(at => if(at.isInstanceOf[Alias]){
     //      at
@@ -175,19 +177,20 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
+//
+
   def getViewPlan(table: V2Table, relation: Option[DataSourceV2Relation] = None): LogicalPlan = {
+
     val viewText = table.v1Table.viewText.getOrElse {
       throw new IllegalStateException("Invalid view without text.")
     }
-    val viewConfigs = table.v1Table.viewSQLConfigs
-    val origin = Origin(
-      objectType = Some("VIEW"),
-      objectName = Some(table.v1Table.qualifiedName)
-    )
 
-    val parsedPlan = SQLConf.withExistingConf(View.effectiveSQLConf(viewConfigs, false)) {
+    val parsedPlan = SQLConf.withExistingConf(
+      View.effectiveSQLConf(table.v1Table.viewSQLConfigs, false)) {
       try {
-        CurrentOrigin.withOrigin(origin) {
+        CurrentOrigin.withOrigin(Origin(
+          objectType = Some("VIEW"),
+          objectName = Some(table.v1Table.qualifiedName))) {
           (new CustomSparkSQLParser()).parseQuery(viewText)
         }
       } catch {
@@ -195,33 +198,105 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           throw QueryCompilationErrors.invalidViewText(viewText, table.v1Table.qualifiedName)
       }
     }
-    val projectList = getViewColumns(table.v1Table)
-    //val secureProjection = getSecureProjectList(projectList, table.v1Table)
-    // val resolvedPlan = apply(Project(projectList, parsedPlan))
-   val parsedPlanWithoutSecureAttribute = CLSUtils.removeSecureProjection(parsedPlan)
-    val child = Project(projectList, parsedPlanWithoutSecureAttribute)
 
-//    val details = CLSUtils.getCatalogTableDetails(table)
-//    val secureTable = CLSUtils.getSecureTableFrom(details._1,details._2,details._3)
-//    val secureViewPlan  = CLSUtils.getSecureLeafPlan(secureTable, leafPlan = child)
+    // Apply CLSSecRule before execute
+    // Handles CTE UnresolvedRelation wrapping and CTE name conflict guard
+    val planWithCLS = (new CLSSecRule(session)).apply(parsedPlan)
 
-    CLSUtils.tagViewPlan(plan = child)
+    // execute WITHOUT view tag, WITHOUT checkAnalysis
+    // parsedPlan already has getProjectedTable CLS projection from visitTableName
+    // restricted cols become unresolved in outer SELECT output
+    val partiallyAnalyzed = session.sessionState.analyzer.execute(planWithCLS)
+
+    // resolved   = CLS-permitted (cls_customer_id, cls_order_date)
+    // unresolved = CLS-restricted (order_id, amount) — from * view metadata expansion
+    val secureQueryOutputNames = partiallyAnalyzed.output
+      .filter(_.resolved)
+      .map(_.name.toLowerCase)
+      .toSet
+
+    println(s"=== Secure table columns visible to view: ${secureQueryOutputNames.mkString(", ")}")
+
+    val allViewColumns = getViewColumns(table.v1Table)
+
+    val secureViewColumns = allViewColumns.filter { namedExpr =>
+      val sourceColName = namedExpr
+        .find {
+          case _: GetViewColumnByNameAndOrdinal => true
+          case _: GetColumnByOrdinal            => true
+          case _: AttributeReference            => true
+          case _                                => false
+        }
+        .map {
+          case col: GetViewColumnByNameAndOrdinal =>
+            col.colName.toLowerCase
+          case col: GetColumnByOrdinal =>
+            partiallyAnalyzed.output
+              .filter(_.resolved)
+              .lift(col.ordinal)
+              .map(_.name.toLowerCase)
+              .getOrElse("")
+          case attr: AttributeReference =>
+            attr.name.toLowerCase
+          case other =>
+            other.toString.toLowerCase
+        }
+        .getOrElse(namedExpr.name.toLowerCase)
+
+      secureQueryOutputNames.contains(sourceColName)
+    }
+
+    println(s"=== View columns after CLS filter: ${secureViewColumns.map(_.name).mkString(", ")}")
+
+    if (secureViewColumns.isEmpty) {
+      throw new AnalysisException(
+        s"Access denied: no permitted columns in view ${table.v1Table.qualifiedName}"
+      )
+    }
+
+    // Use first fully resolved subplan as child
+    // NOT parsedPlan — parsedPlan outer SELECT has 'order_id, 'amount unresolved
+    // from * expansion of view catalog metadata (all 4 cols from HMS)
+    // findFirstResolved navigates to:
+    //   Project([cls_customer_id#210, cls_order_date#212], Relation) ← fully resolved ✓
+    // No unresolved attrs in subtree → checkAnalysis passes ✓
+    val resolvedBase = findFirstResolved(partiallyAnalyzed)
+    println(s"=== Resolved base output: ${resolvedBase.output.map(_.name).mkString(", ")}")
+
+    CLSUtils.tagViewPlan(resolvedBase)
+
+    val child = Project(secureViewColumns, resolvedBase)
+    CLSUtils.tagViewPlan(child)
+
     val newPlan = (new CLSSecRule(session)).apply(child)
-   // CLSUtils.tagViewPlan(plan = child)
-    if (!isHiveCreatedView(table.v1Table))
+    if (!isHiveCreatedView(table.v1Table)) {
       newPlan.setTagValue(TreeNodeTag[String]("custom-view-projection"), "true")
+    }
+    CLSUtils.tagViewPlan(newPlan)
 
-    CLSUtils.tagViewPlan(plan = newPlan)
-    val newChild = session.sessionState.analyzer.executeAndCheck(newPlan, new QueryPlanningTracker())
-    val secureViewPlan = CLSUtils.getSecureViewPlan(View(desc = table.v1Table, isTempView = false, child = newChild))
-    CLSUtils.tagViewPlan(plan = secureViewPlan)
-    session.sessionState.analyzer.executeAndCheck(secureViewPlan, new QueryPlanningTracker())
-    println("Returning View")
+    val newChild = session.sessionState.analyzer.executeAndCheck(
+      newPlan, new QueryPlanningTracker()
+    )
+    CLSUtils.tagViewPlan(newChild)
 
-    println("=== secureViewPlan.output: " +
-      secureViewPlan.output.map(_.name).mkString(", "))
-    CustomView(desc = table.v1Table,secureViewPlan, secureViewPlan.output )
+    println(s"=== Final view output: ${newChild.output.map(_.name).mkString(", ")}")
 
+    CustomView(
+      desc         = table.v1Table,
+      member       = newChild,
+      secureOutput = newChild.output
+    )
+  }
+
+  private def findFirstResolved(plan: LogicalPlan): LogicalPlan = {
+    if (plan.resolved) {
+      plan
+    } else {
+      plan.children
+        .map(findFirstResolved)
+        .find(_.resolved)
+        .getOrElse(plan)
+    }
   }
 
 

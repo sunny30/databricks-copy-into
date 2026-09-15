@@ -7,6 +7,12 @@ import org.apache.spark.sql.{DataFrame, Row, SaveMode, SparkSession}
 object CLSApp {
 
 
+  def dfJoinApp(spark: SparkSession):Unit={
+    spark.sql("""create database if not exists cat.cls_db3""")
+    spark.sql("create table cat.cls_db3.dt(id int, name string) using delta")
+    spark.sql("create table cat.cls_db3.it(id int, name string) using iceberg")
+    spark.read.table("cat.cls_db3.dt").join(spark.table(" cat.cls_db3.it"), "id").show()
+  }
   def viewCLSApp(spark: SparkSession):Unit = {
 
     spark.sql("""create database if not exists cat.cls_db2""")
@@ -14,11 +20,14 @@ object CLSApp {
    // spark.sql("describe table cat.cls_db2.ppt cls_id").show()
     //spark.sql("show columns in cat.cls_db2.ppt").show()
     spark.sql("insert into cat.cls_db2.ppt values(1,'sh'), (3, 'su')")
-//    val cteQuery =
-//      s"""WITH cte_data AS (SELECT * FROM cat.cls_db2.ppt)
-//         |SELECT * FROM cte_data""".stripMargin
-//    spark.sql(cteQuery).show()
-   // spark.sql("SELECT * FROM cte_data").show()
+    val cteQuery =
+      s"""WITH cte_data AS (SELECT * FROM cat.cls_db2.ppt)
+         |SELECT * FROM cte_data""".stripMargin
+
+    val cteQuery1 = """WITH tmp AS (SELECT id, name FROM cat.cls_db2.ppt)
+                      |    SELECT * FROM cat.cls_db2.ppt a JOIN tmp ON a.id = tmp.id""".stripMargin
+    spark.sql(cteQuery1).show()
+//    spark.sql("SELECT * FROM cte_data").show()
    // spark.sql("truncate table cat.cls_db2.ppt")
    // spark.sql("select * from cat.cls_db2.ppt").show()
 
@@ -50,8 +59,8 @@ object CLSApp {
 //        |""".stripMargin)
    // spark.sql("update cat.cls_db2.ppt set id = 4 where name1 = 'sh'")
   //  spark.sql("select * from cat.cls_db2.ppt").show()
-    spark.sql("create view cat.cls_db2.v1(cls_id , name) as select *  from cat.cls_db2.ppt")
-    spark.sql("describe formatted cat.cls_db2.v1").show()
+ //   spark.sql("create view cat.cls_db2.v1(cls_id , name) as select *  from cat.cls_db2.ppt")
+ //   spark.sql("describe formatted cat.cls_db2.v1").show()
   //  spark.sql("show columns in cat.cls_db2.v1").show()
 //    spark.sql("select * from cat.cls_db2.v1").show()
 //    spark.sql("show columns in cat.cls_db2.ppt").show()
@@ -431,48 +440,54 @@ object CLSApp {
          |FROM $tableName2
          |""".stripMargin)
 
-    println("----- Creation of Views completed -----")
-
-//   // val p = (new SparkSqlParser()).parsePlan(
+    spark.sql(s"select * from $viewName1").show()
+    spark.sql(s"select * from $viewName2").show()
+    spark.read.table(s"$viewName1").show()
+    spark.read.table(s"$viewName2").show()
+//
+//
+//    println("----- Creation of Views completed -----")
+//
+////   // val p = (new SparkSqlParser()).parsePlan(
+////      s"""
+////         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+////         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+////         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
+////         |""".stripMargin)
+//
+//  //  println("----- Parsing completed -----")
+//
+////    val df = spark.table("cat.cls_view_db.v_ptbl")
+////      .filter("order_id is not null")
+////      .select("order_id", "cls_customer_id")
+//
+////    val df = spark.sql(
+////      s"""
+////         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+////         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+////         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
+////         |""".stripMargin
+////    )
+//
+//    val df = spark.sql(
 //      s"""
-//         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
-//         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
-//         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
+//         |SELECT a.cls_customer_id
+//         |FROM ${viewName1} a JOIN ${viewName2} b ON a.cls_customer_id = b.cls_customer_id
+//         |WHERE a.cls_order_date > (
+//         |  SELECT MIN(cls_order_date) FROM ${viewName2} WHERE amount > 100
+//         |)
 //         |""".stripMargin)
-
-  //  println("----- Parsing completed -----")
-
-//    val df = spark.table("cat.cls_view_db.v_ptbl")
-//      .filter("order_id is not null")
-//      .select("order_id", "cls_customer_id")
-
-//    val df = spark.sql(
-//      s"""
-//         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
-//         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
-//         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} WHERE order_id IS NOT NULL)
-//         |""".stripMargin
-//    )
-
-    val df = spark.sql(
-      s"""
-         |SELECT a.cls_customer_id
-         |FROM ${viewName1} a JOIN ${viewName2} b ON a.cls_customer_id = b.cls_customer_id
-         |WHERE a.cls_order_date > (
-         |  SELECT MIN(cls_order_date) FROM ${viewName2} WHERE amount > 100
-         |)
-         |""".stripMargin)
-
-//    val df = spark.sql(
-//      s"""
-//         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
-//         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
-//         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} )
-//         |""".stripMargin
-//    )
-
-    df.explain(true)
-    df.show()
+//
+////    val df = spark.sql(
+////      s"""
+////         |SELECT a.cls_customer_id, COUNT(*) FROM ${viewName1} a JOIN ${viewName2} b
+////         |ON a.cls_customer_id = b.cls_customer_id GROUP BY a.cls_customer_id
+////         |HAVING COUNT (*) > ( SELECT COUNT (*) FROM  ${viewName2} )
+////         |""".stripMargin
+////    )
+//
+//    df.explain(true)
+//    df.show()
 
 
   }

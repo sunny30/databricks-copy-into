@@ -66,18 +66,14 @@ object CLSUtils {
   }
 
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
-    if(CLSUtils.isViewsPlan(plan)){
+    if (CLSUtils.isViewsPlan(plan)) {
       return plan
     }
     plan match {
-      case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options)  =>
-        if(table!=null && shouldApplyCLSonDSV2Table(table)) {
-          getSecurePlanFromDataSourceV2(ds, table)
-        }else{
-          ds
-        }
-      case lr@LogicalRelation(relation, output, catalogTable, isStreaming) if catalogTable.isDefined && !isExternalCatalogTable(catalogTable.get) =>
-        getSecurePlanFromLogicalRelation(lr, catalogTable.get)
+      case ds: DataSourceV2Relation if ds.table != null && shouldApplyCLSonDSV2Table(ds.table) =>
+        getSecurePlanFromDataSourceV2(ds, ds.table)
+      case lr: LogicalRelation if lr.catalogTable.isDefined =>
+        getSecurePlanFromLogicalRelation(lr, lr.catalogTable.get)
       case _ => plan
 
     }
@@ -86,26 +82,34 @@ object CLSUtils {
   //covers Iceberg and V2Table
   def getSecurePlanFromDataSourceV2(ds: DataSourceV2Relation, table: Table): LogicalPlan = {
     val (catalogName, dbName, tableName) = getCatalogTableDetails(table)
-    if(catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty){
+    if (catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty) {
       return ds
     }
-    if(isExternalCatalog(catalogName)){
+    if (isExternalCatalog(catalogName)) {
       return ds
     }
 
     val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    getSecureLeafPlan(secureTable, ds)
+    if (secureTable != null) {
+      getSecureLeafPlan(secureTable, ds)
+    } else {
+      ds
+    }
   }
 
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
-    println("Inside getSecurePlanFromLogicalRelation")
     val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
-
-    if(isExternalCatalog(catalogName)){
+    if (isExternalCatalog(catalogName)) {
       return ds
+    } else {
+      val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
+      if (secureTable != null) {
+        getSecureLeafPlan(secureTable, ds)
+      } else {
+        ds
+      }
     }
-    val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
-    getSecureLeafPlan(secureTable, ds)
+
   }
 
 
@@ -151,16 +155,30 @@ object CLSUtils {
 
 
   def getSecureTableFrom(catalogName: String, db: String, table: String): CatalogTable = {
+    println(s"""getSecureTableFrom $catalogName, $db, $table""")
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
     val ct = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(db, table)
+    val ctString = if(ct == null ){
+      "null"
+    }else{
+      ct.toString()
+    }
+    println(s"""getSecureTableFrom $catalogName, $db, $table result is $ctString""")
+
     ct
   }
 
   def getSecureViewPlan(view:View):LogicalPlan={
-    val tid = view.desc.identifier
-    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
-    val secureCatalogTable = getSecureTableFrom(catalogName,dbName,tableName)
-    getSecureLeafPlan(secureCatalogTable, view)
+//    val tid = view.desc.identifier
+//    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
+//    val secureCatalogTable = getSecureTableFrom(catalogName,dbName,tableName)
+//    if (secureCatalogTable != null) {
+//      getSecureLeafPlan(secureCatalogTable, view)
+//    } else {
+//      view
+//    }
+   // getSecureLeafPlan(secureCatalogTable, view)
+    view
   }
 
 
@@ -194,56 +212,50 @@ object CLSUtils {
 
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
-    val tagKey = if(catalogTable.tableType == CatalogTableType.VIEW){
-      "col-view-sec"
-    }else{
-      "col-table-sec"
+    // Views inherit table CLS — no view-level CLS
+    if (catalogTable.tableType == CatalogTableType.VIEW) {
+      return leafPlan
     }
 
+    // Time travel — never apply CLS
     if (isTimeTravelTagPresentAtLogicalRelation(leafPlan)) {
       return leafPlan
     }
 
-    val resolver  = SparkSession.active.sessionState.conf.resolver
-    if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isEmpty) {
-      val secureFields = catalogTable.schema.fields.map(f => f.name).toSet
-      println("***Secure fields name***"+secureFields.mkString(","))
-      val secureAttributes = leafPlan.output.filter(at => secureFields.contains(at.name))
-      leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
-      val prj = Project(secureAttributes, leafPlan)
-      prj.setTagValue(TreeNodeTag[String](tagKey), "true")
-
-
-      val userOutput = userVisibleOutput(leafPlan)
-
-      val sameOutput =
-        secureAttributes.size == userOutput.size &&
-          secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
-            resolver(secureAttr.name, outputAttr.name)
-          }
-
-     if(sameOutput || isTimeTravelTagPresentAtLogicalRelation(leafPlan)){
-       return leafPlan
-     }else {
-       val analyzed = SparkSession.active.sessionState.analyzer.execute(prj)
-       //analyzed.foreach(pl => pl.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec"))
-
-       analyzed
-//       if (tagKey == "col-table-sec") {
-//         analyzed
-////         SecureRelationalTable(
-////           desc = catalogTable,
-////           member = analyzed, // Project([secure cols], DSv2/LogicalRelation)
-////           secureOutput = analyzed.output
-//         )
-//       }else{
-//         analyzed
-//       }
-     }
-
-    } else {
-      leafPlan
+    // Already processed
+    if (leafPlan.getTagValue(TreeNodeTag[String]("cls-sec")).isDefined) {
+      return leafPlan
     }
+
+    val resolver = SparkSession.active.sessionState.conf.resolver
+    val secureFields = catalogTable.schema.fields.map(_.name).toSet
+    println("***Secure fields name*** " + secureFields.mkString(","))
+
+    val hiddenCols = leafPlan.output.filter(isHiddenColumn)
+    val hiddenExprIds = hiddenCols.map(_.exprId).toSet
+    val userOutput = leafPlan.output.filterNot(a => hiddenExprIds.contains(a.exprId))
+
+    val secureAttributes = userOutput.filter(at => secureFields.contains(at.name))
+
+    val sameOutput =
+      secureAttributes.size == userOutput.size &&
+        secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
+          resolver(secureAttr.name, outputAttr.name)
+        }
+
+    if (sameOutput) {
+      // Full permission — return unchanged, no tag needed
+      return leafPlan
+    }
+
+    // CLS restriction applies — set tags only now
+    leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
+
+    // Include hidden cols so Delta/Iceberg internals work
+    val prj = Project(secureAttributes ++ hiddenCols, leafPlan)
+    prj.setTagValue(TreeNodeTag[String]("col-table-sec"), "true")
+
+    SparkSession.active.sessionState.analyzer.execute(prj)
   }
 
   def relationExists(multipartIdentifier: Seq[String]): Boolean = {
@@ -263,12 +275,18 @@ object CLSUtils {
 
   def getSecureTableFromMultiPart(multipartIdentifier: Seq[String]): Option[CatalogTable] ={
     val catalogName = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+    val schemaName = SparkSession.active.sessionState.catalogManager.currentNamespace
+    val defaultSchema = schemaName match {
+      case Array(db) => db
+      case Array(_, db) => db
+      case _ => "default"
+    }
     val res = if (multipartIdentifier.size == 3) {
       (multipartIdentifier(0), multipartIdentifier(1), multipartIdentifier(2))
     } else if (multipartIdentifier.size == 2) {
       (catalogName, multipartIdentifier(0), multipartIdentifier(1))
     } else {
-      (catalogName, "default", multipartIdentifier(0))
+      (catalogName, defaultSchema, multipartIdentifier(0))
     }
     try {
       val ct = getSecureTableFrom(res._1, res._2, res._3)
@@ -314,6 +332,8 @@ object CLSUtils {
       val multiParts = ctx.identifierReference().multipartIdentifier().parts.asScala.map(_.getText).toSeq
       val secureColumns = getSecureColumns(multiParts)
       val ct = getSecureTableFromMultiPart(multiParts)
+      if(ct == null || (ct.isDefined && ct.get.tableType == CatalogTableType.VIEW))
+        return plan
       val tag_key = ct match {
         case Some(table) => if (table.tableType == CatalogTableType.VIEW){
           "col-view-sec"

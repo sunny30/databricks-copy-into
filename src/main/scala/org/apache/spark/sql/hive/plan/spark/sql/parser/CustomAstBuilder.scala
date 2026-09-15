@@ -80,7 +80,7 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
         UnresolvedIdentifier(_)).
         asInstanceOf[UnresolvedIdentifier].nameParts
       val defaultCatalog = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
-      val defaultSchema = SparkSession.active.sessionState.catalogManager.currentCatalog.defaultNamespace().head
+      val defaultSchema = "default"
 
 
       val (catalogName, dbName, viewName) = if (nameParts.size == 3) {
