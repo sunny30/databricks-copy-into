@@ -90,3 +90,39 @@ object CLSErrorSanitiser {
     }
   }
 }
+
+/**
+// PATCHED — Spark 3.5.0
+// sql/core/src/main/scala/org/apache/spark/sql/execution/QueryExecution.scala
+
+def assertAnalyzed(): Unit = {
+  analyzed
+  try {
+    sparkSession.sessionState.analyzer.checkAnalysis(analyzed)
+  } catch {
+    case e: AnalysisException =>
+      // CLS error sanitisation — intercept here because:
+      //   1. Called exactly once per user-facing query ✓
+      //   2. All planLater re-entries complete before this point ✓
+      //   3. No internal control-flow signals reach here ✓
+      val sanitised = org.apache.spark.sql.hive.plan
+        .CLSErrorSanitiser.sanitise(e)
+
+      if (sanitised ne e) {
+        // CLS error — throw sanitised exception
+        // No column names, no plan fragment, no cause chain ✓
+        throw sanitised
+      } else {
+        // Non-CLS error — attach analyzed plan as before (Spark default behaviour)
+        val ae = new AnalysisException(
+          e.message,
+          e.line,
+          e.startPosition,
+          Option(analyzed)
+        )
+        ae.setStackTrace(e.getStackTrace)
+        throw ae
+      }
+  }
+}
+ */
