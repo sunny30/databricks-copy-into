@@ -5,34 +5,33 @@ import org.apache.spark.sql.AnalysisException
 
 object CLSErrorSanitiser {
 
-  // Restricted column = does NOT start with cls_ prefix
-  private def isRestrictedColumn(colName: String): Boolean =
-    !colName.startsWith("cls_")
-
-  // Extract all column names from AnalysisException message
-  // Handles backtick-quoted names: `order_id`, `amount`
-  private def extractMissingColumns(e: AnalysisException): Seq[String] = {
-    val msg = e.getMessage
+  // Extract all backtick-quoted names from message
+  private def extractQuotedNames(msg: String): Seq[String] = {
     if (msg == null) return Seq.empty
     val backtickPattern = "`([^`]+)`".r
     backtickPattern.findAllMatchIn(msg).map(_.group(1)).toSeq
   }
 
+  // First quoted name = the column user tried to access
+  private def extractMissingColumn(msg: String): Option[String] =
+    extractQuotedNames(msg).headOption
+
+  // Remaining quoted names = Spark's suggestions = what IS accessible in plan output
+  // These are the CLS-permitted columns Spark found after CLS restriction
+  private def extractAccessibleColumns(msg: String): Seq[String] =
+    extractQuotedNames(msg).tail
+
   private def isCLSRelatedError(e: AnalysisException): Boolean = {
     val msg = e.getMessage
 
-    // Case 1 — already a CLS access denied message
-    // thrown directly by:
-    //   getViewPlan    → "Access denied: no permitted columns in view ..."
-    //   getSecureLeafPlan → "Access denied: ..."
-    // Pass through as-is — already sanitised, no column names ✓
+    // Case 1 — already a CLS Access denied message thrown by
+    // getViewPlan or getSecureLeafPlan — pass through ✓
     if (msg != null && msg.contains("Access denied")) {
       return true
     }
 
-    // Case 2 — Spark analysis error on a restricted column
-    // These error classes fire when a restricted column is referenced
-    // by the user query after CLS has stripped it from the plan output
+    // Case 2 — Spark analysis error classes that fire when
+    // a column is missing from plan output after CLS restriction
     val clsErrorClasses = Set(
       "UNRESOLVED_COLUMN.WITH_SUGGESTION",
       "UNRESOLVED_COLUMN.WITHOUT_SUGGESTION",
@@ -46,46 +45,65 @@ object CLSErrorSanitiser {
       return false
     }
 
-    // Confirm the missing column is actually a restricted (non-cls_) column
-    // This prevents false positives on genuine user typos or missing columns
-    val missingCols = extractMissingColumns(e)
-    missingCols.nonEmpty && missingCols.exists(isRestrictedColumn)
+    // Only treat as CLS if:
+    //   - There IS a missing column name (user referenced something)
+    //   - The error came from a plan that went through CLS
+    //     (indicated by the presence of a plan tag or by the error class alone)
+    // We cannot reliably distinguish CLS-denied vs genuine typo at this boundary
+    // without catalog lookup — so we treat ALL unresolved column errors from
+    // CLS error classes as potentially CLS-related and show a combined message
+    // that covers both cases: wrong column name OR access denied
+    extractMissingColumn(msg).isDefined
   }
 
-  // Returns:
-  //   new sanitised AnalysisException → if CLS-related (sanitised ne e)
-  //   original e unchanged            → if non-CLS (sanitised eq e)
-  // assertAnalyzed uses `ne` check to distinguish the two cases
   def sanitise(e: AnalysisException): AnalysisException = {
     if (isCLSRelatedError(e)) {
+      val msg = e.getMessage
 
-      if (e.getMessage != null && e.getMessage.contains("Access denied")) {
-        // Already a clean CLS message from getViewPlan or getSecureLeafPlan
-        // Rewrap to strip plan fragment and cause chain which may leak schema ✓
+      if (msg != null && msg.contains("Access denied")) {
+        // Already a clean message from getViewPlan / getSecureLeafPlan
+        // Just strip plan and cause chain — no schema info ✓
         new AnalysisException(
-          message       = e.getMessage,
+          message       = msg,
           line          = e.line,
           startPosition = e.startPosition,
-              // strip plan — no schema structure leaked ✓
-          cause         = None     // strip cause chain — no stacktrace info leaked ✓
+          cause         = None
         )
       } else {
-        // Spark UNRESOLVED_COLUMN / MISSING_ATTRIBUTES on restricted column
-        // Replace with generic message — no restricted column names ✓
+        // Two possible reasons for this error:
+        //   1. Column is restricted by CLS — not in permitted output
+        //   2. Column name is wrong — genuine typo or incorrect reference
+        //
+        // We show both possibilities and list what IS accessible
+        // so the user can self-diagnose without leaking schema info
+        val missingCol     = extractMissingColumn(msg).getOrElse("unknown")
+        val accessibleCols = extractAccessibleColumns(msg)
+
+        val accessibleStr = if (accessibleCols.nonEmpty) {
+          s"Available columns in this context: [${accessibleCols.mkString(", ")}]."
+        } else {
+          "No columns are accessible in this context."
+        }
+
+        // Combined message — covers both CLS denial and wrong column name
+        // Does not leak restricted schema — only shows what IS accessible ✓
+        // Does not expose whether the column exists but is restricted ✓
+        val message =
+        s"Column `$missingCol` cannot be resolved. " +
+          s"This may be because the column does not exist or access is restricted " +
+          s"by Column-Level Security. $accessibleStr"
+
         new AnalysisException(
-          message       = "Access denied: insufficient column privileges. " +
-            "One or more columns referenced are restricted " +
-            "by Column-Level Security.",
+          message       = message,
           line          = e.line,
           startPosition = e.startPosition,
-          cause         = None     // strip cause chain ✓
+          cause         = None    // strip cause chain — no internal info ✓
         )
       }
 
     } else {
-      // Non-CLS error — return SAME object unchanged
-      // assertAnalyzed detects this via `sanitised eq e`
-      // and applies Spark default behaviour (attach analyzed plan)
+      // Non-CLS error class entirely (TABLE_OR_VIEW_NOT_FOUND, syntax error etc.)
+      // Return SAME object → assertAnalyzed applies Spark default behaviour ✓
       e
     }
   }
