@@ -440,9 +440,9 @@ object CLSApp {
          |FROM $tableName2
          |""".stripMargin)
 
-    spark.sql(s"select * from $viewName1").show()
+  //  spark.sql(s"select a from $viewName1").show() negative test case.
     spark.sql(s"select * from $viewName2").show()
-    spark.read.table(s"$viewName1").show()
+    spark.read.table(s"$viewName1").select("*").show()
     spark.read.table(s"$viewName2").show()
 //
 //
