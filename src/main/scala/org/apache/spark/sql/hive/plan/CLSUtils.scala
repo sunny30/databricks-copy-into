@@ -85,7 +85,8 @@ object CLSUtils {
     if (catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty) {
       return ds
     }
-    if (isExternalCatalog(catalogName)) {
+    if (isExternalCatalog(catalogName) || !isCLSFlagEnabled)  {
+
       return ds
     }
 
@@ -99,7 +100,7 @@ object CLSUtils {
 
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
     val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
-    if (isExternalCatalog(catalogName)) {
+    if (isExternalCatalog(catalogName) || !isCLSFlagEnabled) {
       return ds
     } else {
       val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
