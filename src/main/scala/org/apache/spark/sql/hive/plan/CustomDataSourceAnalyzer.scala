@@ -752,16 +752,16 @@ class CustomDataSourceAnalyzer(session: SparkSession)
 
     case p: LogicalPlan => p resolveOperatorsUp {
 
-      case d: DeleteFromTable =>
+      case d: DeleteFromTable if CLSUtils.isCLSFlagEnabled=>
         val newQuery = CLSUtils.removeSecureProjection(d.table)
         d.copy(table = newQuery)
 
-      case mergeIntoTable: MergeIntoTable =>
+      case mergeIntoTable: MergeIntoTable if CLSUtils.isCLSFlagEnabled =>
         val newSource = CLSUtils.removeSecureProjection(mergeIntoTable.sourceTable)
         val newTarget = CLSUtils.removeSecureProjection(mergeIntoTable.targetTable)
         mergeIntoTable.copy(sourceTable = newSource, targetTable = newTarget)
 
-      case replaceData:ReplaceData =>
+      case replaceData:ReplaceData if CLSUtils.isCLSFlagEnabled=>
         val newQuery = CLSUtils.removeSecureProjection(replaceData.query)
         replaceData.copy(query = newQuery)
 
@@ -777,7 +777,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       //        prj.copy(ats)
 
 
-      case pl:LogicalPlan if CLSUtils.isViewsPlan(pl) =>
+      case pl:LogicalPlan if CLSUtils.isViewsPlan(pl) && CLSUtils.isCLSFlagEnabled =>
         println("For View Plan came inside secure Projection")
         new CLSSecRule(session).apply(pl)
 

@@ -66,7 +66,7 @@ object CLSUtils {
   }
 
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
-    if (CLSUtils.isViewsPlan(plan)) {
+    if (CLSUtils.isViewsPlan(plan) || !isCLSFlagEnabled) {
       return plan
     }
     plan match {
@@ -379,7 +379,7 @@ object CLSUtils {
 
   def getSecureRelation(plan:LogicalPlan):LogicalPlan= {
 
-    if (CLSUtils.isViewTagPresent(plan)) {
+    if (CLSUtils.isViewTagPresent(plan) || !CLSUtils.isCLSFlagEnabled) {
       plan
     } else {
       val pl = plan match {
