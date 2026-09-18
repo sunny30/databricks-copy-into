@@ -30,10 +30,10 @@ object CustomStrategy extends Strategy with Serializable  {
           ()=>None,
           SparkSession.active.sharedState.cacheManager.cacheQuery) :: Nil
 
-      case d@DescribeRelation(r: ResolvedTable,_,_,_) if !r.catalog.name().equalsIgnoreCase("live")=>
+      case d@DescribeRelation(r: ResolvedTable,_,_,_) if CLSUtils.isCLSFlagEnabled && !r.catalog.name().equalsIgnoreCase("live")=>
         SecureDescribeTableExec(d)::Nil
 
-      case dc@DescribeColumn(r: ResolvedTable, column: Attribute, isExtended, output) =>
+      case dc@DescribeColumn(r: ResolvedTable, column: Attribute, isExtended, output) if CLSUtils.isCLSFlagEnabled =>
         SecureDescribeColumnExec(output, column, isExtended, r.table) :: Nil
 
 
