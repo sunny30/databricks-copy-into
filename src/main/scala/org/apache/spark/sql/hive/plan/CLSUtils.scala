@@ -432,12 +432,14 @@ object CLSUtils {
   }
 
   def syncSchemaAtLoadAndOverWrite(table:Table, ct:CatalogTable, catalogName:String):Unit ={
-    val trueSchema = table.schema()
-    val msSchema = ct.schema
-    if(!sameFieldsUnordered(trueSchema,msSchema)){
-      val newCt = ct.copy(schema = trueSchema)
-      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
-      plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+    if(CLSUtils.isCLSFlagEnabled) {
+      val trueSchema = table.schema()
+      val msSchema = ct.schema
+      if (!sameFieldsUnordered(trueSchema, msSchema)) {
+        val newCt = ct.copy(schema = trueSchema)
+        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+        plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+      }
     }
   }
 
@@ -479,6 +481,19 @@ object CLSUtils {
 
   private def isMergeCommand(normalizedSql: String): Boolean =
     normalizedSql.startsWith("MERGE ")
+
+
+  def isCLSFlagEnabled:Boolean= {
+    if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+      val confKey = SparkSession.active.conf.getOption("spark.sql.cls.enabled")
+      confKey match {
+        case Some("true") | None => true
+        case _ => false
+      }
+    }else{
+      true
+    }
+  }
 
 
 
