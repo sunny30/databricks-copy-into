@@ -177,9 +177,18 @@ class CustomDataSourceAnalyzer(session: SparkSession)
     }
   }
 
+
 //
 
-  def getViewPlan(table: V2Table, relation: Option[DataSourceV2Relation] = None): LogicalPlan = {
+  def getViewPlan(table: V2Table, relation: Option[DataSourceV2Relation] = None):LogicalPlan ={
+    if(CLSUtils.isCLSFlagEnabled){
+      getViewPlanWithCLS(table = table, relation = relation)
+    }else{
+      getViewPlanWithoutCLS(table = table, relation = relation)
+    }
+  }
+
+  def getViewPlanWithCLS(table: V2Table, relation: Option[DataSourceV2Relation] = None): LogicalPlan = {
 
     val viewText = table.v1Table.viewText.getOrElse {
       throw new IllegalStateException("Invalid view without text.")
@@ -286,6 +295,35 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       member       = newChild,
       secureOutput = newChild.output
     )
+  }
+
+  def getViewPlanWithoutCLS(table: V2Table, relation: Option[DataSourceV2Relation] = None): LogicalPlan = {
+    val viewText = table.v1Table.viewText.getOrElse {
+      throw new IllegalStateException("Invalid view without text.")
+    }
+    val viewConfigs = table.v1Table.viewSQLConfigs
+    val origin = Origin(
+      objectType = Some("VIEW"),
+      objectName = Some(table.v1Table.qualifiedName)
+    )
+
+    val parsedPlan = SQLConf.withExistingConf(View.effectiveSQLConf(viewConfigs, false)) {
+      try {
+        CurrentOrigin.withOrigin(origin) {
+          (new CustomSparkSQLParser()).parseQuery(viewText)
+        }
+      } catch {
+        case _: ParseException => throw new AnalysisException("Invalid text")
+         // throw SparkApiShim.invalidViewText(viewText, table.v1Table.qualifiedName)
+      }
+    }
+    val projectList = getViewColumns(table.v1Table)
+    // val resolvedPlan = apply(Project(projectList, parsedPlan))
+    val child = Project(projectList, parsedPlan)
+
+    val newChild = session.sessionState.analyzer.executeAndCheck(child, new QueryPlanningTracker())
+    //val resolvedPlan = session.sharedState.sparkContext.
+    View(desc = table.v1Table, isTempView = false, child = newChild)
   }
 
   private def findFirstResolved(plan: LogicalPlan): LogicalPlan = {
