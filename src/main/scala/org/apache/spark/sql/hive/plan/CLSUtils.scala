@@ -66,7 +66,7 @@ object CLSUtils {
   }
 
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
-    if (CLSUtils.isViewsPlan(plan)) {
+    if (CLSUtils.isViewsPlan(plan) || !isCLSFlagEnabled) {
       return plan
     }
     plan match {
@@ -85,7 +85,8 @@ object CLSUtils {
     if (catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty) {
       return ds
     }
-    if (isExternalCatalog(catalogName)) {
+    if (isExternalCatalog(catalogName) || !isCLSFlagEnabled)  {
+
       return ds
     }
 
@@ -99,7 +100,7 @@ object CLSUtils {
 
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
     val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
-    if (isExternalCatalog(catalogName)) {
+    if (isExternalCatalog(catalogName) || !isCLSFlagEnabled) {
       return ds
     } else {
       val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
@@ -379,7 +380,7 @@ object CLSUtils {
 
   def getSecureRelation(plan:LogicalPlan):LogicalPlan= {
 
-    if (CLSUtils.isViewTagPresent(plan)) {
+    if (CLSUtils.isViewTagPresent(plan) || !CLSUtils.isCLSFlagEnabled) {
       plan
     } else {
       val pl = plan match {
@@ -432,12 +433,14 @@ object CLSUtils {
   }
 
   def syncSchemaAtLoadAndOverWrite(table:Table, ct:CatalogTable, catalogName:String):Unit ={
-    val trueSchema = table.schema()
-    val msSchema = ct.schema
-    if(!sameFieldsUnordered(trueSchema,msSchema)){
-      val newCt = ct.copy(schema = trueSchema)
-      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
-      plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+    if(CLSUtils.isCLSFlagEnabled) {
+      val trueSchema = table.schema()
+      val msSchema = ct.schema
+      if (!sameFieldsUnordered(trueSchema, msSchema)) {
+        val newCt = ct.copy(schema = trueSchema)
+        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+        plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+      }
     }
   }
 
@@ -479,6 +482,19 @@ object CLSUtils {
 
   private def isMergeCommand(normalizedSql: String): Boolean =
     normalizedSql.startsWith("MERGE ")
+
+
+  def isCLSFlagEnabled:Boolean= {
+    if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+      val confKey = SparkSession.active.conf.getOption("spark.sql.cls.enabled")
+      confKey match {
+        case Some("true") | None => true
+        case _ => false
+      }
+    }else{
+      true
+    }
+  }
 
 
 

@@ -23,6 +23,8 @@ class ViewSecurityRule(session: SparkSession)
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
 
+    if(!CLSUtils.isCLSFlagEnabled)
+      return plan
     // Pass 1: enforce CLS — CustomView still intact
     plan.transformUpWithSubqueries {
       case node: LogicalPlan =>
