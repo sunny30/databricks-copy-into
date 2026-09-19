@@ -484,8 +484,8 @@ object CLSUtils {
     normalizedSql.startsWith("MERGE ")
 
 
-  def isCLSFlagEnabled:Boolean= {
-    if (SparkSession.active.conf.get("spark.sql.test.env").equalsIgnoreCase("true")){
+  lazy val  isCLSFlagEnabled:Boolean= {
+    if ( SparkSession.active.conf.get("spark.sql.test.env", "false").equalsIgnoreCase("true")){
       val confKey = SparkSession.active.conf.getOption("spark.sql.cls.enabled")
       confKey match {
         case Some("true") | None => true
