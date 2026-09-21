@@ -214,7 +214,7 @@ object CLSUtils {
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
     // Views inherit table CLS — no view-level CLS
-    if (catalogTable.tableType == CatalogTableType.VIEW) {
+    if (catalogTable.tableType == CatalogTableType.VIEW || !CLSUtils.isCLSFlagEnabled) {
       return leafPlan
     }
 
@@ -396,6 +396,7 @@ object CLSUtils {
   }
 
   def validatatePartialTablePermissionOnDataSources(plan:LogicalPlan):Boolean = {
+    if (!CLSUtils.isCLSFlagEnabled) return true
      plan match {
       case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) =>
         val (catalogName, dbName, tableName) = getCatalogTableDetails(table)
