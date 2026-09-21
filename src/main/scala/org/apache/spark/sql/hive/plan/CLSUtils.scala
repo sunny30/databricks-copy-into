@@ -241,7 +241,7 @@ object CLSUtils {
     val sameOutput =
       secureAttributes.size == userOutput.size &&
         secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
-          resolver(secureAttr.name, outputAttr.name)
+          resolver(secureAttr.name.toLowerCase, outputAttr.name.toLowerCase())
         }
 
     if (sameOutput) {
@@ -427,9 +427,17 @@ object CLSUtils {
 
 
   def sameFieldsUnordered(a: StructType, b: StructType): Boolean = {
+
     if (a.length != b.length) return false
-    val bByName = b.fields.map(f => f.name.toLowerCase() -> f.dataType).toMap
-    a.fields.forall(fa => bByName.get(fa.name.toLowerCase()).contains(fa.dataType))
+
+    val resolver = SparkSession.active.sessionState.conf.resolver
+    val bFields = b.fields
+
+    a.fields.forall { fa =>
+      val matchingFields = bFields.filter(fb => resolver(fa.name, fb.name))
+      matchingFields.length == 1 &&
+        matchingFields.head.dataType == fa.dataType
+    }
   }
 
   def syncSchemaAtLoadAndOverWrite(table:Table, ct:CatalogTable, catalogName:String):Unit ={
