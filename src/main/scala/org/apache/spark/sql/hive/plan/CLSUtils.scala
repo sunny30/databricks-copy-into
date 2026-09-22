@@ -392,6 +392,9 @@ object CLSUtils {
   }
 
   def validateCreateViewPlan(plan: LogicalPlan): Boolean = {
+    if(!isCLSFlagEnabled)
+      return true
+      
     !plan.collectLeaves().forall(p => validatatePartialTablePermissionOnDataSources(p))
   }
 
@@ -429,6 +432,7 @@ object CLSUtils {
 
   def sameFieldsUnordered(a: StructType, b: StructType): Boolean = {
 
+    if(!isCLSFlagEnabled) return true
     if (a.length != b.length) return false
 
     val resolver = SparkSession.active.sessionState.conf.resolver
