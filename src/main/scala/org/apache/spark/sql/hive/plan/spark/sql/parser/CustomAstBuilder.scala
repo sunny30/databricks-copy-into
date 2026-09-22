@@ -388,15 +388,19 @@ class CustomAstBuilder extends SparkSqlAstBuilder{
 
   override def visitTableName(ctx: SqlBaseParser.TableNameContext): LogicalPlan = {
     var tablePlan = super.visitTableName(ctx)
-    println("parser table plan is "+ tablePlan.toString())
-    tablePlan match {
-      case r@RelationTimeTravel(relation, timestamp, version)=> r
-      case u@UnresolvedRelation(multipartIdentifier,_,_) if multipartIdentifier.size>3 =>
-        u
-      case _ =>
-        tablePlan = CLSUtils.getProjectedTable(tablePlan, ctx)
-        tablePlan
+    if(CLSUtils.isCLSFlagEnabled) {
+      println("parser table plan is " + tablePlan.toString())
+      tablePlan match {
+        case r@RelationTimeTravel(relation, timestamp, version) => r
+        case u@UnresolvedRelation(multipartIdentifier, _, _) if multipartIdentifier.size > 3 =>
+          u
+        case _ =>
+          tablePlan = CLSUtils.getProjectedTable(tablePlan, ctx)
+          tablePlan
 
+      }
+    }else{
+      tablePlan
     }
 
     //tablePlan

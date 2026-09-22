@@ -25,54 +25,48 @@ import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 class ResolveDeltaCrudOperation(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
 
-  override def apply(plan: LogicalPlan): LogicalPlan = plan resolveOperatorsUp  {
+  override def apply(plan: LogicalPlan): LogicalPlan = {
+    if(CLSUtils.isCLSFlagEnabled) {
+      plan resolveOperatorsUp {
 
 
-    case d: DeleteFromTable =>
-      val newQuery = CLSUtils.removeSecureProjection(d.table)
-      d.copy(table = newQuery)
+        case d: DeleteFromTable =>
+          val newQuery = CLSUtils.removeSecureProjection(d.table)
+          d.copy(table = newQuery)
 
-    case m: MergeIntoTable =>
-      val merge = m.copy(
-        targetTable = CLSUtils.getSecureRelation(m.targetTable),
-        sourceTable = CLSUtils.getSecureRelation(m.sourceTable))
-      if (merge.targetTable.resolved && merge.sourceTable.resolved) {
-        expandTargetOnlyMergeStarActions(merge)
-      } else {
-        merge
+        case m: MergeIntoTable =>
+          val merge = m.copy(
+            targetTable = CLSUtils.getSecureRelation(m.targetTable),
+            sourceTable = CLSUtils.getSecureRelation(m.sourceTable))
+          if (merge.targetTable.resolved && merge.sourceTable.resolved) {
+            expandTargetOnlyMergeStarActions(merge)
+          } else {
+            merge
+          }
+
+        case m: DeltaMergeInto=>
+          m.copy(
+            target = CLSUtils.removeSecureProjection(m.target),
+            source = CLSUtils.removeSecureProjection(m.source))
+
+        case u: UpdateTable =>
+          val newQuery = CLSUtils.removeSecureProjection(u.table)
+          u.copy(table = newQuery)
+
+        case b: BinaryNode =>
+          applySecurityToLeaves(b)
+
+        case u: Union =>
+          applySecurityToLeaves(u)
+
+        case dsv2@DataSourceV2Relation(d: DeltaTableV2, _, _, _, options) if (d.timeTravelOpt.isDefined) =>
+          fromV2Relation(d, dsv2, options)
+
+        case pl: LogicalPlan => pl
       }
-
-    case m: DeltaMergeInto =>
-      m.copy(
-        target = CLSUtils.removeSecureProjection(m.target),
-        source = CLSUtils.removeSecureProjection(m.source))
-
-    case u:UpdateTable  =>
-      val newQuery = CLSUtils.removeSecureProjection(u.table)
-      u.copy(table = newQuery)
-
-    case b: BinaryNode =>
-      applySecurityToLeaves(b)
-
-    case u: Union =>
-      applySecurityToLeaves(u)
-
-
-    case dsv2@DataSourceV2Relation(d: DeltaTableV2, _, _, _, options) if (d.timeTravelOpt.isDefined) =>
-      fromV2Relation(d,dsv2, options)
-
-
-
-//    case f@FakeLogicalPlan(exprs: Seq[Expression],
-//    children: Seq[LogicalPlan]) =>
-//      val newChildren = children.map(f => f match {
-//        case s: SubqueryAlias => CLSUtils.removeSecureProjection(s)
-//        case pl:LogicalPlan => pl
-//      })
-//      f.copy(children = newChildren)
-
-
-    case pl: LogicalPlan => pl
+    }else{
+      plan
+    }
   }
 
 

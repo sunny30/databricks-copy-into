@@ -43,6 +43,8 @@ class CLSSecRule(session: SparkSession)
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
 
+    if(!CLSUtils.isCLSFlagEnabled)
+      return plan
     // Collect CTE names before transformation
     // Covers CTEs at top level AND inside subquery expressions
     val cteNames: Set[String] = collectCTENames(plan)

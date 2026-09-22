@@ -490,7 +490,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
       val tt = if (proxyCatalog.tableExists(db = dbName, table = tableName)) {
         proxyCatalog.getTable(db = dbName, table = tableName)
       } else {
-        externalCatalog.getTable(table = tableName, db = dbName)
+        if(CLSUtils.isCLSFlagEnabled){
+          externalCatalog.getTable(table = tableName, db = dbName)
+        }else{
+          externalCatalog.getSecureTable(table = tableName, db = dbName)
+        }
       }
 
       if (tt == null)
@@ -538,7 +542,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val tableName = ident.name().toLowerCase
     val newIdent = Identifier.of(Array(dbName), tableName)
 
-    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    val tt = externalCatalog.getSecureTable(table = tableName, db = dbName)
     if (timestamp == null) {
       if (tt != null) {
         V2Table(tt)
@@ -546,10 +550,12 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         null
       }
     } else {
-      val trueTable = loadTable(ident)
-      val secureTable = loadSecureTable(dbName, tableName)
-      if(!CLSUtils.sameFieldsUnordered(trueTable.schema(), secureTable.schema)){
-        throw new IllegalArgumentException("User with partial permission, not allowed for time travel")
+      if(CLSUtils.isCLSFlagEnabled) {
+        val trueTable = loadTable(ident) //secure table is with user access
+        val secureTable = loadSecureTable(dbName, tableName)
+        if (!CLSUtils.sameFieldsUnordered(trueTable.schema(), secureTable.schema)) {
+          throw new IllegalArgumentException("User with partial permission, not allowed for time travel")
+        }
       }
       tt.provider match {
         case Some(value) => if(value.equalsIgnoreCase("delta")){
@@ -567,7 +573,7 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
     val dbName = ident.namespace().headOption.getOrElse(SQLConf.get.defaultDatabase).toLowerCase
     val tableName = ident.name().toLowerCase
     val newIdent = Identifier.of(Array(dbName), tableName)
-    val tt = externalCatalog.getTable(table = tableName, db = dbName)
+    val tt = externalCatalog.getSecureTable(table = tableName, db = dbName) //secure table is with user access
     if (version == null) {
 
       if (tt != null) {
@@ -576,6 +582,13 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
         null
       }
     } else {
+      if (CLSUtils.isCLSFlagEnabled) {
+        val trueTable = loadTable(ident) //secure table is with user access
+        val secureTable = loadSecureTable(dbName, tableName)
+        if (!CLSUtils.sameFieldsUnordered(trueTable.schema(), secureTable.schema)) {
+          throw new IllegalArgumentException("User with partial permission, not allowed for time travel")
+        }
+      }
       tt.provider match {
         case Some(value) => if (value.equalsIgnoreCase("delta")) {
           new UnityDeltaCatalog(externalCatalog,catalogName).loadTable(newIdent, version)

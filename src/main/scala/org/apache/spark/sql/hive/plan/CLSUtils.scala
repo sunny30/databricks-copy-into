@@ -66,7 +66,7 @@ object CLSUtils {
   }
 
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
-    if (CLSUtils.isViewsPlan(plan)) {
+    if (CLSUtils.isViewsPlan(plan) || !isCLSFlagEnabled) {
       return plan
     }
     plan match {
@@ -85,7 +85,8 @@ object CLSUtils {
     if (catalogName.isEmpty && dbName.isEmpty && tableName.isEmpty) {
       return ds
     }
-    if (isExternalCatalog(catalogName)) {
+    if (isExternalCatalog(catalogName) || !isCLSFlagEnabled)  {
+
       return ds
     }
 
@@ -99,7 +100,7 @@ object CLSUtils {
 
   def getSecurePlanFromLogicalRelation(ds: LogicalRelation, table: CatalogTable): LogicalPlan = {
     val (catalogName, dbName, tableName) = (table.identifier.catalog.getOrElse("default"), table.identifier.database.getOrElse("default"), table.identifier.table)
-    if (isExternalCatalog(catalogName)) {
+    if (isExternalCatalog(catalogName) || !isCLSFlagEnabled) {
       return ds
     } else {
       val secureTable = getSecureTableFrom(catalogName, dbName, tableName)
@@ -213,7 +214,7 @@ object CLSUtils {
   def getSecureLeafPlan(catalogTable: CatalogTable, leafPlan: LogicalPlan): LogicalPlan = {
 
     // Views inherit table CLS — no view-level CLS
-    if (catalogTable.tableType == CatalogTableType.VIEW) {
+    if (catalogTable.tableType == CatalogTableType.VIEW || !CLSUtils.isCLSFlagEnabled) {
       return leafPlan
     }
 
@@ -240,7 +241,7 @@ object CLSUtils {
     val sameOutput =
       secureAttributes.size == userOutput.size &&
         secureAttributes.zip(userOutput).forall { case (secureAttr, outputAttr) =>
-          resolver(secureAttr.name, outputAttr.name)
+          resolver(secureAttr.name.toLowerCase, outputAttr.name.toLowerCase())
         }
 
     if (sameOutput) {
@@ -379,7 +380,7 @@ object CLSUtils {
 
   def getSecureRelation(plan:LogicalPlan):LogicalPlan= {
 
-    if (CLSUtils.isViewTagPresent(plan)) {
+    if (CLSUtils.isViewTagPresent(plan) || !CLSUtils.isCLSFlagEnabled) {
       plan
     } else {
       val pl = plan match {
@@ -391,10 +392,14 @@ object CLSUtils {
   }
 
   def validateCreateViewPlan(plan: LogicalPlan): Boolean = {
+    if(!isCLSFlagEnabled)
+      return true
+      
     !plan.collectLeaves().forall(p => validatatePartialTablePermissionOnDataSources(p))
   }
 
   def validatatePartialTablePermissionOnDataSources(plan:LogicalPlan):Boolean = {
+    if (!CLSUtils.isCLSFlagEnabled) return true
      plan match {
       case ds@DataSourceV2Relation(table, output, catalog, identifier, options) if !CDCReader.isCDCRead(options) =>
         val (catalogName, dbName, tableName) = getCatalogTableDetails(table)
@@ -426,18 +431,29 @@ object CLSUtils {
 
 
   def sameFieldsUnordered(a: StructType, b: StructType): Boolean = {
+
+    if(!isCLSFlagEnabled) return true
     if (a.length != b.length) return false
-    val bByName = b.fields.map(f => f.name.toLowerCase() -> f.dataType).toMap
-    a.fields.forall(fa => bByName.get(fa.name.toLowerCase()).contains(fa.dataType))
+
+    val resolver = SparkSession.active.sessionState.conf.resolver
+    val bFields = b.fields
+
+    a.fields.forall { fa =>
+      val matchingFields = bFields.filter(fb => resolver(fa.name, fb.name))
+      matchingFields.length == 1 &&
+        matchingFields.head.dataType == fa.dataType
+    }
   }
 
   def syncSchemaAtLoadAndOverWrite(table:Table, ct:CatalogTable, catalogName:String):Unit ={
-    val trueSchema = table.schema()
-    val msSchema = ct.schema
-    if(!sameFieldsUnordered(trueSchema,msSchema)){
-      val newCt = ct.copy(schema = trueSchema)
-      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
-      plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+    if(CLSUtils.isCLSFlagEnabled) {
+      val trueSchema = table.schema()
+      val msSchema = ct.schema
+      if (!sameFieldsUnordered(trueSchema, msSchema)) {
+        val newCt = ct.copy(schema = trueSchema)
+        val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+        plugin.asInstanceOf[TableSchemaChangeCatalog].alterUnsafeCatalogTable(newCt)
+      }
     }
   }
 
@@ -479,6 +495,19 @@ object CLSUtils {
 
   private def isMergeCommand(normalizedSql: String): Boolean =
     normalizedSql.startsWith("MERGE ")
+
+
+  lazy val  isCLSFlagEnabled:Boolean= {
+    if ( SparkSession.active.conf.get("spark.sql.test.env", "false").equalsIgnoreCase("true")){
+      val confKey = SparkSession.active.conf.getOption("spark.sql.cls.enabled")
+      confKey match {
+        case Some("true") | None => true
+        case _ => false
+      }
+    }else{
+      true
+    }
+  }
 
 
 
