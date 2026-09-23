@@ -116,24 +116,34 @@ class ResolveDeltaCrudOperation(session: SparkSession)
 
   private def expandTargetOnlyMergeStarActions(merge: MergeIntoTable): MergeIntoTable = {
     val sourceOutput = merge.sourceTable.output
-    val resolver = session.sessionState.conf.resolver
+    val resolver     = session.sessionState.conf.resolver
 
-    def sourceAttrFor(targetAttr: Attribute) =
+    def sourceAttrFor(targetAttr: Attribute): Option[Attribute] =
       sourceOutput.find(sourceAttr => resolver(sourceAttr.name, targetAttr.name))
 
-    val hasTargetOnlyColumns = merge.targetTable.output.exists(targetAttr => sourceAttrFor(targetAttr).isEmpty)
+    val hasTargetOnlyColumns = merge.targetTable.output
+      .exists(targetAttr => sourceAttrFor(targetAttr).isEmpty)
+
     val hasSourceOnlyColumns = sourceOutput.exists { sourceAttr =>
-      !merge.targetTable.output.exists(targetAttr => resolver(targetAttr.name, sourceAttr.name))
+      !merge.targetTable.output
+        .exists(targetAttr => resolver(targetAttr.name, sourceAttr.name))
     }
-    val canEvolveSchema = session.sessionState.conf.getConf(DeltaSQLConf.DELTA_SCHEMA_AUTO_MIGRATE)
+
+    val canEvolveSchema = session.sessionState.conf
+      .getConf(DeltaSQLConf.DELTA_SCHEMA_AUTO_MIGRATE)
 
     if (!hasTargetOnlyColumns || (hasSourceOnlyColumns && canEvolveSchema)) {
       merge
     } else {
       val matchedActions = merge.matchedActions.map {
         case UpdateStarAction(condition) =>
-          val assignments = merge.targetTable.output.map { targetAttr =>
-            Assignment(targetAttr, sourceAttrFor(targetAttr).getOrElse(targetAttr))
+          // Only assign target cols that exist in CLS-permitted source output
+          // Target-only cols (not in source) are skipped — keep existing value ✓
+          // Prevents DELTA_MERGE_UNRESOLVED_EXPRESSION on restricted source cols ✓
+          val assignments = merge.targetTable.output.flatMap { targetAttr =>
+            sourceAttrFor(targetAttr).map { sourceAttr =>
+              Assignment(targetAttr, sourceAttr)
+            }
           }
           UpdateAction(condition, assignments)
         case other => other
@@ -141,16 +151,26 @@ class ResolveDeltaCrudOperation(session: SparkSession)
 
       val notMatchedActions = merge.notMatchedActions.map {
         case InsertStarAction(condition) =>
+          // Only insert cols that exist in CLS-permitted source output ✓
           val assignments = merge.targetTable.output.flatMap { targetAttr =>
-            sourceAttrFor(targetAttr).map(sourceAttr => Assignment(targetAttr, sourceAttr))
+            sourceAttrFor(targetAttr).map { sourceAttr =>
+              Assignment(targetAttr, sourceAttr)
+            }
           }
           InsertAction(condition, assignments)
         case other => other
       }
+
+      // WHEN NOT MATCHED BY SOURCE — source row is absent
+      // Delta natively resolves UPDATE SET * against target only in this clause
+      // DO NOT expand — expanding causes RHS to be resolved against source → error ✗
+      val notMatchedBySourceActions = merge.notMatchedBySourceActions
+
       merge.copy(
-        matchedActions = matchedActions,
-        notMatchedActions = notMatchedActions)
+        matchedActions            = matchedActions,
+        notMatchedActions         = notMatchedActions,
+        notMatchedBySourceActions = notMatchedBySourceActions
+      )
     }
   }
-
 }

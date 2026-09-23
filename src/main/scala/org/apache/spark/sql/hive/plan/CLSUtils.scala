@@ -394,7 +394,7 @@ object CLSUtils {
   def validateCreateViewPlan(plan: LogicalPlan): Boolean = {
     if(!isCLSFlagEnabled)
       return true
-      
+
     !plan.collectLeaves().forall(p => validatatePartialTablePermissionOnDataSources(p))
   }
 
