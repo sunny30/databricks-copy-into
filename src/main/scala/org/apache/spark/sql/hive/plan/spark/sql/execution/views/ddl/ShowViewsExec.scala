@@ -263,35 +263,69 @@ case class SecureDescribeColumnExec(
     val rows = new ArrayBuffer[InternalRow]()
 
     val (c, d, t) = table match {
-      case v: V2Table => (v.v1Table.identifier.catalog.getOrElse("default"), v.v1Table.identifier.database.getOrElse("default"), v.v1Table.identifier.table)
-      case dt: DeltaTableV2 => (dt.v1Table.identifier.catalog.getOrElse("default"), dt.v1Table.identifier.database.getOrElse("default"), dt.v1Table.identifier.table)
+      case v: V2Table =>
+        (v.v1Table.identifier.catalog.getOrElse("default"),
+          v.v1Table.identifier.database.getOrElse("default"),
+          v.v1Table.identifier.table)
+      case dt: DeltaTableV2 =>
+        (dt.v1Table.identifier.catalog.getOrElse("default"),
+          dt.v1Table.identifier.database.getOrElse("default"),
+          dt.v1Table.identifier.table)
       case st: SparkTable =>
-        val multipartName = st.table().name().split("\\.")
-        if (multipartName.size == 3) {
-          (multipartName(0), multipartName(1), multipartName(2))
-        } else if (multipartName.size == 2) {
-          ("default", multipartName(0), multipartName(1))
-        } else {
-          ("default", "default", multipartName(0))
-        }
+        val parts = st.table().name().split("\\.")
+        if (parts.size == 3) (parts(0), parts(1), parts(2))
+        else if (parts.size == 2) ("default", parts(0), parts(1))
+        else ("default", "default", parts(0))
     }
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
-    val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(d, t)
-    val secureColumns = secureCatalogTable.schema.map(f=>f.name)
+
+    // Step 1 — load preliminary CatalogTable for sync input
+    val preliminaryCt = plugin
+      .asInstanceOf[TableSchemaChangeCatalog]
+      .loadSecureTable(d, t)
+
+    // Step 2 — sync Delta log / Iceberg schema → HMS
+    // writes comments from Delta log / Iceberg to HMS ✓
+    table match {
+      case dt: DeltaTableV2 =>
+        CLSUtils.syncSchemaAtLoadAndOverWrite(dt, preliminaryCt, c)
+      case st: SparkTable =>
+        CLSUtils.syncSchemaAtLoadAndOverWrite(st, preliminaryCt, c)
+      case _ => // V2Table — no sync needed
+    }
+
+    // Step 3 — load again AFTER sync
+    // HMS now has correct schema with comments ✓
+    val secureCatalogTable = plugin
+      .asInstanceOf[TableSchemaChangeCatalog]
+      .loadSecureTable(d, t)
+
+    // Step 4 — check column access
+    val secureColumns = secureCatalogTable.schema.map(_.name)
     val doesExist = secureColumns.exists(col => column.name.equalsIgnoreCase(col))
-    if(!doesExist){
+    if (!doesExist) {
       throw new IllegalArgumentException("user does not have access to this column")
     }
-    val comment = if (column.metadata.contains("comment")) {
-      column.metadata.getString("comment")
-    } else {
-      "NULL"
-    }
+
+    // Step 5 — get comment from synced secure schema
+    // authoritative source: Delta log / Iceberg schema (now in HMS after sync)
+    // fallback to attribute metadata if not in schema
+    val comment = secureCatalogTable.schema.fields
+      .find(f => f.name.equalsIgnoreCase(column.name))
+      .flatMap(_.getComment())
+      .orElse(
+        if (column.metadata.contains("comment"))
+          Some(column.metadata.getString("comment"))
+        else
+          None
+      )
+      .getOrElse("NULL")
 
     rows += toCatalystRow("col_name", column.name)
     rows += toCatalystRow("data_type",
-      CharVarcharUtils.getRawType(column.metadata).getOrElse(column.dataType).catalogString)
+      CharVarcharUtils.getRawType(column.metadata)
+        .getOrElse(column.dataType).catalogString)
     rows += toCatalystRow("comment", comment)
 
     if (isExtended) {
@@ -307,41 +341,36 @@ case class SecureDescribeColumnExec(
       }
 
       if (colStats.nonEmpty) {
-        if (colStats.get.min().isPresent) {
+        if (colStats.get.min().isPresent)
           rows += toCatalystRow("min", colStats.get.min().toString)
-        } else {
+        else
           rows += toCatalystRow("min", "NULL")
-        }
 
-        if (colStats.get.max().isPresent) {
+        if (colStats.get.max().isPresent)
           rows += toCatalystRow("max", colStats.get.max().toString)
-        } else {
+        else
           rows += toCatalystRow("max", "NULL")
-        }
 
-        if (colStats.get.nullCount().isPresent) {
+        if (colStats.get.nullCount().isPresent)
           rows += toCatalystRow("num_nulls", colStats.get.nullCount().getAsLong.toString)
-        } else {
+        else
           rows += toCatalystRow("num_nulls", "NULL")
-        }
 
-        if (colStats.get.distinctCount().isPresent) {
-          rows += toCatalystRow("distinct_count", colStats.get.distinctCount().getAsLong.toString)
-        } else {
+        if (colStats.get.distinctCount().isPresent)
+          rows += toCatalystRow("distinct_count",
+            colStats.get.distinctCount().getAsLong.toString)
+        else
           rows += toCatalystRow("distinct_count", "NULL")
-        }
 
-        if (colStats.get.avgLen().isPresent) {
+        if (colStats.get.avgLen().isPresent)
           rows += toCatalystRow("avg_col_len", colStats.get.avgLen().getAsLong.toString)
-        } else {
+        else
           rows += toCatalystRow("avg_col_len", "NULL")
-        }
 
-        if (colStats.get.maxLen().isPresent) {
+        if (colStats.get.maxLen().isPresent)
           rows += toCatalystRow("max_col_len", colStats.get.maxLen().getAsLong.toString)
-        } else {
+        else
           rows += toCatalystRow("max_col_len", "NULL")
-        }
       }
     }
 
