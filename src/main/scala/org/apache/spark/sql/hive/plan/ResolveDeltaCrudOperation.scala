@@ -23,10 +23,10 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import scala.jdk.CollectionConverters.mapAsScalaMapConverter
 
 class ResolveDeltaCrudOperation(session: SparkSession)
-  extends Rule[LogicalPlan] with AnalysisHelper with Logging{
+  extends Rule[LogicalPlan] with AnalysisHelper with Logging {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
-    if(CLSUtils.isCLSFlagEnabled) {
+    if (CLSUtils.isCLSFlagEnabled) {
       plan resolveOperatorsUp {
 
 
@@ -44,7 +44,7 @@ class ResolveDeltaCrudOperation(session: SparkSession)
             merge
           }
 
-        case m: DeltaMergeInto=>
+        case m: DeltaMergeInto =>
           m.copy(
             target = CLSUtils.removeSecureProjection(m.target),
             source = CLSUtils.removeSecureProjection(m.source))
@@ -64,7 +64,7 @@ class ResolveDeltaCrudOperation(session: SparkSession)
 
         case pl: LogicalPlan => pl
       }
-    }else{
+    } else {
       plan
     }
   }
@@ -118,18 +118,23 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     val sourceOutput = merge.sourceTable.output
     val resolver = session.sessionState.conf.resolver
 
-    def sourceAttrFor(targetAttr: Attribute) =
+    def sourceAttrFor(targetAttr: Attribute): Option[Attribute] =
       sourceOutput.find(sourceAttr => resolver(sourceAttr.name, targetAttr.name))
 
-    val hasTargetOnlyColumns = merge.targetTable.output.exists(targetAttr => sourceAttrFor(targetAttr).isEmpty)
+    val hasTargetOnlyColumns = merge.targetTable.output
+      .exists(targetAttr => sourceAttrFor(targetAttr).isEmpty)
+
     val hasSourceOnlyColumns = sourceOutput.exists { sourceAttr =>
-      !merge.targetTable.output.exists(targetAttr => resolver(targetAttr.name, sourceAttr.name))
+      !merge.targetTable.output
+        .exists(targetAttr => resolver(targetAttr.name, sourceAttr.name))
     }
-    val canEvolveSchema = session.sessionState.conf.getConf(DeltaSQLConf.DELTA_SCHEMA_AUTO_MIGRATE)
+
+    val canEvolveSchema = session.sessionState.conf
+      .getConf(DeltaSQLConf.DELTA_SCHEMA_AUTO_MIGRATE)
 
     if (!hasTargetOnlyColumns || (hasSourceOnlyColumns && canEvolveSchema)) {
-      merge
-    } else {
+      // Source and target columns match — safe to expand star
+      // OR schema evolution enabled — Delta handles it
       val matchedActions = merge.matchedActions.map {
         case UpdateStarAction(condition) =>
           val assignments = merge.targetTable.output.map { targetAttr =>
@@ -147,10 +152,20 @@ class ResolveDeltaCrudOperation(session: SparkSession)
           InsertAction(condition, assignments)
         case other => other
       }
+
       merge.copy(
         matchedActions = matchedActions,
-        notMatchedActions = notMatchedActions)
+        notMatchedActions = notMatchedActions,
+        notMatchedBySourceActions = merge.notMatchedBySourceActions
+      )
+
+    } else {
+      // hasTargetOnlyColumns = true AND canEvolveSchema = false
+      // Source has fewer columns than target
+      // DO NOT expand star — pass through as-is
+      // Delta's PreprocessTableMerge will try to resolve * against source
+      // and throw DELTA_MERGE_UNRESOLVED_EXPRESSION for missing cols ✓
+      merge
     }
   }
-
 }

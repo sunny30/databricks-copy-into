@@ -298,6 +298,399 @@ object CLSApp {
 
   }
 
+  def testMergeStarWithRestrictedSource(spark: SparkSession): Unit = {
+
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_merge_test")
+
+    val targetTable = "cat.cls_merge_test.target_tbl"
+    val sourceTable = "cat.cls_merge_test.source_tbl"
+    val sourceView = "cat.cls_merge_test.v_source"
+
+    spark.sql(
+      s"""
+         |CREATE TABLE IF NOT EXISTS $targetTable (
+         |  idt_client_id          STRING,
+         |  cod_client_customer_id STRING,
+         |  nam_client_name        STRING,
+         |  des_certificate_type   STRING,
+         |  dat_creation           TIMESTAMP,
+         |  flg_is_automated       BOOLEAN,
+         |  dat_kafka              TIMESTAMP,
+         |  dat_import_utc         TIMESTAMP
+         |) USING delta
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |INSERT INTO $targetTable VALUES
+         |  ('C001', 'CUST-101', 'Alice', 'TYPE-A',
+         |   TIMESTAMP '2024-01-10 10:00:00', true,
+         |   TIMESTAMP '2024-01-10 10:00:00',
+         |   TIMESTAMP '2024-01-10 10:00:00')
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |CREATE TABLE IF NOT EXISTS $sourceTable (
+         |  idt_client_id          STRING,
+         |  cod_client_customer_id STRING,
+         |  nam_client_name        STRING,
+         |  des_certificate_type   STRING,
+         |  dat_creation           TIMESTAMP,
+         |  flg_is_automated       BOOLEAN,
+         |  dat_kafka              TIMESTAMP,
+         |  dat_import_utc         TIMESTAMP
+         |) USING parquet
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |INSERT INTO $sourceTable VALUES
+         |  ('C001', 'CUST-101', 'Alice Updated', 'TYPE-A',
+         |   TIMESTAMP '2024-01-10 10:00:00', true,
+         |   TIMESTAMP '2024-06-01 08:00:00',
+         |   TIMESTAMP '2024-06-01 08:00:00')
+         |""".stripMargin)
+
+    // Source view — dat_import_utc excluded (CLS restriction)
+    // source has FEWER columns than target
+    spark.sql(
+      s"""
+         |CREATE VIEW $sourceView AS
+         |SELECT
+         |  idt_client_id,
+         |  cod_client_customer_id,
+         |  nam_client_name,
+         |  des_certificate_type,
+         |  dat_creation,
+         |  flg_is_automated,
+         |  dat_kafka
+         |FROM $sourceTable
+         |""".stripMargin)
+
+    println("\n========== Test 3: MERGE UPDATE SET * — source view missing dat_import_utc ==========")
+    println("Scenario: source has fewer columns than target, merge uses UPDATE SET *")
+    println("Expected: DELTA_MERGE_UNRESOLVED_EXPRESSION should NOT occur — flatMap fix skips missing cols")
+
+    try {
+      spark.sql(
+        s"""
+           |MERGE INTO $targetTable AS target
+           |USING $sourceView AS source
+           |ON target.idt_client_id = source.idt_client_id
+           |WHEN MATCHED THEN
+           |  UPDATE SET *
+           |WHEN NOT MATCHED THEN
+           |  INSERT *
+           |""".stripMargin)
+
+      // Verify dat_import_utc preserved on target — never referenced from source
+      val result = spark.sql(
+        s"SELECT * FROM $targetTable WHERE idt_client_id = 'C001'"
+      ).collect()
+
+      assert(result.length == 1, "FAIL — C001 should exist")
+
+      val datImportUtc = result(0).getAs[java.sql.Timestamp]("dat_import_utc")
+      assert(
+        datImportUtc.toString.contains("2024-01-10"),
+        s"FAIL — dat_import_utc should preserve original value, got: $datImportUtc"
+      )
+
+      val namClientName = result(0).getAs[String]("nam_client_name")
+      assert(
+        namClientName == "Alice Updated",
+        s"FAIL — nam_client_name should be updated from source, got: $namClientName"
+      )
+
+      spark.sql(s"SELECT * FROM $targetTable").show(truncate = false)
+      println("PASS — MERGE UPDATE SET * succeeded")
+      println("PASS — dat_import_utc preserved (not in source view)")
+      println("PASS — nam_client_name updated from source view")
+
+    } catch {
+      case e: Exception =>
+        val msg = e.getMessage
+        val errorClass = e match {
+          case ae: org.apache.spark.sql.AnalysisException => ae.getErrorClass
+          case _ => ""
+        }
+        if (
+          errorClass == "DELTA_MERGE_UNRESOLVED_EXPRESSION" ||
+            msg.contains("DELTA_MERGE_UNRESOLVED_EXPRESSION") ||
+            msg.contains("Cannot resolve dat_import_utc")
+        ) {
+          println(s"FAIL — DELTA_MERGE_UNRESOLVED_EXPRESSION still occurring — flatMap fix not working")
+          println(s"       errorClass: $errorClass")
+          println(s"       message: $msg")
+        } else {
+          println(s"FAIL — unexpected error: $msg")
+        }
+        e.printStackTrace()
+    }
+
+    // Cleanup
+//    spark.sql(s"DROP VIEW  IF EXISTS $sourceView")
+//    spark.sql(s"DROP TABLE IF EXISTS $sourceTable")
+//    spark.sql(s"DROP TABLE IF EXISTS $targetTable")
+//    spark.sql("DROP SCHEMA IF EXISTS cat.cls_merge_test")
+
+    println("\n========== Test 3 completed ==========")
+  }
+
+  def testMergeWithCLSRestrictedSource(spark: SparkSession): Unit = {
+
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.cls_merge_test")
+
+    val targetTable = "cat.cls_merge_test.target_tbl"
+    val sourceTable = "cat.cls_merge_test.source_tbl"
+    val sourceView  = "cat.cls_merge_test.v_source"
+
+    // Target table — full schema including dat_import_utc
+    spark.sql(
+      s"""
+         |CREATE TABLE IF NOT EXISTS $targetTable (
+         |  idt_client_id          STRING,
+         |  cod_client_customer_id STRING,
+         |  nam_client_name        STRING,
+         |  des_certificate_type   STRING,
+         |  dat_creation           TIMESTAMP,
+         |  flg_is_automated       BOOLEAN,
+         |  dat_kafka              TIMESTAMP,
+         |  dat_import_utc         TIMESTAMP
+         |) USING delta
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |INSERT INTO $targetTable VALUES
+         |  ('C001', 'CUST-101', 'Alice',   'TYPE-A',
+         |   TIMESTAMP '2024-01-10 10:00:00', true,
+         |   TIMESTAMP '2024-01-10 10:00:00',
+         |   TIMESTAMP '2024-01-10 10:00:00'),
+         |  ('C002', 'CUST-102', 'Bob',     'TYPE-B',
+         |   TIMESTAMP '2024-02-20 11:00:00', false,
+         |   TIMESTAMP '2024-02-20 11:00:00',
+         |   TIMESTAMP '2024-02-20 11:00:00'),
+         |  ('C003', 'CUST-103', 'Charlie', 'TYPE-A',
+         |   TIMESTAMP '2024-03-15 12:00:00', true,
+         |   TIMESTAMP '2024-03-15 12:00:00',
+         |   TIMESTAMP '2024-03-15 12:00:00')
+         |""".stripMargin)
+
+    // Source table — full schema including dat_import_utc
+    spark.sql(
+      s"""
+         |CREATE TABLE IF NOT EXISTS $sourceTable (
+         |  idt_client_id          STRING,
+         |  cod_client_customer_id STRING,
+         |  nam_client_name        STRING,
+         |  des_certificate_type   STRING,
+         |  dat_creation           TIMESTAMP,
+         |  flg_is_automated       BOOLEAN,
+         |  dat_kafka              TIMESTAMP,
+         |  dat_import_utc         TIMESTAMP
+         |) USING parquet
+         |""".stripMargin)
+
+    spark.sql(
+      s"""
+         |INSERT INTO $sourceTable VALUES
+         |  ('C001', 'CUST-101', 'Alice Updated', 'TYPE-A',
+         |   TIMESTAMP '2024-01-10 10:00:00', true,
+         |   TIMESTAMP '2024-06-01 08:00:00',
+         |   TIMESTAMP '2024-06-01 08:00:00'),
+         |  ('C004', 'CUST-104', 'Dave',   'TYPE-C',
+         |   TIMESTAMP '2024-06-01 09:00:00', false,
+         |   TIMESTAMP '2024-06-01 09:00:00',
+         |   TIMESTAMP '2024-06-01 09:00:00')
+         |""".stripMargin)
+
+    // Source view — dat_import_utc intentionally excluded
+    // simulates CLS restriction — user has no read permission on dat_import_utc
+    spark.sql(
+      s"""
+         |CREATE VIEW $sourceView AS
+         |SELECT
+         |  idt_client_id,
+         |  cod_client_customer_id,
+         |  nam_client_name,
+         |  des_certificate_type,
+         |  dat_creation,
+         |  flg_is_automated,
+         |  dat_kafka
+         |FROM $sourceTable
+         |""".stripMargin)
+
+    println("\n========== Test 1: MERGE UPDATE SET * — source view missing dat_import_utc ==========")
+    // expandTargetOnlyMergeStarActions flatMap skips dat_import_utc silently
+    // dat_import_utc in target keeps existing value ✓
+    // No DELTA_MERGE_UNRESOLVED_EXPRESSION expected ✓
+    try {
+      spark.sql(
+        s"""
+           |MERGE INTO $targetTable AS target
+           |USING $sourceView AS source
+           |ON target.idt_client_id = source.idt_client_id
+           |WHEN MATCHED THEN
+           |  UPDATE SET *
+           |WHEN NOT MATCHED THEN
+           |  INSERT *
+           |""".stripMargin)
+
+      println("PASS — MERGE UPDATE SET * completed without DELTA_MERGE_UNRESOLVED_EXPRESSION")
+
+      val result = spark.sql(s"SELECT * FROM $targetTable ORDER BY idt_client_id")
+      result.show(truncate = false)
+
+      // C001 updated — nam_client_name changed, dat_import_utc preserved
+      val c001 = result.filter("idt_client_id = 'C001'").collect()
+      assert(c001.length == 1, "FAIL — C001 should exist")
+      assert(
+        c001(0).getAs[String]("nam_client_name") == "Alice Updated",
+        "FAIL — nam_client_name should be updated from source view"
+      )
+      val datImportUtc = c001(0).getAs[java.sql.Timestamp]("dat_import_utc")
+      assert(
+        datImportUtc.toString.contains("2024-01-10"),
+        s"FAIL — dat_import_utc should keep original value, got: $datImportUtc"
+      )
+      println("PASS — C001 updated, dat_import_utc preserved as expected")
+
+      // C004 inserted — dat_import_utc null since not in source view
+      val c004 = result.filter("idt_client_id = 'C004'").collect()
+      assert(c004.length == 1, "FAIL — C004 should be inserted")
+      println("PASS — C004 inserted correctly")
+
+    } catch {
+      case e: Exception =>
+        println(s"FAIL — unexpected error: ${e.getMessage}")
+        e.printStackTrace()
+    }
+
+    println("\n========== Test 2: MERGE explicit columns — should always work ==========")
+    try {
+      spark.sql(
+        s"""
+           |MERGE INTO $targetTable AS target
+           |USING $sourceView AS source
+           |ON target.idt_client_id = source.idt_client_id
+           |WHEN MATCHED THEN
+           |  UPDATE SET
+           |    target.nam_client_name = source.nam_client_name,
+           |    target.dat_kafka       = source.dat_kafka
+           |WHEN NOT MATCHED THEN
+           |  INSERT (
+           |    idt_client_id, cod_client_customer_id, nam_client_name,
+           |    des_certificate_type, dat_creation, flg_is_automated, dat_kafka
+           |  )
+           |  VALUES (
+           |    source.idt_client_id, source.cod_client_customer_id, source.nam_client_name,
+           |    source.des_certificate_type, source.dat_creation,
+           |    source.flg_is_automated, source.dat_kafka
+           |  )
+           |""".stripMargin)
+
+      spark.sql(s"SELECT * FROM $targetTable ORDER BY idt_client_id").show(truncate = false)
+      println("PASS — explicit column MERGE works correctly")
+
+    } catch {
+      case e: Exception =>
+        println(s"FAIL — ${e.getMessage}")
+    }
+
+    println("\n========== Test 3: MERGE explicit restricted column — expect DELTA_MERGE_UNRESOLVED_EXPRESSION ==========")
+    // User explicitly references source.dat_import_utc
+    // dat_import_utc not in source view → Delta cannot resolve
+    // Must receive DELTA_MERGE_UNRESOLVED_EXPRESSION ✓
+    try {
+      spark.sql(
+        s"""
+           |MERGE INTO $targetTable AS target
+           |USING $sourceView AS source
+           |ON target.idt_client_id = source.idt_client_id
+           |WHEN MATCHED THEN
+           |  UPDATE SET
+           |    target.dat_import_utc = source.dat_import_utc
+           |""".stripMargin)
+      println("FAIL — expected DELTA_MERGE_UNRESOLVED_EXPRESSION")
+    } catch {
+      case e: Exception =>
+        val msg        = e.getMessage
+        val errorClass = e match {
+          case ae: org.apache.spark.sql.AnalysisException => ae.getErrorClass
+          case _ => ""
+        }
+        assert(
+          errorClass == "DELTA_MERGE_UNRESOLVED_EXPRESSION" ||
+            msg.contains("DELTA_MERGE_UNRESOLVED_EXPRESSION") ||
+            msg.contains("Cannot resolve dat_import_utc"),
+          s"FAIL — expected DELTA_MERGE_UNRESOLVED_EXPRESSION but got: $msg"
+        )
+        println(s"PASS — got expected error class: $errorClass")
+        println(s"       message: $msg")
+    }
+
+    println("\n========== Test 4: MERGE full source table — dat_import_utc updated ==========")
+    // Full source table has dat_import_utc → UPDATE SET * includes it ✓
+    try {
+      spark.sql(
+        s"""
+           |MERGE INTO $targetTable AS target
+           |USING $sourceTable AS source
+           |ON target.idt_client_id = source.idt_client_id
+           |WHEN MATCHED THEN
+           |  UPDATE SET *
+           |WHEN NOT MATCHED THEN
+           |  INSERT *
+           |""".stripMargin)
+
+      val result = spark.sql(s"SELECT * FROM $targetTable ORDER BY idt_client_id")
+      result.show(truncate = false)
+
+      val c001         = result.filter("idt_client_id = 'C001'").collect()
+      val datImportUtc = c001(0).getAs[java.sql.Timestamp]("dat_import_utc")
+      assert(
+        datImportUtc.toString.contains("2024-06-01"),
+        s"FAIL — dat_import_utc should be updated from full source, got: $datImportUtc"
+      )
+      println("PASS — full source MERGE updates dat_import_utc correctly")
+
+    } catch {
+      case e: Exception =>
+        println(s"FAIL — ${e.getMessage}")
+    }
+
+    println("\n========== Test 5: MERGE with CTE source — star expansion ==========")
+    try {
+      spark.sql(
+        s"""
+           |MERGE INTO $targetTable AS target
+           |USING (
+           |  WITH src AS (SELECT * FROM $sourceView)
+           |  SELECT * FROM src
+           |) AS source
+           |ON target.idt_client_id = source.idt_client_id
+           |WHEN MATCHED THEN
+           |  UPDATE SET *
+           |WHEN NOT MATCHED THEN
+           |  INSERT *
+           |""".stripMargin)
+
+      spark.sql(s"SELECT * FROM $targetTable ORDER BY idt_client_id").show(truncate = false)
+      println("PASS — MERGE with CTE source works correctly")
+
+    } catch {
+      case e: Exception =>
+        println(s"FAIL — ${e.getMessage}")
+    }
+
+    // Cleanup
+
+
+    println("\n========== All merge CLS tests completed ==========")
+  }
+
   def withCTE(spark:SparkSession):Unit={
 
     spark.sql("CREATE SCHEMA IF NOT EXISTS cat.teste1")
