@@ -319,6 +319,12 @@ class FSMetaStoreCatalog(
   override def dropTable(db: String, table: String, ignoreIfNotExists: Boolean, purge: Boolean): Unit = {
 
     if(tableExists(db, table)) {
+      val ct = getTable(db, table)
+      if(ct.tableType == CatalogTableType.VIEW){
+        println("drop of view completed")
+        return
+      }
+
       val location = getTable(db, table).location
       val path = new Path(location)
      // fs.delete(path)
