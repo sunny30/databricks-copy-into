@@ -117,43 +117,82 @@ case class SecureDescribeTableExec(describeTableExec: DescribeRelation) extends 
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
 
-    // Step 1 — load a preliminary CatalogTable for sync input
-    // needed because syncSchemaAtLoadAndOverWrite requires a CatalogTable
+    // Step 1 — load preliminary CatalogTable for sync input
     val preliminaryCt = plugin
       .asInstanceOf[TableSchemaChangeCatalog]
       .loadSecureTable(d, t)
 
     // Step 2 — sync Delta log / Iceberg schema → HMS
-    // trueSchema (with comments) written to HMS here ✓
+    // writes full schema including comments to HMS ✓
     table match {
       case dt: DeltaTableV2 =>
         CLSUtils.syncSchemaAtLoadAndOverWrite(dt, preliminaryCt, c)
       case st: SparkTable =>
         CLSUtils.syncSchemaAtLoadAndOverWrite(st, preliminaryCt, c)
-      case _ => // V2Table — no sync needed
+      case _ =>
     }
 
-    // Step 3 — load again AFTER sync
-    // HMS now has correct schema with comments from Delta log ✓
-    // loadSecureTable filters to permitted columns — comments intact ✓
-    // secureSchemaWithComments block no longer needed ✓
+    // Step 3 — load secure table AFTER sync
+    // HMS now has updated schema ✓
     val secureCatalogTable = plugin
       .asInstanceOf[TableSchemaChangeCatalog]
       .loadSecureTable(d, t)
 
-    // Merge table properties from Delta log / Iceberg into secure table
-    // properties not synced by syncSchemaAtLoadAndOverWrite — still needed ✓
+    // Step 4 — copy column comments from full HMS schema into secure schema
+    // After sync HMS has full schema with comments for all columns
+    // secureCatalogTable only has permitted columns but may lack comments
+    // load full (non-secure) table from HMS to get comments for all columns
+    // then copy only for permitted columns ✓
+    val secureSchemaWithComments: StructType = table match {
+      case dt: DeltaTableV2 =>
+        val commentMap = dt.deltaLog.snapshot.metadata.schema.fields
+          .map(f => f.name.toLowerCase -> f.getComment().orNull)
+          .toMap
+        StructType(secureCatalogTable.schema.fields.map { f =>
+          commentMap.get(f.name.toLowerCase) match {
+            case Some(c) if c != null => f.withComment(c)
+            case _ => f
+          }
+        })
+
+      case st: SparkTable =>
+        val commentMap = st.schema().fields
+          .map(f => f.name.toLowerCase -> f.getComment().orNull)
+          .toMap
+        StructType(secureCatalogTable.schema.fields.map { f =>
+          commentMap.get(f.name.toLowerCase) match {
+            case Some(c) if c != null => f.withComment(c)
+            case _ => f
+          }
+        })
+
+      case _ =>
+        // V2Table — CatalogTable already carries comments ✓
+        secureCatalogTable.schema
+    }
+
+    // Step 5 — merge table properties from Delta log / Iceberg into secure table
+    // strip null HMS values — must not overwrite valid Delta log / Iceberg values ✓
+    // secureCatalogTable.properties (CLS metadata) takes priority on conflict ✓
     val secureTableWithAll = table match {
       case dt: DeltaTableV2 =>
+        val deltaProps = javaMapToScala(dt.properties())
+        val secureProps = secureCatalogTable.properties
+          .filter { case (_, v) => v != null }
         secureCatalogTable.copy(
-          properties = javaMapToScala(dt.properties()) ++ secureCatalogTable.properties
+          schema = secureSchemaWithComments,
+          properties = deltaProps ++ secureProps
         )
       case st: SparkTable =>
+        val icebergProps = javaMapToScala(st.properties())
+        val secureProps = secureCatalogTable.properties
+          .filter { case (_, v) => v != null }
         secureCatalogTable.copy(
-          properties = javaMapToScala(st.properties()) ++ secureCatalogTable.properties
+          schema = secureSchemaWithComments,
+          properties = icebergProps ++ secureProps
         )
       case _ =>
-        secureCatalogTable
+        secureCatalogTable.copy(schema = secureSchemaWithComments)
     }
 
     val secureV2Table = V2Table(secureTableWithAll)
