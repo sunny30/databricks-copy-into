@@ -691,6 +691,136 @@ object CLSApp {
     println("\n========== All merge CLS tests completed ==========")
   }
 
+  def testColumnCommentReflectsInDescribeTable(spark: SparkSession): Unit = {
+
+    spark.sql("CREATE SCHEMA IF NOT EXISTS cat.teste1")
+
+    val deltaTable = "cat.teste1.pr439_delta_comment"
+    val icebergTable = "cat.teste1.pr439_iceberg_comment"
+
+    try {
+      spark.sql(s"DROP TABLE IF EXISTS $deltaTable")
+      spark.sql(s"DROP TABLE IF EXISTS $icebergTable")
+
+      // ── Delta table ──────────────────────────────────────────────────────────
+      spark.sql(
+        s"""
+           |CREATE TABLE $deltaTable (
+           |  op_type  STRING,
+           |  `table`  STRING,
+           |  current_ts STRING,
+           |  IDT_TRANSACTION_TRANCOST DOUBLE,
+           |  quantity INT,
+           |  state    STRING,
+           |  dat_kafka TIMESTAMP,
+           |  day      STRING
+           |) USING delta
+           |TBLPROPERTIES (
+           |  'test.secure.columns' =
+           |  'op_type,table,current_ts,IDT_TRANSACTION_TRANCOST,quantity,state,dat_kafka,day'
+           |)
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |INSERT INTO $deltaTable VALUES
+           |  ('I', 'SAFEPAY_ADM.TRANS', '2026-06-02T04:47:00Z',
+           |   1.25, 2, 'CA', TIMESTAMP '2026-06-02 04:47:00', '2026-06-02_04_45'),
+           |  ('U', 'SAFEPAY_ADM.TRANS', '2026-06-02T04:50:00Z',
+           |   3.75, 1, 'CA', TIMESTAMP '2026-06-02 04:50:00', '2026-06-02_04_50')
+           |""".stripMargin)
+
+      // Add comment to permitted column
+      spark.sql(
+        s"ALTER TABLE $deltaTable ALTER COLUMN op_type COMMENT 'Operation type I/U/D'")
+      spark.sql(
+        s"ALTER TABLE $deltaTable ALTER COLUMN quantity COMMENT 'Number of units'")
+
+      println("\n===== DESCRIBE FORMATTED Delta =====")
+      spark.sql(s"DESCRIBE FORMATTED $deltaTable").show(100, truncate = false)
+
+      val deltaRows = spark.sql(s"DESCRIBE FORMATTED $deltaTable").collect()
+      val deltaOpRow = deltaRows.find(r => r.getString(0) == "op_type")
+      val deltaQtyRow = deltaRows.find(r => r.getString(0) == "quantity")
+
+      assert(deltaOpRow.isDefined,
+        "FAIL — op_type not in Delta DESCRIBE FORMATTED")
+      assert(deltaOpRow.get.getString(2) == "Operation type I/U/D",
+        s"FAIL — Delta op_type comment wrong: ${deltaOpRow.get.getString(2)}")
+
+      assert(deltaQtyRow.isDefined,
+        "FAIL — quantity not in Delta DESCRIBE FORMATTED")
+      assert(deltaQtyRow.get.getString(2) == "Number of units",
+        s"FAIL — Delta quantity comment wrong: ${deltaQtyRow.get.getString(2)}")
+
+      println("PASS — Delta column comments reflect in DESCRIBE FORMATTED")
+
+      println("\n===== SELECT * FROM Delta =====")
+      spark.sql(s"SELECT * FROM $deltaTable").show(truncate = false)
+
+      // ── Iceberg table ────────────────────────────────────────────────────────
+      spark.sql(
+        s"""
+           |CREATE TABLE $icebergTable (
+           |  op_type  STRING,
+           |  `table`  STRING,
+           |  current_ts STRING,
+           |  IDT_TRANSACTION_TRANCOST DOUBLE,
+           |  quantity INT,
+           |  state    STRING,
+           |  dat_kafka TIMESTAMP,
+           |  day      STRING
+           |) USING iceberg
+           |TBLPROPERTIES (
+           |  'test.secure.columns' =
+           |  'op_type,table,current_ts,IDT_TRANSACTION_TRANCOST,quantity,state,dat_kafka,day'
+           |)
+           |""".stripMargin)
+
+      spark.sql(
+        s"""
+           |INSERT INTO $icebergTable VALUES
+           |  ('I', 'SAFEPAY_ADM.TRANS', '2026-06-02T04:47:00Z',
+           |   1.25, 2, 'CA', TIMESTAMP '2026-06-02 04:47:00', '2026-06-02_04_45'),
+           |  ('U', 'SAFEPAY_ADM.TRANS', '2026-06-02T04:50:00Z',
+           |   3.75, 1, 'CA', TIMESTAMP '2026-06-02 04:50:00', '2026-06-02_04_50')
+           |""".stripMargin)
+
+      // Add comment to permitted column
+      spark.sql(
+        s"ALTER TABLE $icebergTable ALTER COLUMN op_type COMMENT 'Operation type I/U/D'")
+      spark.sql(
+        s"ALTER TABLE $icebergTable ALTER COLUMN quantity COMMENT 'Number of units'")
+
+      println("\n===== DESCRIBE FORMATTED Iceberg =====")
+      spark.sql(s"DESCRIBE FORMATTED $icebergTable").show(100, truncate = false)
+
+      val icebergRows = spark.sql(s"DESCRIBE FORMATTED $icebergTable").collect()
+      val icebergOpRow = icebergRows.find(r => r.getString(0) == "op_type")
+      val icebergQtyRow = icebergRows.find(r => r.getString(0) == "quantity")
+
+      assert(icebergOpRow.isDefined,
+        "FAIL — op_type not in Iceberg DESCRIBE FORMATTED")
+      assert(icebergOpRow.get.getString(2) == "Operation type I/U/D",
+        s"FAIL — Iceberg op_type comment wrong: ${icebergOpRow.get.getString(2)}")
+
+      assert(icebergQtyRow.isDefined,
+        "FAIL — quantity not in Iceberg DESCRIBE FORMATTED")
+      assert(icebergQtyRow.get.getString(2) == "Number of units",
+        s"FAIL — Iceberg quantity comment wrong: ${icebergQtyRow.get.getString(2)}")
+
+      println("PASS — Iceberg column comments reflect in DESCRIBE FORMATTED")
+
+      println("\n===== SELECT * FROM Iceberg =====")
+      spark.sql(s"SELECT * FROM $icebergTable").show(truncate = false)
+
+    } finally {
+      spark.sql(s"DROP TABLE IF EXISTS $deltaTable")
+      spark.sql(s"DROP TABLE IF EXISTS $icebergTable")
+      spark.sql("DROP SCHEMA IF EXISTS cat.teste1")
+    }
+  }
+
   def withCTE(spark:SparkSession):Unit={
 
     spark.sql("CREATE SCHEMA IF NOT EXISTS cat.teste1")
