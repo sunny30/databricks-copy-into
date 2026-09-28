@@ -15,7 +15,9 @@ import org.apache.spark.sql.connector.read.SupportsReportStatistics
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.execution.LeafExecNode
 import org.apache.spark.sql.execution.datasources.v2.{DescribeTableExec, LeafV2CommandExec, V2CommandExec, V2SessionCatalog}
+import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 import org.apache.spark.storage.StorageLevel
 
@@ -83,44 +85,128 @@ case class RenameCatalogViewExec(catalog: TableCatalog,
 case class SecureDescribeTableExec(describeTableExec: DescribeRelation) extends LeafV2CommandExec{
   override def output: Seq[Attribute] = describeTableExec.output
 
+  private def javaMapToScala(
+                              jMap: java.util.Map[String, String]): Map[String, String] = {
+    val builder = Map.newBuilder[String, String]
+    val iter = jMap.entrySet().iterator()
+    while (iter.hasNext) {
+      val entry = iter.next()
+      builder += (entry.getKey -> entry.getValue)
+    }
+    builder.result()
+  }
+
   override protected def run(): Seq[InternalRow] = {
     val table = describeTableExec.relation.asInstanceOf[ResolvedTable].table
-    val (c,d,t) = table match {
-      case v:V2Table => (v.v1Table.identifier.catalog.getOrElse("default"), v.v1Table.identifier.database.getOrElse("default"), v.v1Table.identifier.table)
-      case dt: DeltaTableV2 => (dt.v1Table.identifier.catalog.getOrElse("default"), dt.v1Table.identifier.database.getOrElse("default"), dt.v1Table.identifier.table)
+
+    val (c, d, t) = table match {
+      case v: V2Table =>
+        (v.v1Table.identifier.catalog.getOrElse("default"),
+          v.v1Table.identifier.database.getOrElse("default"),
+          v.v1Table.identifier.table)
+      case dt: DeltaTableV2 =>
+        (dt.v1Table.identifier.catalog.getOrElse("default"),
+          dt.v1Table.identifier.database.getOrElse("default"),
+          dt.v1Table.identifier.table)
       case st: SparkTable =>
-        val multipartName = st.table().name().split("\\.")
-        if(multipartName.size == 3){
-          (multipartName(0), multipartName(1), multipartName(2))
-        }else if(multipartName.size == 2){
-          ("default", multipartName(0), multipartName(1))
-        }else{
-          ("default", "default", multipartName(0))
-        }
+        val parts = st.table().name().split("\\.")
+        if (parts.size == 3) (parts(0), parts(1), parts(2))
+        else if (parts.size == 2) ("default", parts(0), parts(1))
+        else ("default", "default", parts(0))
     }
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
-    val secureCatalogTable =
-      plugin match {
-        case catalog: TableSchemaChangeCatalog =>
-          catalog.loadSecureTable(d, t)
-        case _ => plugin.asInstanceOf[TableCatalog].loadTable(Identifier.of(Array(d), t))
-      }
-    val secureV2Table = secureCatalogTable match {
-      case v2Table: V2Table => v2Table
-      case catalogTable: CatalogTable =>V2Table(catalogTable)
+
+    // Step 1 — load preliminary CatalogTable for sync input
+    val preliminaryCt = plugin
+      .asInstanceOf[TableSchemaChangeCatalog]
+      .loadSecureTable(d, t)
+
+    // Step 2 — sync Delta log / Iceberg schema → HMS
+    // writes full schema including comments to HMS ✓
+    table match {
+      case dt: DeltaTableV2 =>
+        CLSUtils.syncSchemaAtLoadAndOverWrite(dt, preliminaryCt, c)
+      case st: SparkTable =>
+        CLSUtils.syncSchemaAtLoadAndOverWrite(st, preliminaryCt, c)
+      case _ =>
     }
-   // describeTableExec.copy(table = secureV2Table).run()
-   val rows = new ArrayBuffer[InternalRow]()
-    addSchema(rows,secureV2Table)
-    addPartitioning(rows,secureV2Table)
+
+    // Step 3 — load secure table AFTER sync
+    // HMS now has updated schema ✓
+    val secureCatalogTable = plugin
+      .asInstanceOf[TableSchemaChangeCatalog]
+      .loadSecureTable(d, t)
+
+    // Step 4 — copy column comments from full HMS schema into secure schema
+    // After sync HMS has full schema with comments for all columns
+    // secureCatalogTable only has permitted columns but may lack comments
+    // load full (non-secure) table from HMS to get comments for all columns
+    // then copy only for permitted columns ✓
+    val secureSchemaWithComments: StructType = table match {
+      case dt: DeltaTableV2 =>
+        val commentMap = dt.deltaLog.snapshot.metadata.schema.fields
+          .map(f => f.name.toLowerCase -> f.getComment().orNull)
+          .toMap
+        StructType(secureCatalogTable.schema.fields.map { f =>
+          commentMap.get(f.name.toLowerCase) match {
+            case Some(c) if c != null => f.withComment(c)
+            case _ => f
+          }
+        })
+
+      case st: SparkTable =>
+        val commentMap = st.schema().fields
+          .map(f => f.name.toLowerCase -> f.getComment().orNull)
+          .toMap
+        StructType(secureCatalogTable.schema.fields.map { f =>
+          commentMap.get(f.name.toLowerCase) match {
+            case Some(c) if c != null => f.withComment(c)
+            case _ => f
+          }
+        })
+
+      case _ =>
+        // V2Table — CatalogTable already carries comments ✓
+        secureCatalogTable.schema
+    }
+
+    // Step 5 — merge table properties from Delta log / Iceberg into secure table
+    // strip null HMS values — must not overwrite valid Delta log / Iceberg values ✓
+    // secureCatalogTable.properties (CLS metadata) takes priority on conflict ✓
+    val secureTableWithAll = table match {
+      case dt: DeltaTableV2 =>
+        val deltaProps = javaMapToScala(dt.properties())
+        val secureProps = secureCatalogTable.properties
+          .filter { case (_, v) => v != null }
+        secureCatalogTable.copy(
+          schema = secureSchemaWithComments,
+          properties = deltaProps ++ secureProps
+        )
+      case st: SparkTable =>
+        val icebergProps = javaMapToScala(st.properties())
+        val secureProps = secureCatalogTable.properties
+          .filter { case (_, v) => v != null }
+        secureCatalogTable.copy(
+          schema = secureSchemaWithComments,
+          properties = icebergProps ++ secureProps
+        )
+      case _ =>
+        secureCatalogTable.copy(schema = secureSchemaWithComments)
+    }
+
+    val secureV2Table = V2Table(secureTableWithAll)
+
+    val rows = new ArrayBuffer[InternalRow]()
+    addSchema(rows, secureV2Table)
+    addPartitioning(rows, secureV2Table)
 
     if (describeTableExec.isExtended) {
-      addMetadataColumns(rows,secureV2Table)
-      addTableDetails(rows,secureV2Table)
+      addMetadataColumns(rows, secureV2Table)
+      addTableDetails(rows, secureV2Table)
     }
-    rows.toSeq
 
+    rows.toSeq
   }
 
 
@@ -216,35 +302,69 @@ case class SecureDescribeColumnExec(
     val rows = new ArrayBuffer[InternalRow]()
 
     val (c, d, t) = table match {
-      case v: V2Table => (v.v1Table.identifier.catalog.getOrElse("default"), v.v1Table.identifier.database.getOrElse("default"), v.v1Table.identifier.table)
-      case dt: DeltaTableV2 => (dt.v1Table.identifier.catalog.getOrElse("default"), dt.v1Table.identifier.database.getOrElse("default"), dt.v1Table.identifier.table)
+      case v: V2Table =>
+        (v.v1Table.identifier.catalog.getOrElse("default"),
+          v.v1Table.identifier.database.getOrElse("default"),
+          v.v1Table.identifier.table)
+      case dt: DeltaTableV2 =>
+        (dt.v1Table.identifier.catalog.getOrElse("default"),
+          dt.v1Table.identifier.database.getOrElse("default"),
+          dt.v1Table.identifier.table)
       case st: SparkTable =>
-        val multipartName = st.table().name().split("\\.")
-        if (multipartName.size == 3) {
-          (multipartName(0), multipartName(1), multipartName(2))
-        } else if (multipartName.size == 2) {
-          ("default", multipartName(0), multipartName(1))
-        } else {
-          ("default", "default", multipartName(0))
-        }
+        val parts = st.table().name().split("\\.")
+        if (parts.size == 3) (parts(0), parts(1), parts(2))
+        else if (parts.size == 2) ("default", parts(0), parts(1))
+        else ("default", "default", parts(0))
     }
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
-    val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(d, t)
-    val secureColumns = secureCatalogTable.schema.map(f=>f.name)
+
+    // Step 1 — load preliminary CatalogTable for sync input
+    val preliminaryCt = plugin
+      .asInstanceOf[TableSchemaChangeCatalog]
+      .loadSecureTable(d, t)
+
+    // Step 2 — sync Delta log / Iceberg schema → HMS
+    // writes comments from Delta log / Iceberg to HMS ✓
+    table match {
+      case dt: DeltaTableV2 =>
+        CLSUtils.syncSchemaAtLoadAndOverWrite(dt, preliminaryCt, c)
+      case st: SparkTable =>
+        CLSUtils.syncSchemaAtLoadAndOverWrite(st, preliminaryCt, c)
+      case _ => // V2Table — no sync needed
+    }
+
+    // Step 3 — load again AFTER sync
+    // HMS now has correct schema with comments ✓
+    val secureCatalogTable = plugin
+      .asInstanceOf[TableSchemaChangeCatalog]
+      .loadSecureTable(d, t)
+
+    // Step 4 — check column access
+    val secureColumns = secureCatalogTable.schema.map(_.name)
     val doesExist = secureColumns.exists(col => column.name.equalsIgnoreCase(col))
-    if(!doesExist){
+    if (!doesExist) {
       throw new IllegalArgumentException("user does not have access to this column")
     }
-    val comment = if (column.metadata.contains("comment")) {
-      column.metadata.getString("comment")
-    } else {
-      "NULL"
-    }
+
+    // Step 5 — get comment from synced secure schema
+    // authoritative source: Delta log / Iceberg schema (now in HMS after sync)
+    // fallback to attribute metadata if not in schema
+    val comment = secureCatalogTable.schema.fields
+      .find(f => f.name.equalsIgnoreCase(column.name))
+      .flatMap(_.getComment())
+      .orElse(
+        if (column.metadata.contains("comment"))
+          Some(column.metadata.getString("comment"))
+        else
+          None
+      )
+      .getOrElse("NULL")
 
     rows += toCatalystRow("col_name", column.name)
     rows += toCatalystRow("data_type",
-      CharVarcharUtils.getRawType(column.metadata).getOrElse(column.dataType).catalogString)
+      CharVarcharUtils.getRawType(column.metadata)
+        .getOrElse(column.dataType).catalogString)
     rows += toCatalystRow("comment", comment)
 
     if (isExtended) {
@@ -260,41 +380,36 @@ case class SecureDescribeColumnExec(
       }
 
       if (colStats.nonEmpty) {
-        if (colStats.get.min().isPresent) {
+        if (colStats.get.min().isPresent)
           rows += toCatalystRow("min", colStats.get.min().toString)
-        } else {
+        else
           rows += toCatalystRow("min", "NULL")
-        }
 
-        if (colStats.get.max().isPresent) {
+        if (colStats.get.max().isPresent)
           rows += toCatalystRow("max", colStats.get.max().toString)
-        } else {
+        else
           rows += toCatalystRow("max", "NULL")
-        }
 
-        if (colStats.get.nullCount().isPresent) {
+        if (colStats.get.nullCount().isPresent)
           rows += toCatalystRow("num_nulls", colStats.get.nullCount().getAsLong.toString)
-        } else {
+        else
           rows += toCatalystRow("num_nulls", "NULL")
-        }
 
-        if (colStats.get.distinctCount().isPresent) {
-          rows += toCatalystRow("distinct_count", colStats.get.distinctCount().getAsLong.toString)
-        } else {
+        if (colStats.get.distinctCount().isPresent)
+          rows += toCatalystRow("distinct_count",
+            colStats.get.distinctCount().getAsLong.toString)
+        else
           rows += toCatalystRow("distinct_count", "NULL")
-        }
 
-        if (colStats.get.avgLen().isPresent) {
+        if (colStats.get.avgLen().isPresent)
           rows += toCatalystRow("avg_col_len", colStats.get.avgLen().getAsLong.toString)
-        } else {
+        else
           rows += toCatalystRow("avg_col_len", "NULL")
-        }
 
-        if (colStats.get.maxLen().isPresent) {
+        if (colStats.get.maxLen().isPresent)
           rows += toCatalystRow("max_col_len", colStats.get.maxLen().getAsLong.toString)
-        } else {
+        else
           rows += toCatalystRow("max_col_len", "NULL")
-        }
       }
     }
 

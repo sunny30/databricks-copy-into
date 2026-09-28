@@ -93,7 +93,7 @@ object App {
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
-    CLSApp.testMergeStarWithRestrictedSource(spark)
+    CLSApp.testColumnCommentReflectsInDescribeTable(spark)
    //OverwriteFormatTests.runAll(spark)
 //    spark.sql("show databases in live").show(100,0)
 //    spark.sql("describe database live.`HCM - Workforce Time and Labor Management`").show(2,0)
