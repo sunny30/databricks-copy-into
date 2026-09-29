@@ -17,8 +17,10 @@ import org.apache.spark.sql.hive.plan.listener.CrossThreadSqlHolder
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
 import org.apache.spark.sql.types.StructType
 
+import java.net.URI
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.jdk.CollectionConverters.asScalaBufferConverter
+import scala.util.Try
 
 object CLSUtils {
 
@@ -53,14 +55,17 @@ object CLSUtils {
     }
   }
 
-  def shouldApplyCLSonDSV2Table(table: Table):Boolean = {
+  def shouldApplyCLSonDSV2Table(table: Table): Boolean = {
     table match {
       case v2Table: V2Table =>
         !isExternalCatalogTable(v2Table)
 
       case st: SparkTable =>
-        val name = st.table().name()
-        val isPathBased = name.contains("://") || name.startsWith("/")
+        // Use the public Spark Table name: getCatalogTableDetails uses this same
+        // value when it later resolves a catalog-backed table. The underlying
+        // Iceberg Table name can differ from the URI presented to Spark.
+        val name = st.name()
+        val isPathBased = isPathBasedTableName(name)
 
         val isMetadataTable = try {
           val ident = org.apache.iceberg.catalog.TableIdentifier.parse(name)
@@ -74,6 +79,17 @@ object CLSUtils {
         false
       case _ => true
     }
+  }
+
+  /**
+   * Iceberg creates a SparkTable for `spark.read.format("iceberg").load(path)`.
+   * Its name is the storage URI, not a catalog identifier. In particular, local
+   * paths are represented as `file:/tmp/...` (one slash after the scheme), so a
+   * `contains("://")` check does not recognize them. Do not send such names to
+   * the CLS catalog lookup, which would otherwise interpret the URI as a catalog.
+   */
+  private[cls] def isPathBasedTableName(name: String): Boolean = {
+    name.startsWith("/") || Try(new URI(name).isAbsolute).getOrElse(false)
   }
 
   def getSecureDataSource(plan: LogicalPlan): LogicalPlan = {
