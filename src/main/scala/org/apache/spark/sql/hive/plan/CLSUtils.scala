@@ -57,10 +57,21 @@ object CLSUtils {
     table match {
       case v2Table: V2Table =>
         !isExternalCatalogTable(v2Table)
-      case sparkTable: SparkTable =>
-        val parsedIcebergIdent = org.apache.iceberg.catalog.TableIdentifier.parse(sparkTable.name())
-        val metadataTable = org.apache.iceberg.MetadataTableUtils.hasMetadataTableName(parsedIcebergIdent)
-        !metadataTable
+
+      case st: SparkTable =>
+        val name = st.table().name()
+        val isPathBased = name.contains("://") || name.startsWith("/")
+
+        val isMetadataTable = try {
+          val ident = org.apache.iceberg.catalog.TableIdentifier.parse(name)
+          org.apache.iceberg.MetadataTableUtils.hasMetadataTableName(ident)
+        } catch {
+          case _: Exception => false
+        }
+
+        !isPathBased && !isMetadataTable
+      case deltaTableV2: DeltaTableV2 if deltaTableV2.catalogTable.isEmpty =>
+        false
       case _ => true
     }
   }
