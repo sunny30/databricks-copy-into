@@ -99,20 +99,22 @@ case class SecureDescribeTableExec(describeTableExec: DescribeRelation) extends 
   override protected def run(): Seq[InternalRow] = {
     val table = describeTableExec.relation.asInstanceOf[ResolvedTable].table
 
+    val currentCatalog = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+
     val (c, d, t) = table match {
       case v: V2Table =>
-        (v.v1Table.identifier.catalog.getOrElse("default"),
+        (v.v1Table.identifier.catalog.getOrElse(currentCatalog),
           v.v1Table.identifier.database.getOrElse("default"),
           v.v1Table.identifier.table)
       case dt: DeltaTableV2 =>
-        (dt.v1Table.identifier.catalog.getOrElse("default"),
+        (dt.v1Table.identifier.catalog.getOrElse(currentCatalog),
           dt.v1Table.identifier.database.getOrElse("default"),
           dt.v1Table.identifier.table)
       case st: SparkTable =>
         val parts = st.table().name().split("\\.")
         if (parts.size == 3) (parts(0), parts(1), parts(2))
-        else if (parts.size == 2) ("default", parts(0), parts(1))
-        else ("default", "default", parts(0))
+        else if (parts.size == 2) (currentCatalog, parts(0), parts(1))
+        else (currentCatalog, "default", parts(0))
     }
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
@@ -300,21 +302,23 @@ case class SecureDescribeColumnExec(
 
   override protected def run(): Seq[InternalRow] = {
     val rows = new ArrayBuffer[InternalRow]()
+    val currentCatalog = SparkSession.active.sessionState.catalogManager.currentCatalog.name()
+
 
     val (c, d, t) = table match {
       case v: V2Table =>
-        (v.v1Table.identifier.catalog.getOrElse("default"),
+        (v.v1Table.identifier.catalog.getOrElse(currentCatalog),
           v.v1Table.identifier.database.getOrElse("default"),
           v.v1Table.identifier.table)
       case dt: DeltaTableV2 =>
-        (dt.v1Table.identifier.catalog.getOrElse("default"),
+        (dt.v1Table.identifier.catalog.getOrElse(currentCatalog),
           dt.v1Table.identifier.database.getOrElse("default"),
           dt.v1Table.identifier.table)
       case st: SparkTable =>
         val parts = st.table().name().split("\\.")
         if (parts.size == 3) (parts(0), parts(1), parts(2))
-        else if (parts.size == 2) ("default", parts(0), parts(1))
-        else ("default", "default", parts(0))
+        else if (parts.size == 2) (currentCatalog, parts(0), parts(1))
+        else (currentCatalog, "default", parts(0))
     }
 
     val plugin = SparkSession.active.sessionState.catalogManager.catalog(c)
