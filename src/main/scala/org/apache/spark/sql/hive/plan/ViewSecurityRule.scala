@@ -144,15 +144,17 @@ case class SecureShowDeltaColumnCommand(s:ShowDeltaTableColumnsCommand) extends 
     val rows = s.run(sparkSession)
     val deltaTable = getDeltaTable(s.child, "SHOW COLUMNS")
     try {
+      val currentCatalog = sparkSession.sessionState.catalogManager.currentCatalog.name()
+
       val tid = deltaTable.v1Table.identifier
-      val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
+      val (catalogName, dbName, tableName) = (tid.catalog.getOrElse(currentCatalog), tid.database.getOrElse("default"), tid.table)
       val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
       val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(dbName, tableName)
       val secureColumns = secureCatalogTable.schema.map(f => f.name).toSet
       val secureRows = rows.filter(r => (secureColumns).contains(r.get(0).toString))
       secureRows
     }catch {
-      case e:Exception => return rows
+      case e:Exception => throw e
     }
   }
 
@@ -163,12 +165,34 @@ case class SecureShowColumnsCommand(plan: ShowColumns, v2Table: V2Table) extends
   override val output: Seq[Attribute] = toAttributes(ExpressionEncoder[TableColumns]().schema)
 
   override def run(sparkSession: SparkSession): Seq[Row] = {
-    val tid = v2Table.v1Table.identifier
-    val (catalogName, dbName, tableName) = (tid.catalog.getOrElse("default"), tid.database.getOrElse("default"), tid.table)
-    val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
-    val secureCatalogTable = plugin.asInstanceOf[TableSchemaChangeCatalog].loadSecureTable(dbName, tableName)
-    val secureColumns = secureCatalogTable.schema.map(f => f.name)
-    secureColumns.map{ x => Row(x) }
+    try {
+      val tid = v2Table.v1Table.identifier
+      val currentCatalog = sparkSession.sessionState.catalogManager.currentCatalog.name()
+      val catalogName = tid.catalog.getOrElse(currentCatalog) // ← fix ✓
+      val dbName = tid.database.getOrElse("default")
+      val tableName = tid.table
+
+      val plugin = sparkSession.sessionState.catalogManager.catalog(catalogName)
+      val secureCatalogTable = plugin
+        .asInstanceOf[TableSchemaChangeCatalog]
+        .loadSecureTable(dbName, tableName)
+      val secureColumns = secureCatalogTable.schema.map(_.name)
+
+      secureColumns.map(x => Row(x))
+
+    } catch {
+      case e: AnalysisException if e.getMessage.contains("Unable to show") =>
+        throw e // already sanitised ✓
+      case _: Exception =>
+        throw new AnalysisException(
+          "Unable to show columns: secure metadata lookup failed. " +
+            "Contact your administrator.",
+          line = None,
+          startPosition = None,
+
+          cause = None // strip cause chain ✓
+        )
+    }
   }
 }
 
