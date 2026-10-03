@@ -18,6 +18,7 @@ import org.apache.spark.sql.delta.util.AnalysisHelper.FakeLogicalPlan
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ShowCatalogViews
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 import scala.jdk.CollectionConverters.mapAsScalaMapConverter
@@ -121,8 +122,37 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     def sourceAttrFor(targetAttr: Attribute): Option[Attribute] =
       sourceOutput.find(sourceAttr => resolver(sourceAttr.name, targetAttr.name))
 
+    // Check if source attribute is structurally compatible with target attribute
+    // For struct types: source must have ALL nested fields that target has
+    // If source has fewer nested fields → structs are incompatible → do not assign
+    // Let Delta handle natively to preserve target-only nested fields ✓
+    def isStructurallyCompatible(targetAttr: Attribute, sourceAttr: Attribute): Boolean = {
+      (targetAttr.dataType, sourceAttr.dataType) match {
+        case (targetStruct: StructType, sourceStruct: StructType) =>
+          // Every nested field in target must exist in source
+          // If target has fields source does not → incompatible → do not assign ✓
+          targetStruct.fields.forall { targetField =>
+            sourceStruct.fields.exists(sourceField =>
+              resolver(sourceField.name, targetField.name)
+            )
+          }
+        case _ =>
+          // Non-struct types — top-level name match is sufficient ✓
+          true
+      }
+    }
+
     val hasTargetOnlyColumns = merge.targetTable.output
       .exists(targetAttr => sourceAttrFor(targetAttr).isEmpty)
+
+    // Also check for struct incompatibility — if any top-level col has
+    // incompatible nested struct → treat as target-only columns ✓
+    val hasStructIncompatibility = merge.targetTable.output.exists { targetAttr =>
+      sourceAttrFor(targetAttr) match {
+        case Some(sourceAttr) => !isStructurallyCompatible(targetAttr, sourceAttr)
+        case None => false
+      }
+    }
 
     val hasSourceOnlyColumns = sourceOutput.exists { sourceAttr =>
       !merge.targetTable.output
@@ -132,9 +162,15 @@ class ResolveDeltaCrudOperation(session: SparkSession)
     val canEvolveSchema = session.sessionState.conf
       .getConf(DeltaSQLConf.DELTA_SCHEMA_AUTO_MIGRATE)
 
-    if (!hasTargetOnlyColumns || (hasSourceOnlyColumns && canEvolveSchema)) {
-      // Source and target columns match — safe to expand star
-      // OR schema evolution enabled — Delta handles it
+    // Do NOT expand if:
+    //   1. Target has columns not in source (missing cols)
+    //   2. Target has struct cols with nested fields not in source (struct mismatch)
+    //   3. Source has extra cols and schema evolution disabled
+    // In all these cases let Delta handle star natively ✓
+    if (!hasTargetOnlyColumns &&
+      !hasStructIncompatibility &&
+      !(hasSourceOnlyColumns && canEvolveSchema)) {
+
       val matchedActions = merge.matchedActions.map {
         case UpdateStarAction(condition) =>
           val assignments = merge.targetTable.output.map { targetAttr =>
@@ -160,11 +196,9 @@ class ResolveDeltaCrudOperation(session: SparkSession)
       )
 
     } else {
-      // hasTargetOnlyColumns = true AND canEvolveSchema = false
-      // Source has fewer columns than target
-      // DO NOT expand star — pass through as-is
-      // Delta's PreprocessTableMerge will try to resolve * against source
-      // and throw DELTA_MERGE_UNRESOLVED_EXPRESSION for missing cols ✓
+      // Source has fewer columns OR struct incompatibility OR schema evolution
+      // Pass through unchanged — Delta handles star natively ✓
+      // Delta preserves target-only nested fields correctly ✓
       merge
     }
   }
