@@ -12,6 +12,7 @@ import org.apache.spark.sql.hive.customnativefunctions.{CustomAdd, Fibo, FiboFun
 import org.apache.spark.sql.hive.parser.CustomParser
 import org.apache.spark.sql.hive.plan.listener.CatalogQueryExecutionListener
 import org.apache.spark.sql.hive.plan.may26hack.ExternalCatalogCutAnalyzer
+import org.apache.spark.sql.hive.plan.spark.sql.connector.custom.LiveCatalogTableValuedFunction
 import org.apache.spark.sql.hive.plan.spark.sql.connector.hudi.HoodieMultiCatalogExtension
 import org.apache.spark.sql.hive.plan.spark.sql.execution.IcebergStrategy
 import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.ResolveCatalogViews
@@ -61,6 +62,7 @@ class CustomExtensionSuite extends DeltaSparkSessionExtension {
     extensions.injectFunction(ModelFunc.fd)
     extensions.injectFunction(FiboIter.fd)
     extensions.injectFunction(FiboFuncIn.fd)
+    extensions.injectTableFunction(LiveCatalogTableValuedFunction.tableFuncDesc)
     //extensions.injectPostHocResolutionRule(session => new CLSRestrictedColumnErrorRule(session))
    // super.apply(extensions)
 

@@ -44,6 +44,7 @@ import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{StringType, StructType}
 import org.apache.spark.sql.execution.datasources.CreateTable
+import org.apache.spark.sql.hive.plan.spark.sql.connector.custom.{LiveCatalogTableValuedFunction, LiveUnResolvedRelation}
 import org.apache.spark.sql.hive.plan.spark.sql.execution.plan.{CustomCreateDataSourceTableAsSelectCommand, DeltaTruncateUtils}
 
 import java.util.Locale
@@ -836,6 +837,10 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }else{
           u
         }
+
+      case l:LiveUnResolvedRelation  =>
+        LiveCatalogTableValuedFunction.getDSV2Relation(l)
+
 
       //      case pr@Project(plist, p@Project(projectList, child)) =>
       //
