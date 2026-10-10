@@ -13,6 +13,7 @@ import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
 import org.apache.spark.sql.connector.catalog.Identifier
 import org.apache.spark.sql.delta.DeltaTableValueFunctions.TableFunctionDescription
 import org.apache.spark.sql.errors.QueryCompilationErrors
+import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 
@@ -70,6 +71,20 @@ object LiveCatalogTableValuedFunction{
     val catalogTable = tableCatalog.loadTable(ident)
     val dsv2 = DataSourceV2Relation.create(catalogTable, Some(tableCatalog), Some(ident))
     dsv2.copy(output = plan.output.map(a=> a.asInstanceOf[AttributeReference]))
+  }
+
+  def getLogicalRelationFromLiveUnResolvedPlan(liveUnResolvedRelation: LiveUnResolvedRelation):LogicalPlan={
+    val dataSource = DataSource(
+      SparkSession.active,
+      // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
+      // inferred at runtime. We should still support it.
+
+      className = "custom"
+    //  options = table.properties ++ ab.writeOptions.toMap ++ getReadOptionsForExternalSource,
+
+    )
+
+    LogicalRelation(dataSource.resolveRelation(false))
   }
 }
 
