@@ -10,14 +10,14 @@ import org.apache.spark.sql.catalyst.parser.ParseException
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.trees.CurrentOrigin
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.CatalogHelper
-import org.apache.spark.sql.connector.catalog.Identifier
+import org.apache.spark.sql.connector.catalog.{Identifier, TableSchemaChangeCatalog}
 import org.apache.spark.sql.delta.DeltaTableValueFunctions.TableFunctionDescription
 import org.apache.spark.sql.errors.QueryCompilationErrors
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.spark.sql.parser.CustomSparkSQLParser
 
-case class LiveUnResolvedRelation(sql:String, tableName: String, catalogName:String) extends UnresolvedLeafNode
+case class LiveUnResolvedRelation(sql:String, catalogName:String) extends UnresolvedLeafNode
 
 
 
@@ -33,62 +33,42 @@ object LiveCatalogTableValuedFunction{
           Seq(2),args.length)
       }
       try {
-        if(args.length == 2){
+        val sql = args.head.eval().toString
+        val tableName = args(1).eval().toString
+        val catalogName = args.last.eval().toString
+        LiveUnResolvedRelation(sql, catalogName)
 
-          val sql = args.head.eval().toString
-          val tableName = args(1).eval().toString
-          val catalogName = args.last.eval().toString
-          LiveUnResolvedRelation(sql, "", catalogName)
-        }else{
-          val sql = args.head.eval().toString
-          val tableName = args(1).eval().toString
-          val catalogName = args.last.eval().toString
-          LiveUnResolvedRelation(sql, tableName, catalogName)
-        }
-         // any LogicalPlan
       }catch {
         case e:Exception => throw e
       }
     }
   )
 
-  def getDSV2Relation(liveUnResolvedRelation: LiveUnResolvedRelation):LogicalPlan={
-    val catalogName = liveUnResolvedRelation.catalogName
-    val tableName = liveUnResolvedRelation.tableName
-    val parsedPlan = try {
-      CurrentOrigin.withOrigin(origin) {
-        (new CustomSparkSQLParser()).parseQuery(liveUnResolvedRelation.sql)
-      }
-    } catch {
-      case _: ParseException => throw new AnalysisException("Invalid text")
-      // throw SparkApiShim.invalidViewText(viewText, table.v1Table.qualifiedName)
-    }
-    val plan = SparkSession.active.sessionState.analyzer.executeAndCheck(parsedPlan, new QueryPlanningTracker())
-    val tableCatalog = SparkSession.active.sessionState.catalogManager.catalog(catalogName).asTableCatalog
-    val mutipartname = tableName.split("\\.").toArray
-
-    val (catalogName1, dbName1, tableName1) = if (mutipartname.length == 2) {
-      //extract catalog name from conf
-      (catalogName, mutipartname.head, mutipartname.last)
-    } else if (mutipartname.size == 3) {
-      (mutipartname.head, mutipartname(1), mutipartname.last)
-    } else {
-      (catalogName, mutipartname.head, mutipartname.last)
+  def isValidCatalog(catalogName:String):Boolean = {
+    try {
+      val plugin = SparkSession.active.sessionState.catalogManager.catalog(catalogName)
+      plugin.asInstanceOf[TableSchemaChangeCatalog].isLiveCatalog(catalogName)
+    }catch {
+      case e:Exception => false
     }
 
-    val ident = Identifier.of(Seq(dbName1).toArray, tableName1)
-    val catalogTable = tableCatalog.loadTable(ident)
-    val dsv2 = DataSourceV2Relation.create(catalogTable, Some(tableCatalog), Some(ident))
-    dsv2.copy(output = plan.output.map(a=> a.asInstanceOf[AttributeReference]))
   }
 
+
   def getLogicalRelationFromLiveUnResolvedPlan(liveUnResolvedRelation: LiveUnResolvedRelation):LogicalPlan={
+    if(!isValidCatalog(liveUnResolvedRelation.catalogName)){
+      throw new IllegalArgumentException("Remote QUery function is only allowed on Live catalog")
+    }
     val dataSource = DataSource(
       SparkSession.active,
       // In older version(prior to 2.1) of Spark, the table schema can be empty and should be
       // inferred at runtime. We should still support it.
 
-      className = "custom"
+      className = "custom",
+      options = Map(
+        "query" -> liveUnResolvedRelation.sql,
+        "catalog" -> liveUnResolvedRelation.catalogName
+      )
     //  options = table.properties ++ ab.writeOptions.toMap ++ getReadOptionsForExternalSource,
 
     )
