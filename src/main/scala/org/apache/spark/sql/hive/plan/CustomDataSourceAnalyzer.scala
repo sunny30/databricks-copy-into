@@ -839,7 +839,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
         }
 
       case l:LiveUnResolvedRelation  =>
-        LiveCatalogTableValuedFunction.getDSV2Relation(l)
+        LiveCatalogTableValuedFunction.getLogicalRelationFromLiveUnResolvedPlan(l)
 
 
       //      case pr@Project(plist, p@Project(projectList, child)) =>
