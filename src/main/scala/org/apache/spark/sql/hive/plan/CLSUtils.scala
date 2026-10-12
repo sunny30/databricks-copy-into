@@ -88,7 +88,7 @@ object CLSUtils {
    * `contains("://")` check does not recognize them. Do not send such names to
    * the CLS catalog lookup, which would otherwise interpret the URI as a catalog.
    */
-  private[cls] def isPathBasedTableName(name: String): Boolean = {
+  private def isPathBasedTableName(name: String): Boolean = {
     name.startsWith("/") || Try(new URI(name).isAbsolute).getOrElse(false)
   }
 

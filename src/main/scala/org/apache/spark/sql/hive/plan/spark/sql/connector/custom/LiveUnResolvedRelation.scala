@@ -27,16 +27,25 @@ object LiveCatalogTableValuedFunction{
     new ExpressionInfo("com.example.Dummy", "remote_query"),
 
     (args: Seq[Expression]) => {
-      if(args.length!=3){
+      if(args.length!=2){
         throw QueryCompilationErrors.wrongNumArgsError(
           "remote_query", // function name
-          Seq(3),args.length)
+          Seq(2),args.length)
       }
       try {
-        val sql = args.head.eval().asInstanceOf[String]
-        val tableName = args(1).eval().asInstanceOf[String]
-        val catalogName = args.last.eval().asInstanceOf[String]
-        LiveUnResolvedRelation(sql, tableName, catalogName) // any LogicalPlan
+        if(args.length == 2){
+
+          val sql = args.head.eval().toString
+          val tableName = args(1).eval().toString
+          val catalogName = args.last.eval().toString
+          LiveUnResolvedRelation(sql, "", catalogName)
+        }else{
+          val sql = args.head.eval().toString
+          val tableName = args(1).eval().toString
+          val catalogName = args.last.eval().toString
+          LiveUnResolvedRelation(sql, tableName, catalogName)
+        }
+         // any LogicalPlan
       }catch {
         case e:Exception => throw e
       }

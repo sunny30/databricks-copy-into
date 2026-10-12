@@ -829,6 +829,9 @@ class CustomDataSourceAnalyzer(session: SparkSession)
       //        val resolvedPlan = resolveTimeTravelTable(SparkSession.active,u,"RESTORE")
       //        relationTimeTravel.copy(relation = resolvedPlan)
 
+      case l: LiveUnResolvedRelation =>
+        LiveCatalogTableValuedFunction.getLogicalRelationFromLiveUnResolvedPlan(l)
+
       case u: UnresolvedLeafNode =>
         print(u.toString())
         if (u.getTagValue(TreeNodeTag[String]("centrify-resolver")).isEmpty) {
@@ -838,8 +841,7 @@ class CustomDataSourceAnalyzer(session: SparkSession)
           u
         }
 
-      case l:LiveUnResolvedRelation  =>
-        LiveCatalogTableValuedFunction.getLogicalRelationFromLiveUnResolvedPlan(l)
+
 
 
       //      case pr@Project(plist, p@Project(projectList, child)) =>

@@ -14,7 +14,10 @@ case class CustomRelation(sqlContext: SQLContext, parameters: Map[String, String
 
   def setSchema(sch: StructType) = this._schema = sch
 
-  override def schema: StructType = this._schema
+  override def schema: StructType = {
+    val schema1 = StructType.fromDDL("id STRING, name STRING, age STRING")
+    schema1
+  }
 
   override def buildScan(): RDD[Row] = {
     println("this is build schema")
