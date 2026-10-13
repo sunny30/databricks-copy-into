@@ -37,5 +37,7 @@ trait TableSchemaChangeCatalog extends CatalogPlugin {
 
   def alterUnsafeCatalogTable(ct: CatalogTable):Unit
 
+  def isLiveCatalog(catalogName:String):Boolean
+
 
 }

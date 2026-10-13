@@ -665,7 +665,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   override def name(): String = catalogName
 
 
-  private def isLiveCatalog:Boolean={
+  override def isLiveCatalog(catalogName:String): Boolean = {
+    catalogName.equalsIgnoreCase("live")
+  }
+
+  def isLiveCatalog:Boolean={
     catalogName.equalsIgnoreCase("live")
   }
 
