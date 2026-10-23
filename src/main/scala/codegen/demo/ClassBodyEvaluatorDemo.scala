@@ -28,8 +28,22 @@ object ClassBodyEvaluatorDemo {
     val method = clazz.getMethod("fib", classOf[Int]) // find fib(int)
     method.invoke(instance, Int.box(n)).asInstanceOf[Int]
   }
+
+
+  def runFunctionWithDynamicEval(fn: String, values: Map[String, AnyRef]): AnyRef = {
+    val cbe = new ClassBodyEvaluator()
+    cbe.cook(fn)
+    val m = cbe.getClazz.getDeclaredMethods.head
+    val args = m.getParameters.map(p => values(p.getName)) // needs debug info, see below
+    val obj = cbe.getClazz.getDeclaredConstructor().newInstance()
+    val result = m.invoke(obj, args: _*)
+    println(result)
+    result
+  }
   def main(args: Array[String]):Unit={
     println(simpleClassEvalDemo(5))
+    val nv: Int = 6
+    runFunctionWithDynamicEval(fib, Map("arg0"->(Int.box(nv))))
   }
 
 }
