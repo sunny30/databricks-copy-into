@@ -52,6 +52,7 @@ public class CalciteE2EDemo {
             calcite.setSchema("APP");
 
             String sql = "SELECT name, salary FROM employees WHERE salary > 5000 ORDER BY salary DESC";
+            String descSql = "describe table APP.employees" ;
 
             try (Statement statement =
                          calcite.createStatement();
@@ -65,6 +66,25 @@ public class CalciteE2EDemo {
                     );
                 }
             }
+
+
+            DatabaseMetaData metadata = connection.getMetaData();
+
+            try (ResultSet columns =
+                         metadata.getColumns(
+                                 null, "APP", "employees", null)) {
+
+                while (columns.next()) {
+                    System.out.printf(
+                            "%s | %s | %s%n",
+                            columns.getString("COLUMN_NAME"),
+                            columns.getString("TYPE_NAME"),
+                            columns.getString("IS_NULLABLE")
+                    );
+                }
+            }
+
+
         }
     }
 }
