@@ -1,3 +1,4 @@
+/*
 package org.apache.spark.sql.arrow;
 
 import sun.misc.Unsafe;
@@ -13,11 +14,13 @@ import java.nio.ByteBuffer;
 import sun.nio.ch.DirectBuffer;
 
 
+*/
 /**
  * Pure custom Arrow IPC file reader using only mmap + Unsafe.
  * Enhanced for multiple record batches with streaming/lazy iteration.
  * No Apache Arrow dependencies.
- */
+ *//*
+
 public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowReader.RecordBatch> {
 
     // ─── Unsafe Setup ──────────────────────────────────────────────────────
@@ -113,9 +116,11 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
     private int getUShort(long addr) { return UNSAFE.getShort(addr) & 0xFFFF; }
     private long getUInt(long addr) { return UNSAFE.getInt(addr) & 0xFFFFFFFFL; }
 
-    /**
+    */
+/**
      * FlatBuffer soffset_t: signed offset from table start to vtable.
-     */
+     *//*
+
     private int getVTableOffset(long tableStart) {
         return getInt(tableStart);
     }
@@ -124,10 +129,12 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         return tableStart - getVTableOffset(tableStart);
     }
 
-    /**
+    */
+/**
      * Read field offset from vtable.
      * VTable: [vtable_size, table_size, field0_offset, field1_offset, ...]
-     */
+     *//*
+
     private int getFieldOffset(long tableStart, int fieldIndex) {
         long vtable = getVTableAddress(tableStart);
         int vtableSize = getUShort(vtable);
@@ -147,10 +154,12 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         return tableStart + offset;
     }
 
-    /**
+    */
+/**
      * Read a string from FlatBuffer.
      * String: [length: int32, bytes...]
-     */
+     *//*
+
     private String getString(long stringOffsetAddr) {
         int offset = getInt(stringOffsetAddr);
         if (offset == 0) return null;
@@ -163,11 +172,13 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
     }
 
-    /**
+    */
+/**
      * Get vector (array) address and count.
      * Vector: [count: int32, elem0, elem1, ...]
      * Returns [address_of_first_element, count]
-     */
+     *//*
+
     private long[] getVector(long vectorOffsetAddr) {
         int offset = getInt(vectorOffsetAddr);
         if (offset == 0) return null;
@@ -334,10 +345,12 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
 
     // ─── Record Batch Reading ──────────────────────────────────────────────
 
-    /**
+    */
+/**
      * Read a specific record batch by index.
      * This parses the batch header and creates ColumnData objects pointing into mmap'd memory.
-     */
+     *//*
+
     public RecordBatch readBatch(int batchIndex) {
         if (batchIndex < 0 || batchIndex >= recordBlocks.size()) {
             throw new IndexOutOfBoundsException(
@@ -482,23 +495,29 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
 
     // ─── Streaming / Iterator Support ──────────────────────────────────────
 
-    /**
+    */
+/**
      * Reset batch iterator to start from first batch.
-     */
+     *//*
+
     public void reset() {
         currentBatchIndex = 0;
     }
 
-    /**
+    */
+/**
      * Check if there are more batches to read.
-     */
+     *//*
+
     public boolean hasNext() {
         return currentBatchIndex < recordBlocks.size();
     }
 
-    /**
+    */
+/**
      * Read next batch in sequence (for streaming).
-     */
+     *//*
+
     public RecordBatch next() {
         if (!hasNext()) {
             throw new NoSuchElementException("No more batches");
@@ -506,23 +525,29 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         return readBatch(currentBatchIndex++);
     }
 
-    /**
+    */
+/**
      * Get total number of batches.
-     */
+     *//*
+
     public int getBatchCount() {
         return recordBlocks.size();
     }
 
-    /**
+    */
+/**
      * Get schema.
-     */
+     *//*
+
     public Schema getSchema() {
         return schema;
     }
 
-    /**
+    */
+/**
      * Iterate over all batches (for-each support).
-     */
+     *//*
+
     @Override
     public Iterator<RecordBatch> iterator() {
         return new Iterator<RecordBatch>() {
@@ -678,9 +703,11 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         }
     }
 
-    /**
+    */
+/**
      * Represents a complete record batch with all columns.
-     */
+     *//*
+
     public static class RecordBatch {
         public final int index;
         public final long numRows;
@@ -706,9 +733,11 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         }
     }
 
-    /**
+    */
+/**
      * Column data pointing into mmap'd memory.
-     */
+     *//*
+
     public static class ColumnData {
         public String name;
         public byte type;
@@ -806,3 +835,4 @@ public class CustomArrowReader implements AutoCloseable, Iterable<CustomArrowRea
         }
     }
 }
+*/
