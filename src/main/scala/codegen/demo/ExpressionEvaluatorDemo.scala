@@ -1,7 +1,7 @@
 package codegen.demo
 
 import org.apache.commons.lang.ClassUtils
-import org.codehaus.janino.{ExpressionEvaluator, Scanner}
+import org.codehaus.janino.{ExpressionEvaluator, Java, Parser, Scanner, TokenType}
 
 import java.io.StringReader
 
@@ -16,6 +16,14 @@ object ExpressionEvaluatorDemo {
       val c: Class[_] = ClassUtils.getClass(dataType)
       Array.fill[Class[_]](parameterNames.length)(c)
     }
+  }
+
+  def parseJavaExpression(javaExpression: String):Java.Rvalue={
+    val p = new Parser(new Scanner(null, new StringReader(javaExpression)))
+    val r = p.parseExpression()
+    if (!p.peek(TokenType.END_OF_INPUT))
+      throw new IllegalArgumentException(s"unexpected '${p.peek()}' after expression")
+    r
   }
 
   def evaluateDynamicExpression(arithmeticExpr: String, values: Array[AnyRef]):Unit = {
@@ -42,6 +50,7 @@ object ExpressionEvaluatorDemo {
    // evaluateSimpleExpression("a*b+10")
 
     evaluateDynamicExpression("a*b+10*c", Array[AnyRef](Int.box(6), Int.box(7), Int.box(5)))
+    parseJavaExpression("a && (b || (c && d))")
 
   }
 
