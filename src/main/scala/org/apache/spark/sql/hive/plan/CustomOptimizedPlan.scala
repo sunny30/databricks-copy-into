@@ -212,7 +212,8 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
       _, _, _) =>
         println("****Inside CTAS****")
 
-        var properties = CatalogV2Util.convertTableProperties(tableSpec)
+        var properties = CatalogV2Util.convertTableProperties(tableSpec) ++ ctas.writeOptions
+
        // val projectPlan = EliminateSubqueryAliases(query)
        // spark.sessionState.
         val qe = spark.sessionState.executePlan(query,CommandExecutionMode.NON_ROOT)
@@ -259,7 +260,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             partitionColumns = ps,
             bucketSpec = None,
             fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
-            Map.empty,
+            properties,
             query = writePlan,
             SaveMode.Append,
             None,
