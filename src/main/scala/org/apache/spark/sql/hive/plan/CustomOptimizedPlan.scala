@@ -165,7 +165,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
         var table: Table = if (tableExists) getExistingTable(catalog, ident) else null
         val dropAndCreateTable = tableExists && shouldDropExistingTable(table, targetProvider)
         val newTableSpec = tableSpec.copy(provider = Some(targetProvider))
-        var newTableProperties = CatalogV2Util.convertTableProperties(newTableSpec)
+        var newTableProperties = CatalogV2Util.convertTableProperties(newTableSpec) ++ rtas.writeOptions
 
         if (dropAndCreateTable) {
           catalog.asTableCatalog.dropTable(ident)
@@ -198,7 +198,7 @@ case class CustomOptimizedPlan(spark:SparkSession) extends Rule[LogicalPlan] {
             partitionColumns = ps,
             bucketSpec = None,
             fileFormat = getFileFormat(table.asInstanceOf[V2Table].v1Table.provider.getOrElse("csv")),
-            Map.empty,
+            newTableProperties,
             query = writePlan,
             SaveMode.Overwrite,
             None,
