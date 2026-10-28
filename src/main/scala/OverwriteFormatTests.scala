@@ -32,6 +32,10 @@ object OverwriteFormatTests {
   private def count(spark: org.apache.spark.sql.SparkSession, fqn: String): Long =
     spark.sql(s"SELECT COUNT(*) FROM $fqn").collect()(0).getLong(0)
 
+  private def read_fqn(spark: org.apache.spark.sql.SparkSession, fqn: String):Unit={
+    spark.sql(s"SELECT * FROM $fqn").show()
+  }
+
   private def provider(spark: org.apache.spark.sql.SparkSession, fqn: String): String =
     spark.sql(s"DESCRIBE EXTENDED $fqn")
       .filter("col_name = 'Provider'")
@@ -545,6 +549,14 @@ object OverwriteFormatTests {
   // run all
   // ══════════════════════════════════════════════════════════════════════════
 
+  def run_csv_with_options(spark: org.apache.spark.sql.SparkSession):Unit={
+    val fqn = freshTable(spark, "ow_csv_csv1", "t1", "csv")
+    overwriteData(spark).write.format("csv").mode("overwrite").option("header", "true")
+      .option("delimiter", ";").saveAsTable(fqn)
+
+    read_fqn(spark, fqn)
+
+  }
   def runAll(spark: org.apache.spark.sql.SparkSession): Unit = {
     // same format
     testParquetToParquet(spark)
