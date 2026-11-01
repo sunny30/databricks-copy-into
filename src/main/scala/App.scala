@@ -93,7 +93,7 @@ object App {
     //spark.sql("insert into cat.customdb.tbl values(7, 'ss',2.0)")
     spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2")
 
-    OverwriteFormatTests.run_csv_with_options(spark)
+   // OverwriteFormatTests.run_csv_with_options(spark)
     //LiveApp.testTableFunction(spark)
    //OverwriteFormatTests.runAll(spark)
 //    spark.sql("show databases in live").show(100,0)
@@ -109,7 +109,7 @@ object App {
 //    spark.sql("select * from live.f.db.live_tbl").show()
    // spark.read.table("live.`FS('b12'.'a + b')`.`this is table`")
 
-  //    CLSApp.streamDeltaTable(spark)
+      CLSApp.view_usage_test1(spark)
 //    spark.sql("create database cat.cls_db")
 //    spark.sql("create table cat.cls_db.ptbl(cls_id int, age int) using parquet  PARTITIONED BY (age)")
 //    spark.sql("create table cat.cls_db.ptbl1(id int, age int) using parquet  PARTITIONED BY (age)")

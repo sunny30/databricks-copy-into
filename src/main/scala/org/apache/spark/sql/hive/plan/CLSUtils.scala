@@ -282,6 +282,8 @@ object CLSUtils {
       return leafPlan
     }
 
+    if (CLSPlanMask.wasChecked(leafPlan.output)) return leafPlan
+
     val resolver = SparkSession.active.sessionState.conf.resolver
     val secureFields = catalogTable.schema.fields.map(_.name).toSet
     println("***Secure fields name*** " + secureFields.mkString(","))
