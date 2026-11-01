@@ -4,7 +4,7 @@ import org.apache.iceberg.spark.source.SparkTable
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.analysis.{UnresolvedAttribute, UnresolvedRelation}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, MetadataAttribute}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference, ExprId, MetadataAttribute}
 import org.apache.spark.sql.catalyst.parser.SqlBaseParser.TableNameContext
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, View}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
@@ -15,12 +15,22 @@ import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 import org.apache.spark.sql.hive.plan.listener.CrossThreadSqlHolder
 import org.apache.spark.sql.hive.plan.spark.sql.connector.{V2CustomTable, V2Table}
-import org.apache.spark.sql.types.StructType
+import org.apache.spark.sql.types.{MetadataBuilder, StructType}
 
 import java.net.URI
 import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.jdk.CollectionConverters.asScalaBufferConverter
 import scala.util.Try
+
+object CLSPlanMask {
+  val CheckedKey = "cls.checked"   // this relation went through the CLS check
+  val SecureKey  = "cls.secure"    // this attribute is permitted for the user
+
+  def wasChecked(out: Seq[Attribute]): Boolean = out.exists(_.metadata.contains(CheckedKey))
+
+  def visible[A <: Attribute](out: Seq[A]): Seq[A] =
+    if (wasChecked(out)) out.filter(_.metadata.contains(SecureKey)) else out
+}
 
 object CLSUtils {
 
@@ -45,6 +55,23 @@ object CLSUtils {
 
   def isExternalCatalogTable(catalogTable: CatalogTable):Boolean ={
     catalogTable.provider.getOrElse("hive").equalsIgnoreCase("custom")
+  }
+
+  private def markChecked(plan: LogicalPlan, secureIds: Set[ExprId]): LogicalPlan = {
+    def mark(out: Seq[AttributeReference]): Seq[AttributeReference] = out.map { a =>
+      val b = new MetadataBuilder().withMetadata(a.metadata)
+        .putBoolean(CLSPlanMask.CheckedKey, true)
+      if (secureIds.contains(a.exprId)) b.putBoolean(CLSPlanMask.SecureKey, true)
+      a.withMetadata(b.build())
+    }
+
+    val marked: LogicalPlan = plan match {
+      case d: DataSourceV2Relation => d.copy(output = mark(d.output))
+      case lr: LogicalRelation => lr.copy(output = mark(lr.output))
+      case other => other
+    }
+    if (marked ne plan) marked.copyTagsFrom(plan) // case-class copy() drops tags
+    marked
   }
 
   def isExternalCatalogTable(table: Table): Boolean = {
