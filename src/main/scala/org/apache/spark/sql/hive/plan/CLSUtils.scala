@@ -290,7 +290,8 @@ object CLSUtils {
     val hiddenExprIds = hiddenCols.map(_.exprId).toSet
     val userOutput = leafPlan.output.filterNot(a => hiddenExprIds.contains(a.exprId))
 
-    val secureAttributes = userOutput.filter(at => secureFields.contains(at.name))
+    val secureAttributes =
+      userOutput.filter(at => secureFields.exists(f => resolver(at.name, f)))
 
     val sameOutput =
       secureAttributes.size == userOutput.size &&
@@ -307,7 +308,10 @@ object CLSUtils {
     leafPlan.setTagValue(TreeNodeTag[String]("cls-sec"), "cls-sec")
 
     // Include hidden cols so Delta/Iceberg internals work
-    val prj = Project(secureAttributes ++ hiddenCols, leafPlan)
+
+    val secureIds  = (secureAttributes ++ hiddenCols).map(_.exprId).toSet
+    val markedLeaf = markChecked(leafPlan, secureIds)
+    val prj = Project(secureAttributes ++ hiddenCols, markedLeaf)
     prj.setTagValue(TreeNodeTag[String]("col-table-sec"), "true")
 
     SparkSession.active.sessionState.analyzer.execute(prj)
