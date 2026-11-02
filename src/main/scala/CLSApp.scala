@@ -903,6 +903,7 @@ object CLSApp {
     val table2 = "ptbl"
     val tableName1 = "cat.cls_view_db.dtbl"
     val tableName2 = "cat.cls_view_db.ptbl"
+    val tableName3 = "cat.cls_view_db.nclsdtbl"
 
     val viewName1 = "cat.cls_view_db.v_dtbl"
     val viewName2 = "cat.cls_view_db.v_ptbl"
@@ -968,8 +969,18 @@ object CLSApp {
     spark.read.table(s"$viewName1").select("*").show()
     spark.read.table(s"$viewName2").show()
 
+
+    spark.sql(
+      s"""
+         |CREATE TABLE $tableName3 (
+         | order_id STRING,
+         | amount DOUBLE
+         |) USING delta
+         |""".stripMargin)
+
     spark.sql(s"describe query select * from ${tableName1}").show()
     spark.sql(s"explain EXTENDED select * from ${tableName1}").show(100, truncate = false)
+    spark.sql(s"explain EXTENDED select * from ${tableName3}").show(100, truncate = false)
 
 
 //
