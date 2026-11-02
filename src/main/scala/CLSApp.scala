@@ -969,6 +969,7 @@ object CLSApp {
     spark.read.table(s"$viewName2").show()
 
     spark.sql(s"describe query select * from ${tableName1}").show()
+    spark.sql(s"explain EXTENDED select * from ${tableName1}").show(100, truncate = false)
 
 
 //

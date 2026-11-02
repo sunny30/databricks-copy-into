@@ -11,7 +11,8 @@ import org.apache.spark.sql.connector.catalog.Identifier
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.util.AnalysisHelper
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.{CatalogHelper, MultipartIdentifierHelper}
-import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.CatalogDescribeViewCmd
+import org.apache.spark.sql.execution.command.ExplainCommand
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.{CatalogDescribeViewCmd, CustomExplainCommand}
 
 
 class DescribeUnResolvedRelation(session: SparkSession)
@@ -94,6 +95,7 @@ class DescribeUnResolvedRelation(session: SparkSession)
         }
 
 
+      case e: ExplainCommand => CustomExplainCommand(e)
 
       case pl:LogicalPlan => pl
 
