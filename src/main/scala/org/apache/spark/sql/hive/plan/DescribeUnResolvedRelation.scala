@@ -95,7 +95,6 @@ class DescribeUnResolvedRelation(session: SparkSession)
         }
 
 
-      case e: ExplainCommand => CustomExplainCommand(e)
 
       case pl:LogicalPlan => pl
 
