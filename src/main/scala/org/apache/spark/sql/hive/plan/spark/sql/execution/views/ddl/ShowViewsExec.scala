@@ -1,11 +1,11 @@
 package org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl
 
 import org.apache.iceberg.spark.source.SparkTable
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.ResolvedTable
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType}
-import org.apache.spark.sql.catalyst.expressions.Attribute
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.catalyst.plans.logical.{DescribeColumn, DescribeRelation, LogicalPlan}
 import org.apache.spark.sql.catalyst.util.{CharVarcharUtils, ResolveDefaultColumns, StringUtils, quoteIfNeeded}
 import org.apache.spark.sql.connector.catalog.CatalogV2Implicits.NamespaceHelper
@@ -13,7 +13,7 @@ import org.apache.spark.sql.connector.catalog.{CatalogV2Util, Identifier, Suppor
 import org.apache.spark.sql.connector.expressions.{FieldReference, IdentityTransform}
 import org.apache.spark.sql.connector.read.SupportsReportStatistics
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
-import org.apache.spark.sql.execution.LeafExecNode
+import org.apache.spark.sql.execution.{CommandExecutionMode, CostMode, ExtendedMode, LeafExecNode}
 import org.apache.spark.sql.execution.datasources.v2.{DescribeTableExec, LeafV2CommandExec, V2CommandExec, V2SessionCatalog}
 import org.apache.spark.sql.hive.plan.CLSUtils
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
@@ -23,6 +23,12 @@ import org.apache.spark.storage.StorageLevel
 
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters.mapAsScalaMapConverter
+import org.apache.spark.sql.catalyst.plans.QueryPlan
+import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Statistics}
+import org.apache.spark.sql.catalyst.util.truncatedString
+import org.apache.spark.sql.execution.command.{ExplainCommand, LeafRunnableCommand}
+import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Relation
 
 /**
  * Physical plan node for showing views.
@@ -418,6 +424,78 @@ case class SecureDescribeColumnExec(
     }
 
     rows.toSeq
+  }
+}
+
+
+
+
+object CLSMarkers {
+  val Checked = "cls.checked"
+  val Secure  = "cls.secure"
+
+  def wasChecked(out: Seq[Attribute]): Boolean = out.exists(_.metadata.contains(Checked))
+  // checked leaf: print only attributes marked secure; unchecked leaf: default output
+  def visible(out: Seq[Attribute]): Seq[Attribute] =
+    if (wasChecked(out)) out.filter(_.metadata.contains(Secure)) else out
+}
+
+// Display-only leaf: same output and stats as the original, prints the masked form
+case class MaskedLeaf(orig: LogicalPlan, shown: LogicalPlan) extends LeafNode {
+  override def output: Seq[Attribute] = orig.output
+  override def simpleString(maxFields: Int): String = shown.simpleString(maxFields)
+  override def computeStats(): Statistics = orig.stats      // needed for COST mode
+}
+
+object CLSExplainMask {
+  def mask(plan: LogicalPlan): LogicalPlan = plan.transformUpWithSubqueries {
+    case d: DataSourceV2Relation if CLSMarkers.wasChecked(d.output) =>
+      MaskedLeaf(d, d.copy(output = CLSMarkers.visible(d.output).asInstanceOf[Seq[AttributeReference]]))
+    case l: LogicalRelation if CLSMarkers.wasChecked(l.output) =>
+      MaskedLeaf(l, l.copy(output = CLSMarkers.visible(l.output).asInstanceOf[Seq[AttributeReference]]))
+  }
+}
+
+case class CustomExplainCommand(e: ExplainCommand) extends LeafRunnableCommand {
+  override val output: Seq[Attribute] = e.output
+
+  override def run(sparkSession: SparkSession): Seq[Row] = e.mode match {
+    case ExtendedMode | CostMode if !e.logicalPlan.isStreaming =>
+      try {
+        val qe = sparkSession.sessionState.executePlan(e.logicalPlan, CommandExecutionMode.SKIP)
+        val maxFields = sparkSession.sessionState.conf.maxToStringFields
+        val sb = new StringBuilder
+        val app: String => Unit = s => sb.append(s)
+
+        if (e.mode == ExtendedMode) {
+          app("== Parsed Logical Plan ==\n")
+          QueryPlan.append(qe.logical, app, true, false, maxFields)
+          app("\n== Analyzed Logical Plan ==\n")
+          if (qe.analyzed.output.nonEmpty) {
+            app(truncatedString(
+              qe.analyzed.output.map(o => s"${o.name}: ${o.dataType.simpleString}"), ", ", maxFields))
+            app("\n")
+          }
+          QueryPlan.append(CLSExplainMask.mask(qe.analyzed), app, true, false, maxFields)
+          app("\n== Optimized Logical Plan ==\n")
+          QueryPlan.append(CLSExplainMask.mask(qe.optimizedPlan), app, true, false, maxFields)
+        } else {
+          app("== Optimized Logical Plan ==\n")
+          QueryPlan.append(CLSExplainMask.mask(qe.optimizedPlan), app, true, true, maxFields)
+        }
+        app("\n== Physical Plan ==\n")
+        QueryPlan.append(qe.executedPlan, app, true, false, maxFields)
+
+        Seq(Row(org.apache.spark.util.Utils.redact(
+          sparkSession.sessionState.conf.stringRedactionPattern, sb.toString)))
+      } catch {
+        case ae: AnalysisException =>
+          Seq(Row("Error occurred during query planning: \n" + ae.getMessage.split("\n").head))
+      }
+
+    // SIMPLE / FORMATTED / CODEGEN print the physical plan only, and scans are already
+    // column-pruned. Streaming also keeps Spark's own path.
+    case _ => e.run(sparkSession)
   }
 }
 

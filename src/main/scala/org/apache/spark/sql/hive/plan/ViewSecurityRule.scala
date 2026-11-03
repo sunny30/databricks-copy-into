@@ -15,8 +15,9 @@ import org.apache.spark.sql.connector.catalog.TableSchemaChangeCatalog
 import org.apache.spark.sql.delta.catalog.DeltaTableV2
 import org.apache.spark.sql.delta.commands.{DeltaCommand, ShowDeltaTableColumnsCommand, TableColumns}
 import org.apache.spark.sql.delta.util.AnalysisHelper
-import org.apache.spark.sql.execution.command.{LeafRunnableCommand, RunnableCommand}
+import org.apache.spark.sql.execution.command.{ExplainCommand, LeafRunnableCommand, RunnableCommand}
 import org.apache.spark.sql.hive.plan.spark.sql.connector.V2Table
+import org.apache.spark.sql.hive.plan.spark.sql.execution.views.ddl.CustomExplainCommand
 
 class ViewSecurityRule(session: SparkSession)
   extends Rule[LogicalPlan] with AnalysisHelper with Logging{
@@ -69,6 +70,9 @@ class ViewSecurityRule(session: SparkSession)
       case cmd@ShowColumns(
       child@ResolvedTable(_, _, table: V2Table, _), namespace, _) =>
         SecureShowColumnsCommand(cmd, table)
+
+      case e: ExplainCommand => CustomExplainCommand(e)
+
 
       case pl: LogicalPlan => pl
     }
