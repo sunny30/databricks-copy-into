@@ -981,9 +981,11 @@ object CLSApp {
     spark.sql(s"describe query select * from ${tableName1}").show()
     spark.sql(s"explain EXTENDED select * from ${tableName1}").show(100, truncate = false)
     spark.sql(s"explain EXTENDED select * from ${tableName3}").show(100, truncate = false)
+    spark.sql(s"explain select * from ${tableName1}").show(100, truncate = false)
 
 
-//
+
+    //
 //
 //    println("----- Creation of Views completed -----")
 //

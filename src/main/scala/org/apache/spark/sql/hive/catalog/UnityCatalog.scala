@@ -531,10 +531,11 @@ class UnityCatalog[T <: TableCatalog with SupportsNamespaces] extends CatalogExt
   }
 
   override def loadSecureTable(db: String, table: String): CatalogTable = {
-    if(isLiveCatalog){
-      liveCatalog.loadTable(Identifier.of(Array(db), table))
+    if (isLiveCatalog) {
+      liveCatalog.loadTable(Identifier.of(Array(db), table)).asInstanceOf[V2Table].v1Table
+    } else {
+      externalCatalog.getSecureTable(db, table)
     }
-    externalCatalog.getSecureTable(db, table)
   }
 
   override def loadTable(ident: Identifier, timestamp: Long): Table = {
